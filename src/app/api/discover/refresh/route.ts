@@ -1,4 +1,5 @@
-import { searchNews } from '@/lib/search';
+import { runDiscoverPipeline, TOPIC_LABELS } from '@/lib/discover';
+import type { Topic } from '@/lib/discover/types';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -12,75 +13,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const topicQueries: Record<string, { label: string; queries: string[] }> = {
-  africa: {
-    label: 'Afrique',
-    queries: [
-      "actualites Afrique aujourd'hui",
-      'Africa news today',
-      'nouvelles Afrique derniere heure',
-      "Afrique de l'Ouest actualite",
-    ],
-  },
-  tech: {
-    label: 'Tech & IA',
-    queries: [
-      'technology Africa startups',
-      'innovation technologique Afrique',
-      'artificial intelligence Africa 2026',
-      'tech startups Africa funding',
-    ],
-  },
-  finance: {
-    label: 'Economie',
-    queries: [
-      'economie Afrique actualites',
-      'Africa economy finance news',
-      'bourse BRVM UEMOA',
-      'investissement Afrique 2026',
-    ],
-  },
-  art: {
-    label: 'Culture',
-    queries: [
-      'culture africaine actualites',
-      'musique africaine nouveautes',
-      'cinema art africain 2026',
-    ],
-  },
-  sports: {
-    label: 'Sports',
-    queries: [
-      'football africain actualites',
-      'CAN football Afrique',
-      'athletes africains 2026',
-    ],
-  },
-  politics: {
-    label: 'Politique',
-    queries: [
-      'politique Afrique actualites',
-      'elections Afrique 2026',
-      'geopolitique union africaine',
-    ],
-  },
-  sante: {
-    label: 'Sante',
-    queries: [
-      'sante Afrique actualites',
-      'OMS Afrique epidemie',
-      'sante publique Afrique 2026',
-    ],
-  },
-};
-
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace('www.', '');
-  } catch {
-    return '';
-  }
-}
+const ALL_TOPICS = Object.keys(TOPIC_LABELS) as Topic[];
 
 async function ensureTable(): Promise<boolean> {
   try {
@@ -103,10 +36,15 @@ async function ensureTable(): Promise<boolean> {
 
 /**
  * POST /api/discover/refresh
- * Fetches fresh news for all topics and stores them in Supabase.
- * Can also be called with ?topic=xxx to refresh a single topic.
+ *
+ * Runs the new hybrid-retrieval pipeline for every topic (or one topic
+ * if ?topic= is passed), then upserts the results into Supabase.  Each
+ * row now carries the language, quality score, and other metadata the
+ * ranker needs.
+ *
+ * GET is exposed too as a convenience (e.g. for cron / curl checks).
  */
-export const POST = async (req: Request) => {
+const handler = async (req: Request) => {
   try {
     const ready = await ensureTable();
     if (!ready) {
@@ -120,48 +58,21 @@ export const POST = async (req: Request) => {
     }
 
     const params = new URL(req.url).searchParams;
-    const singleTopic = params.get('topic');
+    const singleTopic = params.get('topic') as Topic | null;
     const batchId = `batch-${Date.now()}`;
 
-    const topicsToRefresh = singleTopic
-      ? { [singleTopic]: topicQueries[singleTopic] }
-      : topicQueries;
+    const topicsToRefresh: Topic[] = singleTopic
+      ? (ALL_TOPICS.includes(singleTopic) ? [singleTopic] : [])
+      : ALL_TOPICS;
 
     let totalInserted = 0;
     const errors: string[] = [];
 
-    for (const [topic, config] of Object.entries(topicsToRefresh)) {
-      if (!config) continue;
-
-      console.log(
-        `[Discover Refresh] Fetching topic: ${topic} (${config.queries.length} queries)`,
-      );
+    for (const topic of topicsToRefresh) {
+      console.log(`[Discover Refresh] Running pipeline for topic: ${topic}`);
 
       try {
-        const results = await Promise.all(
-          config.queries.map((query) => searchNews(query, 'fr')),
-        );
-
-        const seenUrls = new Set<string>();
-        const articles = results
-          .flat()
-          .filter((item) => {
-            if (!item.title || !item.url) return false;
-            const url = item.url.toLowerCase().trim();
-            if (seenUrls.has(url)) return false;
-            seenUrls.add(url);
-            return true;
-          })
-          .map((item) => ({
-            topic,
-            title: item.title.slice(0, 500),
-            content: (item.content || '').slice(0, 2000),
-            url: item.url,
-            thumbnail: item.thumbnail || item.img_src || item.thumbnail_src || null,
-            domain: extractDomain(item.url),
-            batch_id: batchId,
-            updated_at: new Date().toISOString(),
-          }));
+        const { articles } = await runDiscoverPipeline(topic, { now: new Date() });
 
         if (articles.length === 0) {
           console.warn(`[Discover Refresh] No articles for topic: ${topic}`);
@@ -169,9 +80,25 @@ export const POST = async (req: Request) => {
           continue;
         }
 
+        // Map ScoredArticle → DB row.  Strips the scoreBreakdown (debug
+        // only) and keeps everything the UI needs.
+        const rows = articles.map((a) => ({
+          topic: a.topic,
+          title: a.title,
+          content: a.content,
+          url: a.url,
+          thumbnail: a.thumbnail,
+          domain: a.domain,
+          language: a.language,
+          author: a.author,
+          quality_score: a.qualityScore,
+          batch_id: batchId,
+          updated_at: new Date().toISOString(),
+        }));
+
         const { error: upsertError, count } = await supabaseAdmin
           .from('discover_articles')
-          .upsert(articles, { onConflict: 'url', ignoreDuplicates: false });
+          .upsert(rows, { onConflict: 'url', ignoreDuplicates: false });
 
         if (upsertError) {
           console.error(
@@ -180,9 +107,9 @@ export const POST = async (req: Request) => {
           );
           errors.push(`${topic}: ${upsertError.message}`);
         } else {
-          totalInserted += count ?? articles.length;
+          totalInserted += count ?? rows.length;
           console.log(
-            `[Discover Refresh] ${topic}: ${articles.length} articles upserted`,
+            `[Discover Refresh] ${topic}: ${rows.length} articles upserted`,
           );
         }
       } catch (err) {
@@ -211,4 +138,5 @@ export const POST = async (req: Request) => {
   }
 };
 
-export const GET = POST;
+export const POST = handler;
+export const GET = handler;

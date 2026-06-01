@@ -15,6 +15,8 @@ interface SearchResult {
   iframe_src?: string;
 }
 
+export type { SearchResult };
+
 interface SearchOptions {
   categories?: string[];
   engines?: string[];

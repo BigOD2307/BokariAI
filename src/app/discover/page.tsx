@@ -350,7 +350,9 @@ const Page = () => {
 
       if (!res.ok) throw new Error(data.message);
 
-      const filtered = (data.blogs || []).filter(
+      // Phase 1: API returns `articles` (was `blogs`); accept both.
+      const raw = data.articles || data.blogs || [];
+      const filtered = raw.filter(
         (b: DiscoverItem) => b.title && b.url,
       );
       setArticles(filtered);
