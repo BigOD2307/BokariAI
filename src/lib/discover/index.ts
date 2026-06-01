@@ -13,6 +13,7 @@ export { tokenize, bm25Score, buildBM25Index } from './bm25';
 export { freshnessScore, ageMs } from './freshness';
 export { applyDiversityCap } from './diversity';
 export { isAfricanDomain, isBlockedDomain, AFRICAN_DOMAINS, BLOCKED_DOMAINS } from './domainLists';
+export { cosine, cosine01 } from './cosine';
 export type {
   Article,
   ScoredArticle,

@@ -60,6 +60,10 @@ export type Article = {
   author: string | null;
   qualityScore: number;
   createdAt: Date;
+  /** BGE-M3 (or any) embedding of title+content.  Generated at refresh. */
+  embedding?: number[] | null;
+  /** Model name that produced the embedding — guards against model swaps. */
+  embeddingModel?: string | null;
 };
 
 /**
@@ -75,6 +79,8 @@ export type ScoreBreakdown = {
   africanBoost: number;
   /** Pre-computed quality signal from refresh time. 0..1. */
   quality: number;
+  /** Cosine similarity in [0, 1] between the query and the article (if both embedded). */
+  cosine: number;
   /** Final combined score used for sorting. */
   final: number;
 };
@@ -93,6 +99,10 @@ export type RankOptions = {
   maxPerDomain?: number;
   /** Total max results returned. Default 30. */
   limit?: number;
+  /** Optional query embedding for cosine re-ranking.  When provided AND
+   *  the candidate articles carry `embedding` arrays, the ranker blends
+   *  cosine similarity into the final score as `(0.7 + 0.3 * cosine01)`. */
+  queryEmbedding?: number[] | null;
 };
 
 export type PipelineMeta = {

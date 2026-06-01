@@ -1,6 +1,8 @@
 import { runDiscoverPipeline, TOPIC_LABELS } from '@/lib/discover';
 import type { Topic } from '@/lib/discover/types';
 import { extractArticlesInParallel } from '@/lib/discover/contentExtractor';
+import { embed } from '@/lib/ai/gateway';
+import { getAiConfig } from '@/lib/ai/config';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -92,12 +94,42 @@ const handler = async (req: Request) => {
         });
         const extractedByUrl = new Map(extractionResults.map((r) => [r.url, r]));
         const extractionStats = { ok: 0, fail: 0 };
+        const embedStats = { ok: 0, fail: 0 };
         const nowIso = new Date().toISOString();
+
+        // Phase 3: embed title+content for every article that has
+        // extractable text.  We embed `title` twice + content (capped at
+        // 1500 chars) — title carries the most semantic weight, and
+        // repeating it matches how we index for BM25 in the ranker.
+        // Failures here are non-fatal: we still upsert the row, just
+        // without an embedding.  Re-rank will treat it as neutral
+        // (cosine=0.5 → factor 0.85).
+        const embedInputs: string[] = articles.map((a) => {
+          const ex = extractedByUrl.get(a.url);
+          const body = (ex?.fullContent ?? a.content ?? '').slice(0, 1500);
+          return `${a.title}\n${a.title}\n${body}`;
+        });
+        let embeddings: number[][] = [];
+        const embeddingModel = getAiConfig().embedding.model;
+        try {
+          embeddings = await embed(embedInputs);
+        } catch (err) {
+          console.error(
+            `[Discover Refresh] Embedding batch failed for ${topic}:`,
+            err,
+          );
+        }
 
         // Map ScoredArticle → DB row.  Strips the scoreBreakdown (debug
         // only) and keeps everything the UI needs.
-        const rows = articles.map((a) => {
+        const rows = articles.map((a, idx) => {
           const ex = extractedByUrl.get(a.url);
+          const vec = embeddings[idx];
+          if (vec && Array.isArray(vec) && vec.length > 0) {
+            embedStats.ok++;
+          } else {
+            embedStats.fail++;
+          }
           if (ex?.success) {
             extractionStats.ok++;
             return {
@@ -115,6 +147,8 @@ const handler = async (req: Request) => {
               full_content: ex.fullContent,
               extracted_at: nowIso,
               content_hash: ex.contentHash,
+              embedding: vec && vec.length > 0 ? vec : null,
+              embedding_model: vec && vec.length > 0 ? embeddingModel : null,
               batch_id: batchId,
               updated_at: nowIso,
             };
@@ -131,6 +165,8 @@ const handler = async (req: Request) => {
             author: a.author,
             published_at: a.publishedAt?.toISOString() ?? null,
             quality_score: a.qualityScore,
+            embedding: vec && vec.length > 0 ? vec : null,
+            embedding_model: vec && vec.length > 0 ? embeddingModel : null,
             batch_id: batchId,
             updated_at: nowIso,
           };
@@ -150,7 +186,8 @@ const handler = async (req: Request) => {
           totalInserted += count ?? rows.length;
           console.log(
             `[Discover Refresh] ${topic}: ${rows.length} articles upserted ` +
-              `(extraction: ${extractionStats.ok} ok / ${extractionStats.fail} fail)`,
+              `(extract ${extractionStats.ok}/${extractionStats.fail}, ` +
+              `embed ${embedStats.ok}/${embedStats.fail})`,
           );
         }
       } catch (err) {
