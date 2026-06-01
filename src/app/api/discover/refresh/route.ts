@@ -1,5 +1,6 @@
 import { runDiscoverPipeline, TOPIC_LABELS } from '@/lib/discover';
 import type { Topic } from '@/lib/discover/types';
+import { extractArticlesInParallel } from '@/lib/discover/contentExtractor';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -80,21 +81,60 @@ const handler = async (req: Request) => {
           continue;
         }
 
+        // Phase 2: extract full content for every article, in parallel,
+        // before upserting.  This is the one-time, expensive step.
+        // Future search-time lookups (via /api/agents/search/webSearch)
+        // will hit the cache instead of re-fetching.
+        const urls = articles.map((a) => a.url);
+        const extractionResults = await extractArticlesInParallel(urls, {
+          maxConcurrent: 5,
+          timeoutMs: 8_000,
+        });
+        const extractedByUrl = new Map(extractionResults.map((r) => [r.url, r]));
+        const extractionStats = { ok: 0, fail: 0 };
+        const nowIso = new Date().toISOString();
+
         // Map ScoredArticle → DB row.  Strips the scoreBreakdown (debug
         // only) and keeps everything the UI needs.
-        const rows = articles.map((a) => ({
-          topic: a.topic,
-          title: a.title,
-          content: a.content,
-          url: a.url,
-          thumbnail: a.thumbnail,
-          domain: a.domain,
-          language: a.language,
-          author: a.author,
-          quality_score: a.qualityScore,
-          batch_id: batchId,
-          updated_at: new Date().toISOString(),
-        }));
+        const rows = articles.map((a) => {
+          const ex = extractedByUrl.get(a.url);
+          if (ex?.success) {
+            extractionStats.ok++;
+            return {
+              topic: a.topic,
+              title: a.title,
+              content: a.content,
+              url: a.url,
+              thumbnail: a.thumbnail,
+              domain: a.domain,
+              language: a.language,
+              author: ex.metadata.author ?? a.author,
+              published_at:
+                (ex.metadata.publishedAt ?? a.publishedAt)?.toISOString() ?? null,
+              quality_score: a.qualityScore,
+              full_content: ex.fullContent,
+              extracted_at: nowIso,
+              content_hash: ex.contentHash,
+              batch_id: batchId,
+              updated_at: nowIso,
+            };
+          }
+          extractionStats.fail++;
+          return {
+            topic: a.topic,
+            title: a.title,
+            content: a.content,
+            url: a.url,
+            thumbnail: a.thumbnail,
+            domain: a.domain,
+            language: a.language,
+            author: a.author,
+            published_at: a.publishedAt?.toISOString() ?? null,
+            quality_score: a.qualityScore,
+            batch_id: batchId,
+            updated_at: nowIso,
+          };
+        });
 
         const { error: upsertError, count } = await supabaseAdmin
           .from('discover_articles')
@@ -109,7 +149,8 @@ const handler = async (req: Request) => {
         } else {
           totalInserted += count ?? rows.length;
           console.log(
-            `[Discover Refresh] ${topic}: ${rows.length} articles upserted`,
+            `[Discover Refresh] ${topic}: ${rows.length} articles upserted ` +
+              `(extraction: ${extractionStats.ok} ok / ${extractionStats.fail} fail)`,
           );
         }
       } catch (err) {

@@ -37,7 +37,6 @@ const AFRICA_FIXTURES: SearchResult[] = [
     title: 'Actualité Mali : visite du président',
     url: 'https://maliactu.net/article/visite-president-1234',
     content: 'Le chef de l\'État est en visite officielle dans la région de Sikasso depuis trois jours.',
-    thumbnail: null,
   },
   // English, African source
   {
@@ -65,7 +64,6 @@ const AFRICA_FIXTURES: SearchResult[] = [
     title: 'African news roundup',
     url: 'https://www.cnn.com/2026/africa-roundup',
     content: 'A roundup of African news this week.',
-    thumbnail: null,
   },
 ];
 

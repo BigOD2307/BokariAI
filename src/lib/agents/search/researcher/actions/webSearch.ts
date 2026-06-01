@@ -3,6 +3,7 @@ import { ResearchAction } from '../../types';
 import { searchSearxng } from '@/lib/search';
 import { Chunk, SearchResultsResearchBlock } from '@/lib/types';
 import { fetchMultipleContent } from '@/lib/utils/extractContent';
+import { getStoredContentForUrls } from '@/lib/supabase/queries';
 
 const actionSchema = z.object({
   type: z.literal('web_search'),
@@ -184,8 +185,34 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
           ]);
         }
 
-        // Fetch full page content in parallel
-        const contentMap = await fetchMultipleContent(uniqueUrls, maxFetch);
+        // Phase 2: look up pre-extracted content from the Discover cache
+        // first, only live-fetch URLs that miss.  Saves 2-6s of network on
+        // every query that hits a known article.  If the cache lookup
+        // itself blows up, we degrade to live fetch (slower but never
+        // crash the agent).
+        const urlsToRead = uniqueUrls.slice(0, maxFetch);
+        let stored: Map<string, { fullContent: string | null }> = new Map();
+        try {
+          stored = await getStoredContentForUrls(urlsToRead);
+        } catch (err) {
+          console.error('[webSearch] Discover cache lookup failed; falling back to live fetch:', err);
+        }
+
+        // Use cached content where available, fall back to live fetch for misses
+        const contentMap = new Map<string, string>();
+        for (const url of urlsToRead) {
+          const hit = stored.get(url);
+          if (hit?.fullContent) {
+            contentMap.set(url, hit.fullContent);
+          }
+        }
+        const cacheMisses = urlsToRead.filter((u) => !contentMap.has(u));
+        if (cacheMisses.length > 0) {
+          const fetched = await fetchMultipleContent(cacheMisses, cacheMisses.length);
+          for (const [url, content] of fetched) {
+            contentMap.set(url, content);
+          }
+        }
 
         // Enrich results with full content
         for (const result of results) {
