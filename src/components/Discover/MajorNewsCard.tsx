@@ -1,12 +1,18 @@
-import { Discover } from '@/app/discover/page';
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
+
+interface DiscoverItem {
+  title: string;
+  content: string;
+  url: string;
+  thumbnail: string;
+}
 
 const MajorNewsCard = ({
   item,
   isLeft = true,
 }: {
-  item: Discover;
+  item: DiscoverItem;
   isLeft?: boolean;
 }) => {
   const imgSrc = (() => {

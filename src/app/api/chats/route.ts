@@ -4,7 +4,9 @@ import { mapChats } from '@/lib/supabase/mappers';
 export const GET = async (req: Request) => {
   try {
     const supabase = createServerClient(req);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       return Response.json({ chats: [] }, { status: 200 });

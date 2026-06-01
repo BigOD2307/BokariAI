@@ -29,6 +29,28 @@
       "when": 1741344000000,
       "tag": "0003_add_missing_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1772820000000,
+      "tag": "0004_add_users_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1772820100000,
+      "tag": "0005_create_discover_articles",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1772820200000,
+      "tag": "0006_drop_focus_mode",
+      "breakpoints": true
     }
   ]
 }
+

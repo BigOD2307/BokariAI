@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tbrqkcufpjtmlzypytqz.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnFrY3VmcGp0bWx6eXB5dHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTc3NTUsImV4cCI6MjA4ODM5Mzc1NX0.w8JT5qD9_qr1jgESuUovs2dJQQUKIGG_QbMRQHToU0I';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    '[Bokari Supabase Server] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.',
+  );
+}
 
 /**
  * Create a Supabase client for server-side API routes.
@@ -14,26 +21,23 @@ export function createServerClient(req?: Request) {
   if (accessToken) {
     return createClient(supabaseUrl, supabaseAnonKey, {
       global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       },
+      auth: { autoRefreshToken: false, persistSession: false },
     });
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
 function getAccessToken(req?: Request): string | null {
   if (!req) return null;
 
-  // Check Authorization header first
   const authHeader = req.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.slice(7);
-  }
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
 
-  // Check cookie
   const cookie = req.headers.get('cookie') || '';
   const match = cookie.match(/sb-access-token=([^;]+)/);
   if (match) return match[1];

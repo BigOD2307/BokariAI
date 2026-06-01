@@ -9,6 +9,47 @@
     --bokari-primary: 20 184 166;
     --bokari-accent: 212 180 131;
     --radius: 0.75rem;
+
+    /* shadcn CSS variables - light */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.7 0.12 175);
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: oklch(0.965 0.001 286);
+    --secondary-foreground: oklch(0.205 0.015 286);
+    --muted: oklch(0.965 0.001 286);
+    --muted-foreground: oklch(0.556 0.016 286);
+    --accent: oklch(0.965 0.001 286);
+    --accent-foreground: oklch(0.205 0.015 286);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0.004 286);
+    --input: oklch(0.922 0.004 286);
+    --ring: oklch(0.7 0.12 175);
+  }
+
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.98 0 0);
+    --card: oklch(0.205 0.006 286);
+    --card-foreground: oklch(0.98 0 0);
+    --popover: oklch(0.205 0.006 286);
+    --popover-foreground: oklch(0.98 0 0);
+    --primary: oklch(0.7 0.12 175);
+    --primary-foreground: oklch(0.145 0 0);
+    --secondary: oklch(0.269 0.006 286);
+    --secondary-foreground: oklch(0.98 0 0);
+    --muted: oklch(0.269 0.006 286);
+    --muted-foreground: oklch(0.708 0.015 286);
+    --accent: oklch(0.269 0.006 286);
+    --accent-foreground: oklch(0.98 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.3 0.006 286);
+    --input: oklch(0.3 0.006 286);
+    --ring: oklch(0.7 0.12 175);
   }
 
   .overflow-hidden-scrollable {
@@ -64,6 +105,14 @@
 }
 
 @layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-box-orient: vertical;

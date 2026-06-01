@@ -29,7 +29,10 @@ export const GET = async (
     if (msgError) throw msgError;
 
     return Response.json(
-      { chat: mapChat(chat), messages: mapMessages(messages || []) },
+      {
+        chat: mapChat(chat),
+        messages: mapMessages(messages || []),
+      },
       { status: 200 },
     );
   } catch (err) {

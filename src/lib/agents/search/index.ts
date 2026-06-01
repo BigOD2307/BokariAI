@@ -8,12 +8,11 @@ import supabase from '@/lib/db';
 import { TextBlock } from '@/lib/types';
 
 /**
- * Fetch conversation memory for the current user/chat
- * Returns recent chat topics to give Bokari context about past interactions
+ * Fetch conversation memory for the current user/chat.
+ * Returns recent chat topics to give Bokari context about past interactions.
  */
 async function fetchMemory(chatId: string): Promise<string> {
   try {
-    // Get the user_id from this chat
     const { data: chat } = await supabase
       .from('chats')
       .select('user_id')
@@ -22,7 +21,6 @@ async function fetchMemory(chatId: string): Promise<string> {
 
     if (!chat?.user_id) return '';
 
-    // Fetch last 10 chats from this user (excluding current one)
     const { data: recentChats } = await supabase
       .from('chats')
       .select('id, title, created_at')
@@ -33,7 +31,6 @@ async function fetchMemory(chatId: string): Promise<string> {
 
     if (!recentChats || recentChats.length === 0) return '';
 
-    // Fetch first message from each chat for context
     const chatIds = recentChats.map((c: any) => c.id);
     const { data: firstMessages } = await supabase
       .from('messages')
@@ -41,19 +38,16 @@ async function fetchMemory(chatId: string): Promise<string> {
       .in('chat_id', chatIds)
       .order('created_at', { ascending: true });
 
-    // Build memory string: list of recent topics
     const seenChats = new Set<string>();
     const memories: string[] = [];
 
-    for (const chat of recentChats) {
-      if (seenChats.has(chat.id)) continue;
-      seenChats.add(chat.id);
+    for (const c of recentChats) {
+      if (seenChats.has(c.id)) continue;
+      seenChats.add(c.id);
 
-      const firstMsg = firstMessages?.find((m: any) => m.chat_id === chat.id);
-      const topic = chat.title || firstMsg?.query || '';
-      if (topic) {
-        memories.push(`- ${topic}`);
-      }
+      const firstMsg = firstMessages?.find((m: any) => m.chat_id === c.id);
+      const topic = c.title || firstMsg?.query || '';
+      if (topic) memories.push(`- ${topic}`);
     }
 
     if (memories.length === 0) return '';
@@ -92,13 +86,11 @@ class SearchAgent {
           response_blocks: [],
         });
       } else {
-        // Delete messages after current one
         await supabase
           .from('messages')
           .delete()
           .eq('chat_id', input.chatId)
           .gt('id', exists.id);
-        // Reset current message
         await supabase
           .from('messages')
           .update({
@@ -130,10 +122,7 @@ class SearchAgent {
         session.emitBlock({
           id: crypto.randomUUID(),
           type: 'widget',
-          data: {
-            widgetType: o.type,
-            params: o.data,
-          },
+          data: { widgetType: o.type, params: o.data },
         });
       });
       return widgetOutputs;
@@ -146,12 +135,11 @@ class SearchAgent {
       searchPromise = researcher.research(session, {
         chatHistory: input.chatHistory,
         followUp: input.followUp,
-        classification: classification,
+        classification,
         config: input.config,
       });
     }
 
-    // Fetch memory in parallel with research (non-blocking)
     const memoryPromise = fetchMemory(input.chatId);
 
     const [widgetOutputs, searchResults, memory] = await Promise.all([
@@ -160,9 +148,7 @@ class SearchAgent {
       memoryPromise,
     ]);
 
-    session.emit('data', {
-      type: 'researchComplete',
-    });
+    session.emit('data', { type: 'researchComplete' });
 
     const finalContext =
       searchResults?.searchFindings
@@ -173,9 +159,7 @@ class SearchAgent {
         .join('\n') || '';
 
     const widgetContext = widgetOutputs
-      .map((o) => {
-        return `<result>${o.llmContext}</result>`;
-      })
+      .map((o) => `<result>${o.llmContext}</result>`)
       .join('\n-------------\n');
 
     const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
@@ -186,17 +170,12 @@ class SearchAgent {
       input.config.mode,
       memory || undefined,
     );
+
     const answerStream = input.config.llm.streamText({
       messages: [
-        {
-          role: 'system',
-          content: writerPrompt,
-        },
+        { role: 'system', content: writerPrompt },
         ...input.chatHistory,
-        {
-          role: 'user',
-          content: input.followUp,
-        },
+        { role: 'user', content: input.followUp },
       ],
     });
 
@@ -209,25 +188,14 @@ class SearchAgent {
           type: 'text',
           data: chunk.contentChunk,
         };
-
         session.emitBlock(block);
-
         responseBlockId = block.id;
       } else {
         const block = session.getBlock(responseBlockId) as TextBlock | null;
-
-        if (!block) {
-          continue;
-        }
-
+        if (!block) continue;
         block.data += chunk.contentChunk;
-
         session.updateBlock(block.id, [
-          {
-            op: 'replace',
-            path: '/data',
-            value: block.data,
-          },
+          { op: 'replace', path: '/data', value: block.data },
         ]);
       }
     }

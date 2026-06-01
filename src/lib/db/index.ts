@@ -1,15 +1,22 @@
 /**
- * Database module - now powered by Supabase PostgreSQL
- * This file provides backward-compatible helpers used by existing code.
+ * Real Supabase Postgres client (data persistence + RLS-aware auth).
+ *
+ * Use this for every DB read/write. SQLite (src/lib/db/sqlite.ts) is
+ * reserved for tests and local ephemeral caches.
  */
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tbrqkcufpjtmlzypytqz.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicnFrY3VmcGp0bWx6eXB5dHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTc3NTUsImV4cCI6MjA4ODM5Mzc1NX0.w8JT5qD9_qr1jgESuUovs2dJQQUKIGG_QbMRQHToU0I';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-// Server-side client with service role for bypassing RLS in agents
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error(
+    '[Bokari DB] Missing Supabase env vars. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local.',
+  );
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 export default supabase;
-export const initDb = async () => { /* no-op for Supabase */ };
-export function saveDatabase() { /* no-op for Supabase */ }

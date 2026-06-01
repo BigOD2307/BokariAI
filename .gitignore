@@ -3,6 +3,9 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Local agent memory (not portable across machines)
+.claude/
+
 # Build output
 .next/
 out/

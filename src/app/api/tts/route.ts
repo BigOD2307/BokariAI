@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || 'sk_fb03b29ba2198db8dfed762e40d91bdabc4d27cb6c910e6c';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '[REDACTED]';
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel - default voice
 
 export async function POST(req: NextRequest) {

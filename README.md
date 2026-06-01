@@ -208,6 +208,37 @@ npm run dev
 
 Le serveur demarre sur http://localhost:3000 avec rechargement automatique.
 
+### Configuration Supabase (obligatoire pour le dev)
+
+Bokari utilise Supabase pour l'auth, les chats, les messages et le feed Discover.
+
+1. Creez un projet sur https://supabase.com (ou reutilisez un projet existant).
+2. Dans les reglages du projet, recuperez :
+   - **Project URL** (ex. `https://xxxxx.supabase.co`)
+   - **anon public key** (cle JWT, commence par `eyJ…`)
+   - **service_role key** (cle JWT secrete, ROL `service_role`)
+3. Creez un fichier `.env.local` a la racine :
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ…
+   SUPABASE_SERVICE_ROLE_KEY=eyJ…
+   SUPABASE_PROJECT_ID=xxxxx
+   ```
+
+4. Demarrez le serveur : `npm run dev`.
+5. Ouvrez http://localhost:3000/setup — la page detecte les tables manquantes et
+   affiche un bouton **"Ouvrir le SQL Editor Supabase"** + un bloc SQL
+   a copier-coller. Collez dans l'editeur SQL, cliquez **Run**, puis
+   revenez sur `/setup` et cliquez sur l'icone de rafraichissement.
+
+   Alternative CLI (recommandee en CI) : creez un personal access token sur
+   https://supabase.com/dashboard/account/tokens puis :
+
+   ```bash
+   SUPABASE_ACCESS_TOKEN=sbp_… node scripts/apply-migrations.js
+   ```
+
 ---
 
 ## CONFIGURATION
