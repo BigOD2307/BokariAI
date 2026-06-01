@@ -189,6 +189,12 @@ const AssistantSteps = ({
                               const faviconUrl = domain
                                 ? `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=128`
                                 : '';
+                              // Phase 4: distinguish Bokari-cited sources
+                              // (from the discover_search action) from
+                              // generic web citations.
+                              const isBokari =
+                                (result.metadata as any).source ===
+                                'bokari-discover';
 
                               return (
                                 <a
@@ -208,6 +214,11 @@ const AssistantSteps = ({
                                     />
                                   )}
                                   <span className="line-clamp-1 max-w-[120px]">{title}</span>
+                                  {isBokari && (
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-bokari-500/10 text-bokari-700 dark:text-bokari-300 border border-bokari-500/15">
+                                      Bokari
+                                    </span>
+                                  )}
                                 </a>
                               );
                             })}

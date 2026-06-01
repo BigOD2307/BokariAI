@@ -14,6 +14,7 @@ export { freshnessScore, ageMs } from './freshness';
 export { applyDiversityCap } from './diversity';
 export { isAfricanDomain, isBlockedDomain, AFRICAN_DOMAINS, BLOCKED_DOMAINS } from './domainLists';
 export { cosine, cosine01 } from './cosine';
+export { discoverCosineSearch } from './search';
 export type {
   Article,
   ScoredArticle,
@@ -26,3 +27,8 @@ export type {
   PipelineMeta,
   PipelineOptions,
 } from './types';
+export type {
+  DiscoverCandidate,
+  DiscoverSearchHit,
+  DiscoverSearchOptions,
+} from './search';
