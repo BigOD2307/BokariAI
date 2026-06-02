@@ -81,8 +81,8 @@ const ChartBlock: React.FC<Props> = ({ spec }) => {
         <button
           type="button"
           onClick={downloadSvg}
-          title="T\u00e9l\u00e9charger (SVG)"
-          aria-label="T\u00e9l\u00e9charger le graphique"
+          title={'T\u00e9l\u00e9charger (SVG)'}
+          aria-label={'T\u00e9l\u00e9charger le graphique'}
           className={cn(
             'p-1 rounded flex-shrink-0',
             'text-bokari-500 hover:bg-bokari-500/10',
@@ -97,10 +97,10 @@ const ChartBlock: React.FC<Props> = ({ spec }) => {
           {renderChart(spec)}
         </ResponsiveContainer>
       </div>
-      {spec.caption && (
+      {(spec.caption || spec.unit) && (
         <p className="text-xs text-black/50 dark:text-white/45 mt-2">
-          {spec.caption}
-          {spec.unit ? ` (${spec.unit})` : ''}
+          {spec.caption ?? ''}
+          {spec.unit ? (spec.caption ? ` (${spec.unit})` : spec.unit) : ''}
         </p>
       )}
     </div>
