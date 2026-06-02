@@ -18,7 +18,10 @@
     "eval:update-baseline": "npx tsx scripts/check-retrieval.ts --precomputed --update-baseline",
     "eval:embed-fixture": "npx tsx scripts/embed-fixture.ts",
     "eval:precompute": "npx tsx scripts/precompute-query-embeddings.ts",
-    "eval:sweep": "npx tsx scripts/sweep-cosine-weight.ts"
+    "eval:sweep": "npx tsx scripts/sweep-cosine-weight.ts",
+    "feedback:export": "npx tsx scripts/export-feedback.ts",
+    "feedback:export:positive": "npx tsx scripts/export-feedback.ts --positive",
+    "feedback:export:negative": "npx tsx scripts/export-feedback.ts --negative"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

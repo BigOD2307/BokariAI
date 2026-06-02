@@ -16,6 +16,7 @@ import {
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
 import Rewrite from './MessageActions/Rewrite';
+import Feedback from './MessageActions/Feedback';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
@@ -227,6 +228,7 @@ const MessageBox = ({
                     </div>
                     <div className="flex items-center gap-0.5 -mr-1.5">
                       <Copy initialMessage={parsedMessage} section={section} />
+                      <Feedback section={section} />
                       <button
                         onClick={handleTTS}
                         disabled={ttsLoading}

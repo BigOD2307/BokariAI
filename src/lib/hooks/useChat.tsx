@@ -1,7 +1,8 @@
 'use client';
 
-import { Message } from '@/components/ChatWindow';
 import { Block } from '@/lib/types';
+import type { Message, Widget } from '@/lib/types/window';
+import type { Section } from '@/lib/types/section';
 import {
   createContext,
   useContext,
@@ -18,16 +19,8 @@ import { getSuggestions } from '../actions';
 import { MinimalProvider } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
-import { Widget } from '@/components/ChatWindow';
 
-export type Section = {
-  message: Message;
-  widgets: Widget[];
-  parsedTextBlocks: string[];
-  speechMessage: string;
-  thinkingEnded: boolean;
-  suggestions?: string[];
-};
+export type { Section } from '@/lib/types/section';
 
 type ChatContext = {
   messages: Message[];

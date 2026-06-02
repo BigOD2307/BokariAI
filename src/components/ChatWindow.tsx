@@ -6,32 +6,9 @@ import EmptyChat from './EmptyChat';
 import NextError from 'next/error';
 import { useChat } from '@/lib/hooks/useChat';
 import SettingsButtonMobile from './Settings/SettingsButtonMobile';
-import { Block } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
-export interface BaseMessage {
-  chatId: string;
-  messageId: string;
-  createdAt: Date;
-}
-
-export interface Message extends BaseMessage {
-  backendId: string;
-  query: string;
-  responseBlocks: Block[];
-  status: 'answering' | 'completed' | 'error';
-}
-
-export interface File {
-  fileName: string;
-  fileExtension: string;
-  fileId: string;
-}
-
-export interface Widget {
-  widgetType: string;
-  params: Record<string, any>;
-}
+export type { BaseMessage, Message, File, Widget } from '@/lib/types/window';
 
 const ChatWindow = () => {
   const { hasError, notFound, messages, isReady } = useChat();
