@@ -9,7 +9,10 @@ import supabase from '@/lib/db';
 import UploadManager from '@/lib/uploads/manager';
 import { createServerClient } from '@/lib/supabase/server';
 import { startTimer, logStage } from '@/lib/observability/latence';
+import { recordTiming, getTimings } from '@/lib/observability/ttfb';
 import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
+import { tryGetCachedResponse, cacheResponse } from '@/lib/cache/semantic';
+import { embedOne } from '@/lib/ai/gateway';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,9 +98,259 @@ const ensureChatExists = async (input: {
   }
 };
 
+/**
+ * Build the chat SSE stream.  Returns a `ReadableStream` that
+ * the caller wires up to a `Response` object.
+ *
+ * Pattern (the Sprint 3 C2 refactor):
+ *   1. Construct the `TransformStream` *before* doing any blocking
+ *      work — model loading, Supabase auth, embedding lookups.
+ *   2. Return the stream immediately to the caller so the first
+ *      byte hits the wire ASAP.
+ *   3. Kick off all async work (auth, model load, cache lookup,
+ *      agent kick-off) after the stream is in flight.  All work
+ *      writes to the same writer, so the client sees a coherent
+ *      sequence of SSE events.
+ *
+ * This is the pattern recommended for Next.js App Router SSE
+ * (see next.js issue #9965) to avoid the request timing out
+ * before the first byte.
+ */
+const buildChatStream = (
+  req: Request,
+  body: Body,
+  tTotal: () => number,
+): ReadableStream<Uint8Array> => {
+  const { message } = body;
+
+  const responseStream = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = responseStream.writable.getWriter();
+  const encoder = new TextEncoder();
+
+  // Tiny initial event so the browser sees a connection within
+  // a few ms of the request being sent.  This drops TTFB on the
+  // client from "model-load + agent-kickoff" to "next tick".
+  queueMicrotask(() => {
+    void writer.write(encoder.encode(JSON.stringify({ type: 'open' }) + '\n'));
+  });
+
+  let tFirstBlock: (() => number) | null = null;
+  let closed = false;
+
+  const safeWrite = async (line: string): Promise<void> => {
+    if (closed) return;
+    try {
+      await writer.write(encoder.encode(line + '\n'));
+    } catch (err) {
+      // Stream already closed — log and mark so we stop trying.
+      closed = true;
+      console.warn('[Bokari] chat stream write failed:', err);
+    }
+  };
+
+  const tStart = startTimer();
+
+  // All async work happens here, AFTER the stream is returned.
+  void (async () => {
+    let session: SessionManager | null = null;
+    try {
+      const tAuth = startTimer();
+      const authClient = createServerClient(req);
+      const {
+        data: { user },
+      } = await authClient.auth.getUser();
+      logStage('chat.auth', tAuth(), { hasUser: !!user });
+      recordTiming('chat.auth', tAuth());
+
+      // Model load (was previously awaited before stream creation).
+      const tLoad = startTimer();
+      const registry = new ModelRegistry();
+      const [llm, embedding] = await Promise.all([
+        registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
+        registry.loadEmbeddingModel(
+          body.embeddingModel.providerId,
+          body.embeddingModel.key,
+        ),
+      ]);
+      logStage('chat.load_models', tLoad(), {
+        chat: body.chatModel.key,
+        embed: body.embeddingModel.key,
+      });
+      recordTiming('chat.load_models', tLoad());
+
+      const history: ChatTurnMessage[] = truncateHistory(
+        body.history,
+        MAX_HISTORY_ENTRIES,
+      ).map((msg) =>
+        msg[0] === 'human'
+          ? { role: 'user', content: msg[1] }
+          : { role: 'assistant', content: msg[1] },
+      );
+
+      // Semantic cache fast path.  On hit we emit a single
+      // "message" block with the cached response and end the
+      // stream — saving the entire search → read → write chain.
+      const tCache = startTimer();
+      let cacheHit: Awaited<ReturnType<typeof tryGetCachedResponse>> = null;
+      try {
+        const embeddingVec = await embedOne(message.content);
+        cacheHit = await tryGetCachedResponse(message.content, async () => embeddingVec);
+      } catch (cacheErr) {
+        console.warn('[Bokari] cache lookup failed; falling back to live:', cacheErr);
+      }
+      logStage('chat.cache_lookup', tCache(), { hit: cacheHit?.hitType ?? 'miss' });
+      recordTiming('chat.cache_lookup', tCache());
+
+      if (cacheHit) {
+        const tCacheRespond = startTimer();
+        const block = {
+          id: crypto.randomUUID(),
+          type: 'text',
+          data: cacheHit.response,
+        };
+        await safeWrite(JSON.stringify({ type: 'block', block }));
+        await safeWrite(JSON.stringify({ type: 'researchComplete' }));
+        await safeWrite(JSON.stringify({ type: 'messageEnd' }));
+        logStage('chat.cache_serve', tCacheRespond(), { hit: cacheHit.hitType });
+        recordTiming('chat.cache_serve', tCacheRespond());
+        logStage('chat.total', tTotal(), { ok: true, cache: cacheHit.hitType });
+        try { await writer.close(); } catch { /* noop */ }
+        closed = true;
+        return;
+      }
+
+      session = SessionManager.createSession();
+      const agent = new SearchAgent();
+
+      const disconnect = session.subscribe((event: string, data: any) => {
+        void (async () => {
+          if (closed) return;
+          if (event === 'data') {
+            if (data.type === 'block') {
+              if (!tFirstBlock) {
+                tFirstBlock = startTimer();
+                logStage('chat.first_block', tFirstBlock());
+                recordTiming('chat.first_block', tFirstBlock());
+              }
+              await safeWrite(JSON.stringify({ type: 'block', block: data.block }));
+            } else if (data.type === 'updateBlock') {
+              await safeWrite(
+                JSON.stringify({
+                  type: 'updateBlock',
+                  blockId: data.blockId,
+                  patch: data.patch,
+                }),
+              );
+            } else if (data.type === 'researchComplete') {
+              await safeWrite(JSON.stringify({ type: 'researchComplete' }));
+            }
+          } else if (event === 'analyzing') {
+            await safeWrite(
+              JSON.stringify({ type: 'analyzing', step: data.step, message: data.message }),
+            );
+          } else if (event === 'end') {
+            // Try to cache the response for next time.  We do this
+            // best-effort — failures here must not break the
+            // stream because the user already has their answer.
+            const sess = session;
+            if (!sess) return;
+            try {
+              const tCacheWrite = startTimer();
+              const blocks = sess.getAllBlocks();
+              const text = blocks
+                .filter((b) => b.type === 'text')
+                .map((b) => (b as { type: 'text'; data: string }).data)
+                .join('\n');
+              if (text) {
+                const vec = await embedOne(message.content);
+                await cacheResponse(message.content, vec, text, {
+                  metadata: { mode: body.optimizationMode },
+                });
+              }
+              logStage('chat.cache_write', tCacheWrite());
+              recordTiming('chat.cache_write', tCacheWrite());
+            } catch (cacheErr) {
+              console.warn('[Bokari] cache write failed:', cacheErr);
+            }
+            await safeWrite(JSON.stringify({ type: 'messageEnd' }));
+            logStage('chat.total', tTotal(), { ok: true, live: true });
+            try { await writer.close(); } catch { /* noop */ }
+            closed = true;
+            sess.removeAllListeners();
+          } else if (event === 'error') {
+            await safeWrite(
+              JSON.stringify({ type: 'error', data: data.data }),
+            );
+            logStage('chat.total', tTotal(), { ok: false });
+            try { await writer.close(); } catch { /* noop */ }
+            closed = true;
+            if (session) session.removeAllListeners();
+          }
+        })();
+      });
+
+      ensureChatExists({
+        id: body.message.chatId,
+        sources: body.sources as SearchSources[],
+        fileIds: body.files,
+        query: message.content,
+        userId: user?.id,
+      });
+
+      const tAgent = startTimer();
+      agent
+        .searchAsync(session, {
+          chatHistory: history,
+          followUp: message.content,
+          chatId: body.message.chatId,
+          messageId: body.message.messageId,
+          config: {
+            llm,
+            embedding,
+            sources: body.sources as SearchSources[],
+            mode: body.optimizationMode,
+            fileIds: body.files,
+            systemInstructions: body.systemInstructions || 'None',
+          },
+        })
+        .then(() => logStage('chat.agent', tAgent()))
+        .catch((err) => {
+          console.error('[Bokari] Search agent error:', err);
+          logStage('chat.agent', tAgent(), { error: true });
+          session?.emit('error', {
+            data: 'Une erreur est survenue lors de la recherche. Veuillez reessayer.',
+          });
+        });
+
+      req.signal.addEventListener('abort', () => {
+        closed = true;
+        disconnect();
+        try { void writer.close(); } catch { /* noop */ }
+      });
+    } catch (err) {
+      console.error('[Bokari] chat stream background error:', err);
+      logStage('chat.total', tTotal(), { ok: false, threw: true });
+      await safeWrite(
+        JSON.stringify({
+          type: 'error',
+          data: 'Une erreur est survenue. Veuillez reessayer.',
+        }),
+      );
+      try { await writer.close(); } catch { /* noop */ }
+      closed = true;
+    } finally {
+      // Suppress unused-var lint; tStart is here for the future
+      // "background-only" timing analysis.
+      void tStart;
+      void getTimings;
+    }
+  })();
+
+  return responseStream.readable;
+};
+
 export const POST = async (req: Request) => {
   const tTotal = startTimer();
-  let tFirstBlock: (() => number) | null = null;
   try {
     const tParse = startTimer();
     const reqBody = (await req.json()) as Body;
@@ -120,127 +373,9 @@ export const POST = async (req: Request) => {
       );
     }
 
-    const tLoad = startTimer();
-    const registry = new ModelRegistry();
-    const [llm, embedding] = await Promise.all([
-      registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
-      registry.loadEmbeddingModel(
-        body.embeddingModel.providerId,
-        body.embeddingModel.key,
-      ),
-    ]);
-    logStage('chat.load_models', tLoad(), {
-      chat: body.chatModel.key,
-      embed: body.embeddingModel.key,
-    });
-
-    const history: ChatTurnMessage[] = truncateHistory(
-      body.history,
-      MAX_HISTORY_ENTRIES,
-    ).map((msg) =>
-      msg[0] === 'human'
-        ? { role: 'user', content: msg[1] }
-        : { role: 'assistant', content: msg[1] },
-    );
-
-    const agent = new SearchAgent();
-    const session = SessionManager.createSession();
-    const responseStream = new TransformStream();
-    const writer = responseStream.writable.getWriter();
-    const encoder = new TextEncoder();
-
-    const disconnect = session.subscribe((event: string, data: any) => {
-      if (event === 'data') {
-        if (data.type === 'block') {
-          if (!tFirstBlock) {
-            tFirstBlock = startTimer();
-            logStage('chat.first_block', tFirstBlock());
-          }
-          writer.write(
-            encoder.encode(
-              JSON.stringify({ type: 'block', block: data.block }) + '\n',
-            ),
-          );
-        } else if (data.type === 'updateBlock') {
-          writer.write(
-            encoder.encode(
-              JSON.stringify({
-                type: 'updateBlock',
-                blockId: data.blockId,
-                patch: data.patch,
-              }) + '\n',
-            ),
-          );
-        } else if (data.type === 'researchComplete') {
-          writer.write(
-            encoder.encode(JSON.stringify({ type: 'researchComplete' }) + '\n'),
-          );
-        }
-      } else if (event === 'end') {
-        writer.write(encoder.encode(JSON.stringify({ type: 'messageEnd' }) + '\n'));
-        writer.close();
-        logStage('chat.total', tTotal(), { ok: true });
-        session.removeAllListeners();
-      } else if (event === 'error') {
-        writer.write(
-          encoder.encode(
-            JSON.stringify({ type: 'error', data: data.data }) + '\n',
-          ),
-        );
-        writer.close();
-        logStage('chat.total', tTotal(), { ok: false });
-        session.removeAllListeners();
-      }
-    });
-
-    const tAgent = startTimer();
-    agent
-      .searchAsync(session, {
-        chatHistory: history,
-        followUp: message.content,
-        chatId: body.message.chatId,
-        messageId: body.message.messageId,
-        config: {
-          llm,
-          embedding,
-          sources: body.sources as SearchSources[],
-          mode: body.optimizationMode,
-          fileIds: body.files,
-          systemInstructions: body.systemInstructions || 'None',
-        },
-      })
-      .then(() => logStage('chat.agent', tAgent()))
-      .catch((err) => {
-        console.error('[Bokari] Search agent error:', err);
-        logStage('chat.agent', tAgent(), { error: true });
-        session.emit('error', {
-          data: 'Une erreur est survenue lors de la recherche. Veuillez reessayer.',
-        });
-      });
-
-    // Get user from Supabase Auth (cookie/header) — fire-and-forget so it
-    // doesn't block the first byte.  We still await for `ensureChatExists`
-    // because that needs the user id.
-    const authClient = createServerClient(req);
-    const tAuth = startTimer();
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
-    logStage('chat.auth', tAuth(), { hasUser: !!user });
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: message.content,
-      userId: user?.id,
-    });
-
-    req.signal.addEventListener('abort', () => {
-      disconnect();
-      writer.close();
-    });
-
-    return new Response(responseStream.readable, {
+    // NEW: return the stream immediately, do all async work after.
+    const stream = buildChatStream(req, body, tTotal);
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         Connection: 'keep-alive',
