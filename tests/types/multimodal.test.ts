@@ -25,4 +25,13 @@ describe('multimodal types', () => {
   it('supports application/pdf', () => {
     expect(SUPPORTED_PDF_MIMES).toContain('application/pdf');
   });
+
+  it('exports readonly mime lists', () => {
+    expect(Array.isArray(SUPPORTED_IMAGE_MIMES)).toBe(true);
+    expect(Array.isArray(SUPPORTED_PDF_MIMES)).toBe(true);
+  });
+
+  it('does not exceed 20MB for pdf cap', () => {
+    expect(MAX_PDF_SIZE_BYTES).toBeLessThanOrEqual(25 * 1024 * 1024);
+  });
 });

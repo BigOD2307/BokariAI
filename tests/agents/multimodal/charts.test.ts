@@ -50,6 +50,27 @@ describe('looksLikeChartRequest', () => {
   it('returns false for empty input', () => {
     expect(looksLikeChartRequest('')).toBe(false);
   });
+
+  it('handles non-string input safely', () => {
+    expect(
+      looksLikeChartRequest(null as unknown as string),
+    ).toBe(false);
+    expect(
+      looksLikeChartRequest(undefined as unknown as string),
+    ).toBe(false);
+  });
+
+  it('detects "top 10" trigger', () => {
+    expect(looksLikeChartRequest('Donne-moi le top 10 des villes')).toBe(true);
+  });
+
+  it('detects "répartition" trigger', () => {
+    expect(looksLikeChartRequest('Répartition de la population')).toBe(true);
+  });
+
+  it('detects "repartition" without accent', () => {
+    expect(looksLikeChartRequest('Repartition des revenus')).toBe(true);
+  });
 });
 
 describe('extractChartSpec', () => {
@@ -144,5 +165,66 @@ describe('extractChartSpec', () => {
     expect(msgs[0]?.role).toBe('system');
     expect(msgs[1]?.role).toBe('user');
     expect(msgs[1]?.content).toContain('question');
+  });
+
+  it('returns null when xKey is missing', async () => {
+    const llm = fakeLlm(
+      JSON.stringify({
+        kind: 'bar',
+        title: 't',
+        series: [{ name: 'v' }],
+        data: [{ v: 1 }],
+      }),
+    );
+    const spec = await extractChartSpec('q', sources, llm);
+    expect(spec).toBeNull();
+  });
+
+  it('returns null when series is empty', async () => {
+    const llm = fakeLlm(
+      JSON.stringify({
+        kind: 'bar',
+        title: 't',
+        xKey: 'x',
+        series: [],
+        data: [{ x: 1 }],
+      }),
+    );
+    const spec = await extractChartSpec('q', sources, llm);
+    expect(spec).toBeNull();
+  });
+
+  it('returns null when data is empty', async () => {
+    const llm = fakeLlm(
+      JSON.stringify({
+        kind: 'bar',
+        title: 't',
+        xKey: 'x',
+        series: [{ name: 'v' }],
+        data: [],
+      }),
+    );
+    const spec = await extractChartSpec('q', sources, llm);
+    expect(spec).toBeNull();
+  });
+
+  it('attaches sourceIds from the first three sources', async () => {
+    const manySources: ChartSource[] = [
+      { id: 10, title: 'a', content: 'a' },
+      { id: 20, title: 'b', content: 'b' },
+      { id: 30, title: 'c', content: 'c' },
+      { id: 40, title: 'd', content: 'd' },
+    ];
+    const llm = fakeLlm(
+      JSON.stringify({
+        kind: 'bar',
+        title: 't',
+        xKey: 'x',
+        series: [{ name: 'v' }],
+        data: [{ x: 1, v: 2 }],
+      }),
+    );
+    const spec = await extractChartSpec('q', manySources, llm);
+    expect(spec?.sourceIds).toEqual([10, 20, 30]);
   });
 });

@@ -56,4 +56,25 @@ describe('ImageBlock (SSR smoke)', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
+
+  it('renders cost + duration when vision has them', () => {
+    const vision: VisionResult = {
+      attachmentId: 'a1',
+      description: 'A dog',
+      model: 'anthropic/claude-sonnet-4.6',
+      costUsd: 0.0123,
+      durationMs: 1000,
+    };
+    const html = renderToStaticMarkup(
+      <ImageBlock attachment={ATT} vision={vision} />,
+    );
+    expect(html).toContain('0.0123');
+    expect(html).toContain('1000ms');
+  });
+
+  it('omits vision block when not provided', () => {
+    const html = renderToStaticMarkup(<ImageBlock attachment={ATT} />);
+    expect(html).not.toContain('gemini');
+    expect(html).not.toContain('claude');
+  });
 });

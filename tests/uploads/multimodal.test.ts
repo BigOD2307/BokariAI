@@ -146,4 +146,19 @@ describe('dropHandler', () => {
     expect(out).toHaveLength(1);
     expect(out[0]?.filename).toBe('ok.png');
   });
+
+  it('returns empty array when no files are dropped', async () => {
+    const e = {
+      preventDefault: vi.fn(),
+      dataTransfer: { files: [] },
+    } as unknown as DragEvent;
+    const out = await dropHandler(e);
+    expect(out).toEqual([]);
+  });
+
+  it('handles drop without dataTransfer gracefully', async () => {
+    const e = { preventDefault: vi.fn() } as unknown as DragEvent;
+    const out = await dropHandler(e);
+    expect(out).toEqual([]);
+  });
 });

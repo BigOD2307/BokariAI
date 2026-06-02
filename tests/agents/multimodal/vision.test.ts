@@ -153,4 +153,50 @@ describe('analyseImage (router)', () => {
     );
     expect(fake).toHaveBeenCalledTimes(2);
   });
+
+  it('attaches the original attachment id to the result', async () => {
+    const fake = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fake.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        status: 200,
+        body: {
+          choices: [{ message: { content: 'ok' } }],
+          usage: { cost: 0 },
+        },
+      }),
+    );
+    const att = { ...ATT, id: 'attach-xyz' };
+    const r = await analyseImage(att, 'p', 'k');
+    expect(r.attachmentId).toBe('attach-xyz');
+  });
+
+  it('records non-zero durationMs', async () => {
+    const fake = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fake.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        status: 200,
+        body: {
+          choices: [{ message: { content: 'ok' } }],
+          usage: { cost: 0 },
+        },
+      }),
+    );
+    const r = await analyseImage(ATT, 'p', 'k');
+    expect(r.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns empty text when choices are empty', async () => {
+    const fake = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fake.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        status: 200,
+        body: { choices: [], usage: { cost: 0 } },
+      }),
+    );
+    const r = await analyseImage(ATT, 'p', 'k');
+    expect(r.description).toBe('');
+  });
 });
