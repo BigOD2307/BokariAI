@@ -77,6 +77,52 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     });
   }
 
+  /**
+   * Mark the system message and the last context message as
+   * ephemeral-cacheable.  Drops the marginal-cost-per-1k-tokens
+   * by ~50% on repeat calls (OpenAI bills cached reads at 0.5x).
+   *
+   * The `cache_control` field is not yet in the OpenAI SDK
+   * types so we attach it via a cast.  The field is forwarded
+   * as-is by the SDK to the API.
+   *
+   * Subclasses (e.g. Anthropic) override this to use the
+   * provider-specific shape.
+   */
+  applyPromptCaching(
+    messages: ChatCompletionMessageParam[],
+  ): ChatCompletionMessageParam[] {
+    if (messages.length === 0) return messages;
+    const result = messages.slice();
+    const withCache = (
+      msg: ChatCompletionMessageParam,
+    ): ChatCompletionMessageParam => {
+      if (typeof msg.content === 'string' && msg.content.length > 0) {
+        return {
+          ...msg,
+          content: [
+            {
+              type: 'text',
+              text: msg.content,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        } as unknown as ChatCompletionMessageParam;
+      }
+      return msg;
+    };
+    if (result[0]?.role === 'system') {
+      result[0] = withCache(result[0]);
+    }
+    if (result.length > 1) {
+      const lastIdx = result.length - 1;
+      if (result[lastIdx]?.role !== 'system') {
+        result[lastIdx] = withCache(result[lastIdx]!);
+      }
+    }
+    return result;
+  }
+
   async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
     const openaiTools: ChatCompletionTool[] = [];
 
@@ -94,7 +140,9 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     const response = await this.openAIClient.chat.completions.create({
       model: this.resolvedModel,
       tools: openaiTools.length > 0 ? openaiTools : undefined,
-      messages: this.convertToOpenAIMessages(input.messages),
+      messages: this.applyPromptCaching(
+        this.convertToOpenAIMessages(input.messages),
+      ),
       temperature:
         input.options?.temperature ?? this.config.options?.temperature ?? 1.0,
       top_p: input.options?.topP ?? this.config.options?.topP,
@@ -150,7 +198,9 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
 
     const stream = await this.openAIClient.chat.completions.create({
       model: this.resolvedModel,
-      messages: this.convertToOpenAIMessages(input.messages),
+      messages: this.applyPromptCaching(
+        this.convertToOpenAIMessages(input.messages),
+      ),
       tools: openaiTools.length > 0 ? openaiTools : undefined,
       temperature:
         input.options?.temperature ?? this.config.options?.temperature ?? 1.0,
@@ -204,7 +254,9 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
 
   async generateObject<T>(input: GenerateObjectInput): Promise<T> {
     const response = await this.openAIClient.chat.completions.parse({
-      messages: this.convertToOpenAIMessages(input.messages),
+      messages: this.applyPromptCaching(
+        this.convertToOpenAIMessages(input.messages),
+      ),
       model: this.resolvedModel,
       temperature:
         input.options?.temperature ?? this.config.options?.temperature ?? 1.0,
