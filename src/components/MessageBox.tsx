@@ -28,6 +28,7 @@ import AssistantSteps from './AssistantSteps';
 import { ResearchBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
+import ImageBlock from './MessageRenderer/ImageBlock';
 
 const ThinkTagProcessor = ({
   children,
@@ -125,6 +126,22 @@ const MessageBox = ({
           {section.message.query}
         </h2>
       </div>
+
+      {/* User attachments (uploaded images) */}
+      {section.message.attachments && section.message.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {section.message.attachments.map((att: import('@/lib/types/multimodal').Attachment) => {
+            const vision = section.message.visionResults?.find(
+              (v: import('@/lib/types/multimodal').VisionResult) =>
+                v.attachmentId === att.id,
+            );
+            if (att.kind !== 'image') return null;
+            return (
+              <ImageBlock key={att.id} attachment={att} vision={vision} />
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row lg:justify-between lg:gap-10">
         <div
