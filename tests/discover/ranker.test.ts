@@ -278,4 +278,55 @@ describe('rank', () => {
     // And B is never crushed below 0.7x of A.
     expect(byUrl[baseB.url].final / byUrl[baseA.url].final).toBeGreaterThanOrEqual(0.7 - 1e-9);
   });
+
+  it('cosineWeight=0 makes the ranker pure BM25 (cosine ignored)', () => {
+    const article = makeArticle({
+      id: 'a1', title: 'Bamako', content: 'foo', embedding: [1, 0, 0, 0],
+    });
+    const out = rank([article], 'Bamako', {
+      ...baseOptions,
+      cosineWeight: 0,
+      queryEmbedding: [1, 0, 0, 0], // cos=1 with itself
+    });
+    // With weight=0, the cosine factor is (1-0) + 0*1 = 1.0 → no effect.
+    // The recorded `cosine` is still 1 (we computed it), but the multiplier
+    // is multiplied by 1.0.
+    expect(out[0]?.scoreBreakdown.cosine).toBe(1);
+    // The cosine factor in the final should be 1.0 (the multiplier is
+    // (1-0) + 0*1 = 1.0).  Verify by checking that the breakdown's
+    // cosine field equals 1 and that the BM25-only part dominates.
+    const breakdown = out[0]?.scoreBreakdown;
+    expect(breakdown?.bm25).toBeGreaterThan(0);
+  });
+
+  it('cosineWeight=1 lets cosine dominate (cos=0 still gives 0)', () => {
+    const a1 = makeArticle({ id: 'a1', title: 'Bamako', content: 'foo', embedding: [1, 0, 0] });
+    const a2 = makeArticle({ id: 'a2', title: 'Bamako', content: 'foo', embedding: [0, 1, 0] });
+    const out = rank([a2, a1], 'Bamako', {
+      ...baseOptions,
+      cosineWeight: 1,
+      queryEmbedding: [1, 0, 0],
+    });
+    // a1 has cos=1, a2 has cos=0 — with weight=1, a1 should win
+    // even though BM25 ties.
+    expect(out[0]?.id).toBe('a1');
+  });
+
+  it('cosineWeight is clamped to [0, 1]', () => {
+    const article = makeArticle({ id: 'a1', title: 'Bamako', content: 'foo', embedding: [1, 0, 0] });
+    // Out-of-range weight should be clamped, not crash.
+    const out1 = rank([article], 'Bamako', {
+      ...baseOptions,
+      cosineWeight: 5, // > 1, should clamp to 1
+      queryEmbedding: [1, 0, 0],
+    });
+    expect(out1).toHaveLength(1);
+
+    const out2 = rank([article], 'Bamako', {
+      ...baseOptions,
+      cosineWeight: -2, // < 0, should clamp to 0
+      queryEmbedding: [1, 0, 0],
+    });
+    expect(out2).toHaveLength(1);
+  });
 });

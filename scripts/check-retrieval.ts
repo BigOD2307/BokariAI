@@ -9,20 +9,26 @@
  * retrieval by more than `--threshold=0.02` will fail CI.
  *
  * Usage:
- *   npx tsx scripts/check-retrieval.ts
- *   npx tsx scripts/check-retrieval.ts --offline
+ *   npx tsx scripts/check-retrieval.ts                    # full live eval (needs OPENROUTER_API_KEY)
+ *   npx tsx scripts/check-retrieval.ts --offline          # unit vectors, BM25-only gate
+ *   npx tsx scripts/check-retrieval.ts --precomputed      # cached BGE-M3 vectors, full hybrid gate
  *   npx tsx scripts/check-retrieval.ts --threshold=0.05
  *   npx tsx scripts/check-retrieval.ts --update-baseline
  *
  * The baseline lives at `docs/eval/baseline.json` and is updated
  * manually (or via `--update-baseline`) when the eval is intentionally
  * improved.  Threshold defaults to 0.02 (NDCG@10 / MRR / hit-rate).
+ *
+ * `--precomputed` is the default in CI (see
+ * .github/workflows/retrieval-regression.yml).  It uses the
+ * BGE-M3 vectors in `docs/eval/query-embeddings.json` so the gate
+ * catches hybrid regressions, not just BM25 regressions.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { FIXTURE_CORPUS_EMBEDDED } from '../src/lib/eval/fixture-embedded';
 import { AFRICAN_EVAL_QUERIES } from '../src/lib/eval/dataset';
-import { runEval } from '../src/lib/eval/runner';
+import { runEval, type EmbedFn } from '../src/lib/eval/runner';
 import { embed } from '../src/lib/ai/gateway';
 
 const args = process.argv.slice(2);
@@ -34,8 +40,10 @@ function arg(flag: string, fallback: string | null = null): string | null {
 }
 
 const offline = args.includes('--offline');
+const precomputed = args.includes('--precomputed');
 const updateBaseline = args.includes('--update-baseline');
 const threshold = Number(arg('--threshold', '0.02'));
+const cosineWeight = Number(arg('--cosine-weight', '0.3'));
 const baselinePath = resolve('docs/eval/baseline.json');
 
 type Baseline = {
@@ -44,6 +52,7 @@ type Baseline = {
   queries: number;
   corpusSize: number;
   k: number;
+  cosineWeight: number;
   model: string;
   recordedAt: string;
 };
@@ -55,16 +64,47 @@ function unitVector(dim: number): number[] {
   return v;
 }
 
+function loadPrecomputed(): EmbedFn {
+  const path = resolve('docs/eval/query-embeddings.json');
+  if (!existsSync(path)) {
+    throw new Error(
+      `[check-retrieval] --precomputed requires docs/eval/query-embeddings.json. ` +
+        `Run \`npm run eval:precompute\` first.`,
+    );
+  }
+  const cached = new Map(
+    Object.entries(JSON.parse(readFileSync(path, 'utf-8')) as Record<string, number[]>),
+  );
+  return async (texts: string[]) =>
+    texts.map((t) => {
+      const v = cached.get(t);
+      if (!v) throw new Error(`No precomputed embedding for "${t}"`);
+      return v;
+    });
+}
+
 async function main() {
+  let embedFn: EmbedFn;
+  let mode: 'live' | 'precomputed' | 'offline';
+  if (precomputed) {
+    embedFn = loadPrecomputed();
+    mode = 'precomputed';
+  } else if (offline) {
+    embedFn = async (inputs: string[]) => inputs.map(() => unitVector(1024));
+    mode = 'offline';
+  } else {
+    embedFn = embed;
+    mode = 'live';
+  }
+
+  console.log(`[check-retrieval] Mode: ${mode}  Cosine weight: ${cosineWeight.toFixed(2)}`);
   console.log('[check-retrieval] Running eval…');
   const t0 = Date.now();
-  const embedFn = offline
-    ? async (inputs: string[]): Promise<number[][]> => inputs.map(() => unitVector(1024))
-    : embed;
   const report = await runEval(
     FIXTURE_CORPUS_EMBEDDED,
     AFRICAN_EVAL_QUERIES,
     embedFn,
+    { cosineWeight },
   );
   console.log(`[check-retrieval] Done in ${Date.now() - t0}ms.`);
 
@@ -74,7 +114,13 @@ async function main() {
     queries: report.queries,
     corpusSize: FIXTURE_CORPUS_EMBEDDED.length,
     k: report.k,
-    model: offline ? 'unit-vector' : 'baai/bge-m3',
+    cosineWeight,
+    model:
+      mode === 'precomputed'
+        ? 'baai/bge-m3 (precomputed)'
+        : mode === 'offline'
+          ? 'unit-vector'
+          : 'baai/bge-m3',
     recordedAt: new Date().toISOString(),
   };
 
@@ -96,7 +142,7 @@ async function main() {
   }
 
   const baseline: Baseline = JSON.parse(readFileSync(baselinePath, 'utf-8'));
-  console.log(`\n[check-retrieval] Baseline (${baseline.recordedAt}):`);
+  console.log(`\n[check-retrieval] Baseline (${baseline.recordedAt}, w=${baseline.cosineWeight.toFixed(2)}):`);
   console.log(`  BM25-only  NDCG@${baseline.k}: ${baseline.bm25Only.ndcgAtK.toFixed(3)}  MRR: ${baseline.bm25Only.mrr.toFixed(3)}  Hit: ${baseline.bm25Only.hitRateAtK.toFixed(3)}`);
   console.log(`  Hybrid     NDCG@${baseline.k}: ${baseline.hybrid.ndcgAtK.toFixed(3)}  MRR: ${baseline.hybrid.mrr.toFixed(3)}  Hit: ${baseline.hybrid.hitRateAtK.toFixed(3)}`);
 

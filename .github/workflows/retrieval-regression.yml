@@ -1,15 +1,25 @@
 name: Retrieval regression check
 
-# CI gate for the Bokari citation engine.  Runs the eval harness
-# in offline mode (no OpenRouter calls) and compares to the
-# baseline at `docs/eval/baseline.json`.  Fails if any of:
+# CI gate for the Bokari citation engine.  Uses **precomputed**
+# mode (BGE-M3 vectors cached at `docs/eval/query-embeddings.json`
+# and `src/lib/eval/fixture-embedded.ts`) so the gate catches
+# **hybrid** regressions, not just BM25 regressions — and runs
+# without any OpenRouter API call.
+#
+# Fails if any of:
 #   - hybrid NDCG@10 drops by > 0.02
 #   - hybrid MRR drops by > 0.02
 #   - hybrid hit-rate@10 drops by > 0.02
 #
 # To intentionally improve the baseline, run:
-#   npx tsx scripts/check-retrieval.ts --update-baseline --offline
+#   npx tsx scripts/check-retrieval.ts --precomputed --update-baseline
 # and commit the new docs/eval/baseline.json.
+#
+# To add new queries to the eval, run:
+#   npx tsx scripts/embed-fixture.ts         # re-embed fixture articles
+#   npx tsx scripts/precompute-query-embeddings.ts  # re-embed queries
+#   npx tsx scripts/check-retrieval.ts --precomputed --update-baseline
+# and commit all three files.
 
 on:
   pull_request:
@@ -20,13 +30,17 @@ on:
       - 'scripts/run-eval.ts'
       - 'scripts/check-retrieval.ts'
       - 'scripts/embed-fixture.ts'
+      - 'scripts/precompute-query-embeddings.ts'
+      - 'scripts/sweep-cosine-weight.ts'
       - 'docs/eval/baseline.json'
+      - 'docs/eval/query-embeddings.json'
+      - 'src/lib/eval/fixture-embedded.ts'
   push:
     branches: [master]
 
 jobs:
   retrieval-check:
-    name: Retrieval regression check
+    name: Retrieval regression check (precomputed hybrid)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -41,8 +55,8 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Run retrieval eval (offline)
-        run: npx tsx scripts/check-retrieval.ts --offline
+      - name: Run retrieval eval (precomputed BGE-M3)
+        run: npx tsx scripts/check-retrieval.ts --precomputed
 
       - name: Upload eval report on failure
         if: failure()
@@ -51,5 +65,6 @@ jobs:
           name: retrieval-regression-report
           path: |
             docs/eval/baseline.json
+            docs/eval/query-embeddings.json
             docs/eval/2026-06-02*.md
           if-no-files-found: ignore

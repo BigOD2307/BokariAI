@@ -2,14 +2,19 @@
  * @module discover/ranker
  * @description Hybrid ranker: BM25 + freshness + African boost + quality + (optional) cosine.
  * @author Amadou — Dicken AI
- * @version 1.1.0
+ * @version 1.2.0
  *
  * This is the heart of the Discover pipeline.  Given a query and a set
  * of articles, it produces a deterministic ordering with an attached
  * score breakdown so we can debug bad rankings in the logs.
  *
  * Final score =
- *   BM25 * freshness * africanBoost * (0.5 + 0.5 * quality) * (0.7 + 0.3 * cosine)
+ *   BM25 * freshness * africanBoost * (0.5 + 0.5 * quality)
+ *           * (1 - cosineWeight + cosineWeight * cosine01)
+ *
+ * The `cosineWeight` knob (default 0.3) controls how much cosine
+ * similarity influences the final score.  Use `scripts/sweep-cosine-weight.ts`
+ * to find the optimal value on the eval fixture.
  *
  * Why multiplicative for freshness & boost?  Because we want to *gate*
  * these signals, not just nudge them.  A 7-day-old article with a
@@ -22,15 +27,15 @@
  * not a gate.  A high-quality but stale article can still surface
  * for evergreen topics.
  *
- * Why multiplicative for cosine with a 0.7 floor?  Because semantic
- * similarity should *boost* a good BM25 hit, never crush a strong
- * lexical match when the embedding is uninformative.  Floor 0.7 means
- * cosine can lift an article by at most 30% but never penalise it
- * below 70% of its lexical-only score.
+ * Why multiplicative for cosine with a floor of (1 - cosineWeight)?
+ * Because semantic similarity should *boost* a good BM25 hit, never
+ * crush a strong lexical match when the embedding is uninformative.
+ * With cosineWeight=0.3, cosine can lift an article by at most 30%
+ * but never penalise it below 70% of its lexical-only score.
  *
  * If no `queryEmbedding` is provided (or the candidate has no
  * `embedding`), the cosine term is exactly 0.5, making the cosine
- * factor 0.7 + 0.3*0.5 = 0.85 — a tiny fixed penalty that
+ * factor (1 - 0.3) + 0.3 * 0.5 = 0.85 — a tiny fixed penalty that
  * disappears the moment any candidate gets embedded.
  *
  * No external model.  No random shuffling.  No "AI ranking" black box.
@@ -44,13 +49,14 @@ import { isAfricanDomain } from './domainLists';
 import { cosine, cosine01 } from './cosine';
 import type { Article, RankOptions, ScoredArticle, ScoreBreakdown } from './types';
 
+export const DEFAULT_COSINE_WEIGHT = 0.3;
+export const DEFAULT_COSINE_FLOOR_FACTOR = 0.7; // 1 - DEFAULT_COSINE_WEIGHT
+
 const DEFAULT_LIMIT = 30;
 const DEFAULT_MAX_PER_DOMAIN = 2;
 const AFRICAN_BOOST_FACTOR = 1.5;
 const AFRICAN_BOOST_NEUTRAL = 1.0;
 const COSINE_NEUTRAL = 0.5;
-const COSINE_FLOOR = 0.7;
-const COSINE_WEIGHT = 0.3;
 
 /**
  * Build the indexable text for an article: title (3x) + content + domain.
@@ -133,15 +139,17 @@ export function rank(
     const quality = article.qualityScore ?? 0;
     const qualityMultiplier = 0.5 + 0.5 * Math.max(0, Math.min(1, quality));
 
-    // Cosine blend.  We use a (0.7 + 0.3 * cos01) factor so cosine can
-    // boost by at most 30% but never crush BM25.  When no embedding is
-    // available (refresh not yet run, or query is not embedded), the
-    // factor is 0.7 + 0.3 * 0.5 = 0.85 — a small, uniform discount
-    // that disappears the moment at least one side has an embedding.
+    // Cosine blend.  We use a (1 - w + w * cos01) factor so cosine can
+    // boost by at most w (default 30%) but never crush BM25.  When no
+    // embedding is available (refresh not yet run, or query is not
+    // embedded), the factor is (1 - w) + w * 0.5 = 0.85 — a small,
+    // uniform discount that disappears the moment at least one side
+    // has an embedding.
     //
     // The eval harness passes `useCosine: false` to get a clean BM25
     // baseline.  In that case the factor is exactly 1.0 — pure BM25.
     const useCosine = options.useCosine !== false;
+    const cosineWeight = clamp01(options.cosineWeight ?? DEFAULT_COSINE_WEIGHT);
     let cos01 = COSINE_NEUTRAL;
     let cosineMultiplier: number;
     if (!useCosine) {
@@ -152,7 +160,7 @@ export function rank(
       cos01 = hasQ && hasA
         ? cosine01(cosine(options.queryEmbedding as number[], article.embedding as number[]))
         : COSINE_NEUTRAL;
-      cosineMultiplier = COSINE_FLOOR + COSINE_WEIGHT * cos01;
+      cosineMultiplier = (1 - cosineWeight) + cosineWeight * cos01;
     }
 
     const final = bm25 * fresh * africanBoost * qualityMultiplier * cosineMultiplier;
@@ -177,4 +185,9 @@ export function rank(
 
   // 8. Slice to limit
   return diverse.slice(0, limit);
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_COSINE_WEIGHT;
+  return Math.max(0, Math.min(1, n));
 }

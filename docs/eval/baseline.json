@@ -5,13 +5,14 @@
     "hitRateAtK": 0.9705882352941176
   },
   "hybrid": {
-    "ndcgAtK": 0.8886805933987073,
-    "mrr": 0.8872549019607843,
+    "ndcgAtK": 0.8922130758884962,
+    "mrr": 0.892156862745098,
     "hitRateAtK": 0.9705882352941176
   },
   "queries": 34,
   "corpusSize": 53,
   "k": 10,
-  "model": "unit-vector",
-  "recordedAt": "2026-06-02T00:44:50.984Z"
+  "cosineWeight": 0.3,
+  "model": "baai/bge-m3 (precomputed)",
+  "recordedAt": "2026-06-02T01:15:43.586Z"
 }

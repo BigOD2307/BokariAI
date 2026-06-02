@@ -13,9 +13,12 @@
     "test:watch": "vitest",
     "eval": "npx tsx scripts/run-eval.ts",
     "eval:offline": "npx tsx scripts/run-eval.ts --offline",
-    "eval:check": "npx tsx scripts/check-retrieval.ts --offline",
-    "eval:update-baseline": "npx tsx scripts/check-retrieval.ts --offline --update-baseline",
-    "eval:embed-fixture": "npx tsx scripts/embed-fixture.ts"
+    "eval:precomputed": "npx tsx scripts/run-eval.ts --precomputed",
+    "eval:check": "npx tsx scripts/check-retrieval.ts --precomputed",
+    "eval:update-baseline": "npx tsx scripts/check-retrieval.ts --precomputed --update-baseline",
+    "eval:embed-fixture": "npx tsx scripts/embed-fixture.ts",
+    "eval:precompute": "npx tsx scripts/precompute-query-embeddings.ts",
+    "eval:sweep": "npx tsx scripts/sweep-cosine-weight.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

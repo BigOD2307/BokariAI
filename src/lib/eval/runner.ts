@@ -10,14 +10,15 @@
  *
  * Workflow per query:
  *   1. Rank with BM25 only (cosine multiplier = 1.0)
- *   2. Embed the query, rank with hybrid (BM25 + cosine)
+ *   2. Embed the query, rank with hybrid (BM25 + cosine at the
+ *      configured `cosineWeight`)
  *   3. Convert both rankings to RankedItem[] using derived
  *      relevance grades
  *   4. Compute NDCG@K, MRR, hit rate
  *   5. Aggregate across queries
  *
  * @author Amadou — Dicken AI
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 import { rank } from '@/lib/discover/ranker';
@@ -50,6 +51,7 @@ function buildRankOptions(
   query: EvalQuery,
   queryEmbedding: number[] | null,
   useCosine: boolean,
+  cosineWeight?: number,
 ): RankOptions {
   return {
     topic: query.topic ?? 'africa',
@@ -61,6 +63,7 @@ function buildRankOptions(
     maxPerDomain: 99, // disable diversity cap for eval (we want raw ranking)
     useCosine,
     queryEmbedding: queryEmbedding,
+    ...(cosineWeight !== undefined ? { cosineWeight } : {}),
   };
 }
 
@@ -69,6 +72,7 @@ export type EvalReport = {
   hybrid: { ndcgAtK: number; mrr: number; hitRateAtK: number };
   k: number;
   queries: number;
+  cosineWeight: number;
   perQuery: Array<{
     query: string;
     bm25: { ndcg: number; mrr: number; hit: number };
@@ -76,11 +80,25 @@ export type EvalReport = {
   }>;
 };
 
+export type RunEvalOptions = {
+  /** K for the top-N cutoff.  Default 10. */
+  k?: number;
+  /**
+   * How much cosine similarity influences the final score.
+   * 0.0 = pure BM25, 1.0 = cosine-on-top-of-BM25.  Default 0.3
+   * (matches the production ranker default).
+   */
+  cosineWeight?: number;
+};
+
 export async function runEval(
   corpus: readonly Article[],
   queries: readonly EvalQuery[],
   embed: EmbedFn,
+  options: RunEvalOptions = {},
 ): Promise<EvalReport> {
+  const K_LOCAL = options.k ?? K;
+  const cosineWeight = options.cosineWeight ?? 0.3;
   const perQueryBm25: RankedItem[][] = [];
   const perQueryHybrid: RankedItem[][] = [];
   const perQueryReport: EvalReport['perQuery'] = [];
@@ -100,8 +118,12 @@ export async function runEval(
       console.warn(`[eval] Embedding failed for "${q.query}":`, err);
     }
 
-    // Hybrid (BM25 + cosine)
-    const hybridRanked = rank(corpus, q.query, buildRankOptions(q, qEmbedding, true));
+    // Hybrid (BM25 + cosine at the configured weight)
+    const hybridRanked = rank(
+      corpus,
+      q.query,
+      buildRankOptions(q, qEmbedding, true, cosineWeight),
+    );
     const hybridItems = toRankedItems(hybridRanked, q);
     perQueryHybrid.push(hybridItems);
 
@@ -109,20 +131,20 @@ export async function runEval(
     perQueryReport.push({
       query: q.query,
       bm25: {
-        ndcg: computeNdcg(bm25Items),
-        mrr: computeMrr(bm25Items),
-        hit: computeHit(bm25Items),
+        ndcg: ndcg(bm25Items, K_LOCAL),
+        mrr: mrr(bm25Items),
+        hit: hitRateAtK(bm25Items, K_LOCAL),
       },
       hybrid: {
-        ndcg: computeNdcg(hybridItems),
-        mrr: computeMrr(hybridItems),
-        hit: computeHit(hybridItems),
+        ndcg: ndcg(hybridItems, K_LOCAL),
+        mrr: mrr(hybridItems),
+        hit: hitRateAtK(hybridItems, K_LOCAL),
       },
     });
   }
 
-  const bm25Agg = aggregate(perQueryBm25, K);
-  const hybridAgg = aggregate(perQueryHybrid, K);
+  const bm25Agg = aggregate(perQueryBm25, K_LOCAL);
+  const hybridAgg = aggregate(perQueryHybrid, K_LOCAL);
 
   return {
     bm25Only: {
@@ -135,21 +157,12 @@ export async function runEval(
       mrr: hybridAgg.mrr,
       hitRateAtK: hybridAgg.hitRateAtK,
     },
-    k: K,
+    k: K_LOCAL,
     queries: queries.length,
+    cosineWeight,
     perQuery: perQueryReport,
   };
 }
 
-function computeNdcg(items: RankedItem[]): number {
-  return ndcg(items, K);
-}
-function computeMrr(items: RankedItem[]): number {
-  return mrr(items);
-}
-function computeHit(items: RankedItem[]): number {
-  return hitRateAtK(items, K);
-}
-
-/** Default dataset: the 20 African eval queries. */
+/** Default dataset: the 34 African eval queries. */
 export const DEFAULT_QUERIES = AFRICAN_EVAL_QUERIES;

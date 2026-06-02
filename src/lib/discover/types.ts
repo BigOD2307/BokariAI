@@ -101,15 +101,25 @@ export type RankOptions = {
   limit?: number;
   /** Optional query embedding for cosine re-ranking.  When provided AND
    *  the candidate articles carry `embedding` arrays, the ranker blends
-   *  cosine similarity into the final score as `(0.7 + 0.3 * cosine01)`. */
+   *  cosine similarity into the final score as
+   *  `(1 - cosineWeight + cosineWeight * cosine01)`.  Default 0.3. */
   queryEmbedding?: number[] | null;
   /**
    * Disable the cosine blend entirely (multiply by 1.0 instead of
-   * `0.7 + 0.3 * cos01`).  Used by the eval harness to measure a
-   * pure BM25 baseline.  Default true (cosine is on when embeddings
-   * exist).
+   * `(1 - cosineWeight + cosineWeight * cos01)`).  Used by the
+   * eval harness to measure a pure BM25 baseline.  Default true
+   * (cosine is on when embeddings exist).
    */
   useCosine?: boolean;
+  /**
+   * How much cosine similarity influences the final score.
+   * Final = BM25 * freshness * africanBoost * (0.5+0.5*quality)
+   *              * (1 - cosineWeight + cosineWeight * cosine01)
+   *
+   * 0.0 = pure BM25, 1.0 = pure cosine-on-top-of-BM25.
+   * Default 0.3 (cosine as a tie-breaker).
+   */
+  cosineWeight?: number;
 };
 
 export type PipelineMeta = {
