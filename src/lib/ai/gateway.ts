@@ -42,7 +42,6 @@ let _registry: ModelRegistryType | null = null;
 function getRegistry(): ModelRegistryType {
   if (_registry) return _registry;
   // Dynamic require to avoid the top-of-file side effect.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ModelRegistry = require('@/lib/models/registry').default;
   const r = new ModelRegistry();
   _registry = r;
@@ -55,7 +54,6 @@ function getRegistry(): ModelRegistryType {
  * file).  Returns null when no active provider of that type exists.
  */
 async function resolveProviderId(type: string): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { getConfiguredModelProviders } = require('@/lib/config/serverRegistry');
   const configured: any[] = getConfiguredModelProviders();
   const match = configured.find((p) => p.type === type);

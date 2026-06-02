@@ -103,6 +103,13 @@ export type RankOptions = {
    *  the candidate articles carry `embedding` arrays, the ranker blends
    *  cosine similarity into the final score as `(0.7 + 0.3 * cosine01)`. */
   queryEmbedding?: number[] | null;
+  /**
+   * Disable the cosine blend entirely (multiply by 1.0 instead of
+   * `0.7 + 0.3 * cos01`).  Used by the eval harness to measure a
+   * pure BM25 baseline.  Default true (cosine is on when embeddings
+   * exist).
+   */
+  useCosine?: boolean;
 };
 
 export type PipelineMeta = {

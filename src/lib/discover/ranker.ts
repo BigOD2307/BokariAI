@@ -138,12 +138,22 @@ export function rank(
     // available (refresh not yet run, or query is not embedded), the
     // factor is 0.7 + 0.3 * 0.5 = 0.85 — a small, uniform discount
     // that disappears the moment at least one side has an embedding.
-    const hasQ = Array.isArray(options.queryEmbedding) && options.queryEmbedding.length > 0;
-    const hasA = Array.isArray(article.embedding) && article.embedding.length > 0;
-    const cos01 = hasQ && hasA
-      ? cosine01(cosine(options.queryEmbedding as number[], article.embedding as number[]))
-      : COSINE_NEUTRAL;
-    const cosineMultiplier = COSINE_FLOOR + COSINE_WEIGHT * cos01;
+    //
+    // The eval harness passes `useCosine: false` to get a clean BM25
+    // baseline.  In that case the factor is exactly 1.0 — pure BM25.
+    const useCosine = options.useCosine !== false;
+    let cos01 = COSINE_NEUTRAL;
+    let cosineMultiplier: number;
+    if (!useCosine) {
+      cosineMultiplier = 1;
+    } else {
+      const hasQ = Array.isArray(options.queryEmbedding) && options.queryEmbedding.length > 0;
+      const hasA = Array.isArray(article.embedding) && article.embedding.length > 0;
+      cos01 = hasQ && hasA
+        ? cosine01(cosine(options.queryEmbedding as number[], article.embedding as number[]))
+        : COSINE_NEUTRAL;
+      cosineMultiplier = COSINE_FLOOR + COSINE_WEIGHT * cos01;
+    }
 
     const final = bm25 * fresh * africanBoost * qualityMultiplier * cosineMultiplier;
 
