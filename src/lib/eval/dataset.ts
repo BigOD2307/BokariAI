@@ -113,6 +113,87 @@ export const AFRICAN_EVAL_QUERIES: readonly EvalQuery[] = [
     mustMatch: ['ai', 'startup'],
     notes: 'Cross-vocab: ML/venture/AI — cosine should bridge to fixture-009',
   },
+
+  // ─────────────────────────────────────────────────────────────────
+  // PHASE 6 — Multilingual queries.  These are the queries Bokari
+  // actually needs to handle: African users typing in their own
+  // language.  BGE-M3 is multilingual; BM25 is not.  We expect
+  // hybrid >> BM25 on this section.
+  // ─────────────────────────────────────────────────────────────────
+
+  // Bambara (Mali) — same meaning as "Mali président inauguration"
+  {
+    query: 'Mali kɛntɛri sera kongo',
+    topic: 'africa',
+    mustMatch: ['kɛntɛri', 'sera'],
+    notes: 'Bambara: "Mali president sworn in" — should match fixture-032 (bm) via cosine',
+  },
+  {
+    query: 'Bamako kuntigi kura',
+    topic: 'africa',
+    mustMatch: ['bamako'],
+    notes: 'Bambara: "Bamako new president" — cross-language match',
+  },
+
+  // Wolof (Senegal) — same meaning as "Sénégal Dakar actualité"
+  {
+    query: 'Senegaal xibaar bi tey',
+    topic: 'africa',
+    mustMatch: ['senegaal'],
+    notes: 'Wolof: "Senegal news today" — should match fixture-033 (wo) via cosine',
+  },
+  {
+    query: 'Dakar politig',
+    topic: 'africa',
+    mustMatch: ['dakar'],
+    notes: 'Wolof: "Dakar politics" — cross-language match',
+  },
+
+  // Hausa (Nigeria/Niger) — same meaning as "Nigerian fintech funding"
+  {
+    query: 'Najeriya fintech kudade',
+    topic: 'finance',
+    mustMatch: ['fintech'],
+    notes: 'Hausa: "Nigeria fintech funding" — should match fixture-034 (ha) via cosine',
+  },
+  {
+    query: 'Lagos kamfanin kuɗi',
+    topic: 'finance',
+    mustMatch: ['lagos'],
+    notes: 'Hausa: "Lagos financial company" — cross-language match',
+  },
+
+  // Swahili (East Africa) — same meaning as "African developer community"
+  {
+    query: 'Kenya wapangaji programu AI',
+    topic: 'tech',
+    mustMatch: ['wapangaji', 'programu', 'ai'],
+    notes: 'Swahili: "Kenya AI developers" — should match fixture-035 (sw) via cosine',
+  },
+  {
+    query: 'Nairobi mafunzo akili bandia',
+    topic: 'tech',
+    mustMatch: ['nairobi'],
+    notes: 'Swahili: "Nairobi AI training" — cross-language match',
+  },
+
+  // Cross-language pairs: query in one language, expected article in
+  // another.  Tests the BGE-M3 cross-lingual capability directly.
+  {
+    query: 'African capital markets BRVM',
+    topic: 'finance',
+    notes: 'EN query about West African stock exchange — should find French fixture',
+  },
+  {
+    query: 'jeune startuppeur africain intelligence artificielle',
+    topic: 'tech',
+    notes: 'FR query about African AI startupper — should find EN fixture',
+  },
+  {
+    query: 'Nollywood film industry Nigeria',
+    topic: 'art',
+    notes: 'EN query about Nigerian cinema — cross-language anchor',
+  },
 ];
 
 export type DerivedRelevance = 0 | 1 | 2 | 3;

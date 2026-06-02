@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 import { AFRICAN_EVAL_QUERIES, deriveRelevance } from '@/lib/eval/dataset';
 
 describe('AFRICAN_EVAL_QUERIES', () => {
-  it('has exactly 23 queries (20 base + 3 adversarial)', () => {
-    expect(AFRICAN_EVAL_QUERIES).toHaveLength(23);
+  it('has exactly 34 queries (20 base + 3 adversarial + 11 multilingual)', () => {
+    expect(AFRICAN_EVAL_QUERIES).toHaveLength(34);
   });
 
   it('every query is non-empty and has a topic', () => {

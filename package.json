@@ -10,7 +10,12 @@
     "lint": "next lint",
     "format:write": "prettier . --write",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "npx tsx scripts/run-eval.ts",
+    "eval:offline": "npx tsx scripts/run-eval.ts --offline",
+    "eval:check": "npx tsx scripts/check-retrieval.ts --offline",
+    "eval:update-baseline": "npx tsx scripts/check-retrieval.ts --offline --update-baseline",
+    "eval:embed-fixture": "npx tsx scripts/embed-fixture.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

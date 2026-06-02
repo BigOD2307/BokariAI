@@ -426,4 +426,304 @@ export const FIXTURE_CORPUS: Article[] = [
     publishedAt: new Date(NOW.getTime() - 5 * ONE_DAY_MS),
     qualityScore: 0.9,
   }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // PHASE 6 — Multilingual fixture: Bokari's 4 target languages
+  // (Bambara, Wolof, Hausa, Swahili) + French + English.  These
+  // exercise BGE-M3's strongest capability: cross-language semantic
+  // similarity.  BM25 cannot match a Bambara query to a French
+  // article — but BGE-M3 can, because it learned a shared embedding
+  // space across 100+ languages.
+  // ─────────────────────────────────────────────────────────────────
+
+  // BAMBARA (Mali)
+  makeArticle({
+    id: 'fixture-032',
+    topic: 'africa',
+    title: 'Bamako: Mali ka kɛntɛri kura sera kongo la',
+    content: 'Bamako — Mali ka kɛntɛri kura sera kongo Koulouba kɔkan na. Ɲɛnaminɛnan wele ka fɛ.',
+    url: 'https://bamada.net/kɛntɛri',
+    domain: 'bamada.net',
+    language: 'bm',
+    publishedAt: new Date(NOW.getTime() - 1 * ONE_DAY_MS),
+    qualityScore: 0.85,
+  }),
+
+  // WOLOF (Senegal)
+  makeArticle({
+    id: 'fixture-033',
+    topic: 'africa',
+    title: 'Dakar: Senegaal am kow ñëw ñu xam ndiaye ak kër',
+    content: 'Dakar — Senegaal ndajeel nekk dafa bokk ci politig yi.  Kow ñëw ñu xam ndiaye ak kër ñëw yi.',
+    url: 'https://senego.com/wolof',
+    domain: 'senego.com',
+    language: 'wo',
+    publishedAt: new Date(NOW.getTime() - 3 * ONE_DAY_MS),
+    qualityScore: 0.75,
+  }),
+
+  // HAUSA (Nigeria/Niger)
+  makeArticle({
+    id: 'fixture-034',
+    topic: 'finance',
+    title: 'Lagos: Kamfanin fintech na Afirka ya samu kudade dala miliyan 50',
+    content: 'Lagos — Wani kamfani mai bayar da sabis na kuɗi a Najeriya ya samu kudade dala miliyan 50 daga masu zuba jari na Amurka.',
+    url: 'https://dailytrust.com.ng/fintech',
+    domain: 'dailytrust.com.ng',
+    language: 'ha',
+    publishedAt: new Date(NOW.getTime() - 6 * ONE_DAY_MS),
+    qualityScore: 0.8,
+  }),
+
+  // SWAHILI (East Africa)
+  makeArticle({
+    id: 'fixture-035',
+    topic: 'tech',
+    title: 'Nairobi: Wapangaji wa programu Kenya wameanza mafunzo ya AI',
+    content: 'Nairobi — Jumuiya ya wapangaji programu Kenya imeanza mafunzo ya akili bandia kwa vijana wa Kiafrika.',
+    url: 'https://the-star.co.ke/ai',
+    domain: 'the-star.co.ke',
+    language: 'sw',
+    publishedAt: new Date(NOW.getTime() - 8 * ONE_DAY_MS),
+    qualityScore: 0.9,
+  }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // PHASE 6 — Adversarial distractors for cross-language.  These
+  // are articles in DIFFERENT languages that share NO query terms
+  // with the multilingual queries above.  BM25 will rank them at
+  // 0 for Bambara/Wolof/Hausa/Swahili queries; cosine should
+  // recognize them as off-topic.
+  // ─────────────────────────────────────────────────────────────────
+
+  // Distractor: about Kenyan agriculture in Swahili — wrong topic
+  // (agriculture, not tech) for the "Kenya AI training" query.
+  makeArticle({
+    id: 'fixture-036',
+    topic: 'africa',
+    title: 'Nairobi: Wakulima Kenya wapata mafanikio katika kilimo',
+    content: 'Nairobi — Wakulima katika eneo la Kenya wamepata mafanikio makubwa katika kilimo cha mahindi na maharage.',
+    url: 'https://nation.co.ke/kilimo',
+    domain: 'nation.co.ke',
+    language: 'sw',
+    publishedAt: new Date(NOW.getTime() - 10 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: about Niger politics in Hausa — wrong topic
+  // (politics, not finance) for the "Nigerian fintech" query.
+  makeArticle({
+    id: 'fixture-037',
+    topic: 'africa',
+    title: 'Niamey: Jamhuriyar Nijar ta yi bikin ranar lumana',
+    content: 'Niamey — Jamhuriyar Nijar ta yi bikin ranar lumana a fadar shugaban kasa, tare da daukakar al\'ummar kasar.',
+    url: 'https://radiofrance.com/hausa',
+    domain: 'radiofrance.com',
+    language: 'ha',
+    publishedAt: new Date(NOW.getTime() - 12 * ONE_DAY_MS),
+    qualityScore: 0.65,
+  }),
+
+  // Distractor: about Senegal tourism in Wolof — wrong topic
+  // (tourism, not politics) for the "Senegal news" query.
+  makeArticle({
+    id: 'fixture-038',
+    topic: 'africa',
+    title: 'Senegaal: Turis yi di nañ ñëw Dakar',
+    content: 'Senegaal — turis yu bees yi di nañ ñëw Dakar ngir xool jumtuka yi ci seen biir.',
+    url: 'https://walf-groupe.com/tourisme',
+    domain: 'walf-groupe.com',
+    language: 'wo',
+    publishedAt: new Date(NOW.getTime() - 14 * ONE_DAY_MS),
+    qualityScore: 0.6,
+  }),
+
+  // Distractor: about Malian music in Bambara — wrong topic
+  // (music, not politics) for the "Mali president" query.
+  makeArticle({
+    id: 'fixture-039',
+    topic: 'art',
+    title: 'Bamako: Mɔgɔ musow ka bɛn yiriwa kɔkan',
+    content: 'Bamako — mɔgɔ musow minnu bɛ Mali kɔkan, ɲɔgɔndan ye ka bɛn yiriwa la kalo gafe.',
+    url: 'https://mali-music.com/concert',
+    domain: 'mali-music.com',
+    language: 'bm',
+    publishedAt: new Date(NOW.getTime() - 16 * ONE_DAY_MS),
+    qualityScore: 0.55,
+  }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // PHASE 6 — Additional French/English cross-cutting adversarial
+  // articles to add BM25-vs-hybrid signal on lexical queries.
+  // These create close-score situations where the cosine factor
+  // (0.3) can flip a ranking.
+  // ─────────────────────────────────────────────────────────────────
+
+  // Distractor: Sahel security — about food security, not physical
+  // security.  Same word "security" but different meaning.
+  makeArticle({
+    id: 'fixture-040',
+    topic: 'africa',
+    title: 'Sahel : la sécurité alimentaire s\'améliore grâce à une bonne récolte',
+    content: 'Niamey — Les organisations humanitaires saluent l\'amélioration de la sécurité alimentaire au Sahel après une récolte record de mil.',
+    url: 'https://reliefweb.int/sahel-food',
+    domain: 'reliefweb.int',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 7 * ONE_DAY_MS),
+    qualityScore: 0.75,
+  }),
+
+  // Distractor: AFCON — about Africa Cup of Nations *qualifiers*,
+  // not the final tournament.  Same word "AFCON" + "Morocco".
+  makeArticle({
+    id: 'fixture-041',
+    topic: 'sports',
+    title: 'AFCON 2026 qualifiers : le Maroc lance sa campagne',
+    content: 'Rabat — Le Maroc entame sa campagne de qualification pour la CAN 2026 par un match amical contre la Côte d\'Ivoire.',
+    url: 'https://afriquefoot.com/qualifiers',
+    domain: 'afriquefoot.com',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 9 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: malaria vaccine — about vaccine *research*, not
+  // rollout.  Same word "vaccine" but different intent.
+  makeArticle({
+    id: 'fixture-042',
+    topic: 'sante',
+    title: 'Malaria : un nouveau candidat-vaccin entre en essai clinique de phase 2',
+    content: 'Dakar — Un nouveau candidat-vaccin contre le paludisme, développé par un laboratoire sud-africain, est entré en essai clinique de phase 2.',
+    url: 'https://sciencesetavenir.fr/malaria',
+    domain: 'sciencesetavenir.fr',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 11 * ONE_DAY_MS),
+    qualityScore: 0.85,
+  }),
+
+  // Distractor: Afrobeats Grammy — about Afrobeats *tour*, not
+  // Grammy nomination.
+  makeArticle({
+    id: 'fixture-043',
+    topic: 'art',
+    title: 'Afrobeats : Burna Boy annonce une tournée africaine',
+    content: 'Lagos — Le chanteur nigérian Burna Boy a annoncé une tournée de 12 dates à travers l\'Afrique de l\'Ouest et l\'Afrique de l\'Est.',
+    url: 'https://musicinafrica.net/tour',
+    domain: 'musicinafrica.net',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 13 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: Flutterwave — about *competitor* (Paystack
+  // acquisition), not Flutterwave itself.
+  makeArticle({
+    id: 'fixture-044',
+    topic: 'finance',
+    title: 'Paystack : Stripe finalise l\'acquisition pour $200M',
+    content: 'San Francisco — Stripe a finalisé l\'acquisition de la plateforme nigériane Paystack pour 200 millions de dollars.',
+    url: 'https://restofworld.org/paystack',
+    domain: 'restofworld.org',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 15 * ONE_DAY_MS),
+    qualityScore: 0.8,
+  }),
+
+  // Distractor: BRVM — about Moroccan stock exchange (Casablanca),
+  // not the West African one.
+  makeArticle({
+    id: 'fixture-045',
+    topic: 'finance',
+    title: 'La Bourse de Casablanca termine en hausse',
+    content: 'Casablanca — L\'indice MASI de la Bourse de Casablanca a clôturé en hausse de 1,2% mardi, porté par les valeurs bancaires.',
+    url: 'https://leconomiste.com/casablanca',
+    domain: 'leconomiste.com',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 17 * ONE_DAY_MS),
+    qualityScore: 0.75,
+  }),
+
+  // Distractor: Nigerian election — about Kenyan election, not
+  // Nigerian.
+  makeArticle({
+    id: 'fixture-046',
+    topic: 'africa',
+    title: 'Kenya : la commission électorale publie le calendrier 2027',
+    content: 'Nairobi — La commission électorale kényane a publié le calendrier des élections générales de 2027, avec un premier tour prévu en août.',
+    url: 'https://nation.co.ke/elections',
+    domain: 'nation.co.ke',
+    language: 'sw',
+    publishedAt: new Date(NOW.getTime() - 18 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: AfCFTA — about African Union summit, not the
+  // trade area itself.
+  makeArticle({
+    id: 'fixture-047',
+    topic: 'africa',
+    title: 'Sommet de l\'Union africaine à Addis-Abeba : le communiqué final',
+    content: 'Addis-Abeba — Les chefs d\'État de l\'Union africaine ont adopté le communiqué final du sommet, qui couvre la ZLECAF et la sécurité régionale.',
+    url: 'https://au.int/sommet',
+    domain: 'au.int',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 19 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: Ethiopia peace — about Ethiopian election, not
+  // peace process.
+  makeArticle({
+    id: 'fixture-048',
+    topic: 'africa',
+    title: 'Ethiopia : les élections régionales se préparent dans le Tigré',
+    content: 'Mekele — La commission électorale éthiopienne prépare les élections régionales dans le Tigré pour le mois prochain.',
+    url: 'https://addisstandard.com/elections',
+    domain: 'addisstandard.com',
+    language: 'en',
+    publishedAt: new Date(NOW.getTime() - 20 * ONE_DAY_MS),
+    qualityScore: 0.65,
+  }),
+
+  // Distractor: M-Pesa — about M-Pesa in Kenya (correct), but
+  // wrong intent: it's about *competitor* Airtel Money, not M-Pesa.
+  makeArticle({
+    id: 'fixture-049',
+    topic: 'tech',
+    title: 'Airtel Money dépasse M-Pesa en Ouganda',
+    content: 'Kampala — Selon les chiffres du quatrième trimestre 2025, Airtel Money a dépassé M-Pesa en parts de marché en Ouganda.',
+    url: 'https://techjaja.com/airtel',
+    domain: 'techjaja.com',
+    language: 'en',
+    publishedAt: new Date(NOW.getTime() - 21 * ONE_DAY_MS),
+    qualityScore: 0.7,
+  }),
+
+  // Distractor: CFA franc — about Mauritanian ouguiya, not CFA
+  // franc.  Different currency, similar region.
+  makeArticle({
+    id: 'fixture-050',
+    topic: 'finance',
+    title: 'Mauritanie : la Banque centrale maintient le taux de change de l\'ouguiya',
+    content: 'Nouakchott — La Banque centrale de Mauritanie a annoncé le maintien du taux de change de l\'ouguiya face à l\'euro.',
+    url: 'https://cridem.com/ouguiya',
+    domain: 'cridem.com',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 22 * ONE_DAY_MS),
+    qualityScore: 0.6,
+  }),
+
+  // Distractor: crypto adoption — about crypto *regulation*, not
+  // adoption.  Same word "crypto" but different intent.
+  makeArticle({
+    id: 'fixture-051',
+    topic: 'finance',
+    title: 'Nigeria : la SEC durcit la régulation des cryptoactifs',
+    content: 'Abuja — La Securities and Exchange Commission du Nigeria a annoncé de nouvelles règles pour les plateformes d\'échange de cryptomonnaies.',
+    url: 'https://thecable.ng/sec',
+    domain: 'thecable.ng',
+    language: 'fr',
+    publishedAt: new Date(NOW.getTime() - 23 * ONE_DAY_MS),
+    qualityScore: 0.75,
+  }),
 ];

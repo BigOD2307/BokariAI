@@ -1,0 +1,55 @@
+name: Retrieval regression check
+
+# CI gate for the Bokari citation engine.  Runs the eval harness
+# in offline mode (no OpenRouter calls) and compares to the
+# baseline at `docs/eval/baseline.json`.  Fails if any of:
+#   - hybrid NDCG@10 drops by > 0.02
+#   - hybrid MRR drops by > 0.02
+#   - hybrid hit-rate@10 drops by > 0.02
+#
+# To intentionally improve the baseline, run:
+#   npx tsx scripts/check-retrieval.ts --update-baseline --offline
+# and commit the new docs/eval/baseline.json.
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/discover/**'
+      - 'src/lib/eval/**'
+      - 'src/lib/ai/**'
+      - 'scripts/run-eval.ts'
+      - 'scripts/check-retrieval.ts'
+      - 'scripts/embed-fixture.ts'
+      - 'docs/eval/baseline.json'
+  push:
+    branches: [master]
+
+jobs:
+  retrieval-check:
+    name: Retrieval regression check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run retrieval eval (offline)
+        run: npx tsx scripts/check-retrieval.ts --offline
+
+      - name: Upload eval report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-regression-report
+          path: |
+            docs/eval/baseline.json
+            docs/eval/2026-06-02*.md
+          if-no-files-found: ignore
