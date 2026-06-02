@@ -19,14 +19,23 @@
  *     and to be polite to the upstream API.
  *   - Chat fallback only fires if the primary provider throws — we
  *     don't fall back on a "weird" response.
+ *   - Query embeddings are cached in an in-memory LRU (1k entries).
+ *     See `embedOne` for the rationale.  Cache key = FNV-1a(text+model).
  *
  * @author Amadou — Dicken AI
- * @version 1.0.0
+ * @version 1.1.0
  */
 import type BaseEmbedding from '@/lib/models/base/embedding';
 import type BaseLLM from '@/lib/models/base/llm';
 import type ModelRegistryType from '@/lib/models/registry';
 import { getAiConfig } from './config';
+import {
+  clearEmbedCache,
+  embedCacheGet,
+  embedCacheKey,
+  embedCacheSet,
+  embedCacheSize,
+} from './embedCache';
 
 const MAX_RETRIES = 2;
 const RETRY_BACKOFF_MS = 400;
@@ -133,12 +142,24 @@ export async function embed(texts: string[]): Promise<number[][]> {
   return out;
 }
 
-/** Convenience: embed a single string and return the first vector. */
+/** Convenience: embed a single string and return the first vector.
+ *
+ *  This is the *user-query* embedding path.  We cache the result in
+ *  an in-memory LRU keyed on (text, model) so repeat queries don't
+ *  pay the 200-400ms BGE-M3 round trip.  See embedCache.ts. */
 export async function embedOne(text: string): Promise<number[]> {
+  if (!text) throw new Error('[ai/gateway] embedOne: text is required');
+  const cfg = getAiConfig().embedding;
+  const key = embedCacheKey(text, cfg.model);
+  const hit = embedCacheGet(key);
+  if (hit) return hit;
   const [v] = await embed([text]);
   if (!v) throw new Error('[ai/gateway] embedOne returned no vector');
+  embedCacheSet(key, v);
   return v;
 }
+
+export { clearEmbedCache, embedCacheSize };
 
 /**
  * Build the standard "title-weighted" embedding input for an article.

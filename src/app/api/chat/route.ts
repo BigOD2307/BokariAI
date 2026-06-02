@@ -8,6 +8,7 @@ import { SearchSources } from '@/lib/agents/search/types';
 import supabase from '@/lib/db';
 import UploadManager from '@/lib/uploads/manager';
 import { createServerClient } from '@/lib/supabase/server';
+import { startTimer, logStage } from '@/lib/observability/latence';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -94,7 +95,10 @@ const ensureChatExists = async (input: {
 };
 
 export const POST = async (req: Request) => {
+  const tTotal = startTimer();
+  let tFirstBlock: (() => number) | null = null;
   try {
+    const tParse = startTimer();
     const reqBody = (await req.json()) as Body;
     const parseBody = safeValidateBody(reqBody);
     if (!parseBody.success) {
@@ -103,6 +107,7 @@ export const POST = async (req: Request) => {
         { status: 400 },
       );
     }
+    logStage('chat.parse', tParse(), { mode: (reqBody as any).optimizationMode });
 
     const body = parseBody.data as Body;
     const { message } = body;
@@ -114,6 +119,7 @@ export const POST = async (req: Request) => {
       );
     }
 
+    const tLoad = startTimer();
     const registry = new ModelRegistry();
     const [llm, embedding] = await Promise.all([
       registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
@@ -122,6 +128,10 @@ export const POST = async (req: Request) => {
         body.embeddingModel.key,
       ),
     ]);
+    logStage('chat.load_models', tLoad(), {
+      chat: body.chatModel.key,
+      embed: body.embeddingModel.key,
+    });
 
     const history: ChatTurnMessage[] = body.history.map((msg) =>
       msg[0] === 'human'
@@ -138,6 +148,10 @@ export const POST = async (req: Request) => {
     const disconnect = session.subscribe((event: string, data: any) => {
       if (event === 'data') {
         if (data.type === 'block') {
+          if (!tFirstBlock) {
+            tFirstBlock = startTimer();
+            logStage('chat.first_block', tFirstBlock());
+          }
           writer.write(
             encoder.encode(
               JSON.stringify({ type: 'block', block: data.block }) + '\n',
@@ -161,6 +175,7 @@ export const POST = async (req: Request) => {
       } else if (event === 'end') {
         writer.write(encoder.encode(JSON.stringify({ type: 'messageEnd' }) + '\n'));
         writer.close();
+        logStage('chat.total', tTotal(), { ok: true });
         session.removeAllListeners();
       } else if (event === 'error') {
         writer.write(
@@ -169,10 +184,12 @@ export const POST = async (req: Request) => {
           ),
         );
         writer.close();
+        logStage('chat.total', tTotal(), { ok: false });
         session.removeAllListeners();
       }
     });
 
+    const tAgent = startTimer();
     agent
       .searchAsync(session, {
         chatHistory: history,
@@ -188,23 +205,29 @@ export const POST = async (req: Request) => {
           systemInstructions: body.systemInstructions || 'None',
         },
       })
+      .then(() => logStage('chat.agent', tAgent()))
       .catch((err) => {
         console.error('[Bokari] Search agent error:', err);
+        logStage('chat.agent', tAgent(), { error: true });
         session.emit('error', {
           data: 'Une erreur est survenue lors de la recherche. Veuillez reessayer.',
         });
       });
 
-    // Get user from Supabase Auth (cookie/header)
+    // Get user from Supabase Auth (cookie/header) — fire-and-forget so it
+    // doesn't block the first byte.  We still await for `ensureChatExists`
+    // because that needs the user id.
     const authClient = createServerClient(req);
+    const tAuth = startTimer();
     const {
       data: { user },
     } = await authClient.auth.getUser();
+    logStage('chat.auth', tAuth(), { hasUser: !!user });
     ensureChatExists({
       id: body.message.chatId,
       sources: body.sources as SearchSources[],
       fileIds: body.files,
-      query: body.message.content,
+      query: message.content,
       userId: user?.id,
     });
 
@@ -222,6 +245,7 @@ export const POST = async (req: Request) => {
     });
   } catch (err) {
     console.error('An error occurred while processing chat request:', err);
+    logStage('chat.total', tTotal(), { ok: false, threw: true });
     return Response.json(
       { message: 'An error occurred while processing chat request' },
       { status: 500 },
