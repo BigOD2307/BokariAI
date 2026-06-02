@@ -9,6 +9,7 @@
  * @version 1.0.0
  */
 import { Block } from './types';
+import type { Attachment, ChartSpec, VisionResult } from './multimodal';
 
 export interface BaseMessage {
   chatId: string;
@@ -21,6 +22,9 @@ export interface Message extends BaseMessage {
   query: string;
   responseBlocks: Block[];
   status: 'answering' | 'completed' | 'error';
+  attachments?: Attachment[];
+  visionResults?: VisionResult[];
+  charts?: ChartSpec[];
 }
 
 export interface File {
