@@ -8,6 +8,15 @@ if (process.env.NODE_ENV !== 'production') {
   (global as any)._sessionManagerSessions = sessions;
 }
 
+/** Cap on the number of events we keep in the per-session buffer.
+ *  The buffer is used to replay history to *new* subscribers (e.g. a
+ *  reconnect from the browser).  Unbounded growth was a memory leak
+ *  for deep-search sessions that emit 100+ block events.  The cap
+ *  is intentionally generous — a reconnect within the first 50
+ *  events will see the full stream; later reconnects see a truncated
+ *  stream (the message in the DB is the source of truth). */
+const MAX_SESSION_EVENTS = 50;
+
 class SessionManager {
   private static sessions: Map<string, SessionManager> = sessions;
   readonly id: string;
@@ -45,6 +54,21 @@ class SessionManager {
   emit(event: string, data: any) {
     this.emitter.emit(event, data);
     this.events.push({ event, data });
+    // FIFO cap — drop the oldest event when we exceed the limit.
+    // 'end' and 'error' are never trimmed (they're at the end of
+    // the stream and a late subscriber needs to see them).
+    if (this.events.length > MAX_SESSION_EVENTS) {
+      // Find the first non-terminal event to drop.
+      const dropIdx = this.events.findIndex(
+        (e) => e.event !== 'end' && e.event !== 'error',
+      );
+      if (dropIdx !== -1) {
+        this.events.splice(dropIdx, 1);
+      } else {
+        // All remaining events are terminal — just drop the oldest.
+        this.events.shift();
+      }
+    }
   }
 
   emitBlock(block: Block) {

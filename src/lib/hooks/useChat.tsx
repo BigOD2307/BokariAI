@@ -19,6 +19,14 @@ import { getSuggestions } from '../actions';
 import { MinimalProvider } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
+import { truncateHistory } from '../utils/chatHistory';
+import { withTimeout } from '../utils/streamTimeout';
+
+/** SSE stream budgets on the client.  These guard the user against
+ *  a stalled backend — if no chunk arrives within these windows,
+ *  we surface a clean error rather than spinning forever. */
+const SSE_FIRST_CHUNK_MS = 60_000;
+const SSE_IDLE_MS = 45_000;
 
 export type { Section } from '@/lib/types/section';
 
@@ -443,11 +451,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const messageHandler = getMessageHandler(lastMsg);
 
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+        const safeRead = withTimeout(
+          (async function* () {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) return;
+              yield value;
+            }
+          })(),
+          {
+            // Tighter on reconnect — the backend already has
+            // buffered events, so a healthy reconnect emits within
+            // a couple of seconds.  If not, the session is gone.
+            firstChunkMs: 5_000,
+            idleMs: 5_000,
+            label: 'sse/reconnect',
+          },
+        );
 
+        try {
+          for await (const value of safeRead) {
             partialChunk += decoder.decode(value, { stream: true });
 
             try {
@@ -649,7 +672,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           (msg) => msg.messageId === messageId,
         );
 
-        const newHistory: [string, string][] = [
+        const newHistory: [string, string][] = truncateHistory([
           ...chatHistory.current,
           ['human', message.query],
           [
@@ -657,7 +680,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             (currentMsg?.responseBlocks || []).find((b) => b.type === 'text')?.data ||
               '',
           ],
-        ];
+        ]);
 
         chatHistory.current = newHistory;
 
@@ -765,11 +788,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sources: sources,
         optimizationMode: optimizationMode,
         history: rewrite
-          ? chatHistory.current.slice(
-              0,
-              messageIndex === -1 ? undefined : messageIndex,
+          ? truncateHistory(
+              chatHistory.current.slice(
+                0,
+                messageIndex === -1 ? undefined : messageIndex,
+              ),
             )
-          : chatHistory.current,
+          : truncateHistory(chatHistory.current),
         chatModel: {
           key: chatModelProvider.key,
           providerId: chatModelProvider.providerId,
@@ -791,23 +816,51 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const messageHandler = getMessageHandler(newMessage);
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      partialChunk += decoder.decode(value, { stream: true });
-
-      try {
-        const messages = partialChunk.split('\n');
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const json = JSON.parse(msg);
-          messageHandler(json);
+    // Wrap the raw reader in a timeout so a stalled backend does
+    // not pin the UI forever.  See Bug #2 in
+    // docs/bugs/2026-06-02-bokari-12-20-slowdown.md.
+    const safeRead = withTimeout(
+      (async function* () {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) return;
+          yield value;
         }
-        partialChunk = '';
-      } catch (error) {
-        console.warn('Incomplete JSON, waiting for next chunk...');
+      })(),
+      {
+        firstChunkMs: SSE_FIRST_CHUNK_MS,
+        idleMs: SSE_IDLE_MS,
+        label: 'sse/chat',
+      },
+    );
+
+    try {
+      for await (const value of safeRead) {
+        partialChunk += decoder.decode(value, { stream: true });
+
+        try {
+          const messages = partialChunk.split('\n');
+          for (const msg of messages) {
+            if (!msg.trim()) continue;
+            const json = JSON.parse(msg);
+            messageHandler(json);
+          }
+          partialChunk = '';
+        } catch (error) {
+          console.warn('Incomplete JSON, waiting for next chunk...');
+        }
       }
+    } catch (err: any) {
+      // Stream stalled.  Mark the message as errored so the UI
+      // does not stay in the 'answering' state.  The user can
+      // retry from the message actions.
+      console.error('[Bokari] SSE stream stalled:', err?.message);
+      try {
+        await reader.cancel();
+      } catch {
+        /* noop */
+      }
+      throw err;
     }
   };
 

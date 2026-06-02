@@ -5,6 +5,15 @@ import SessionManager from '@/lib/session';
 import { Message, ReasoningResearchBlock } from '@/lib/types';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { ToolCall } from '@/lib/models/types';
+import { withTimeout } from '@/lib/utils/streamTimeout';
+
+/** Per-call LLM stream budgets for the researcher's reasoning loop.
+ *  Mirrors the search-agent writer budgets.  Each iteration gets a
+ *  fresh deadline — the total wall clock of a deep-search (up to 35
+ *  iterations × these caps) is bounded by `maxIteration` upstream. */
+const RESEARCHER_FIRST_CHUNK_MS = 45_000;
+const RESEARCHER_IDLE_MS = 30_000;
+const RESEARCHER_TOTAL_MS = 90_000;
 
 class Researcher {
   async research(
@@ -65,16 +74,24 @@ class Researcher {
         input.config.fileIds,
       );
 
-      const actionStream = input.config.llm.streamText({
-        messages: [
-          {
-            role: 'system',
-            content: researcherPrompt,
-          },
-          ...agentMessageHistory,
-        ],
-        tools: availableTools,
-      });
+      const actionStream = withTimeout(
+        input.config.llm.streamText({
+          messages: [
+            {
+              role: 'system',
+              content: researcherPrompt,
+            },
+            ...agentMessageHistory,
+          ],
+          tools: availableTools,
+        }),
+        {
+          firstChunkMs: RESEARCHER_FIRST_CHUNK_MS,
+          idleMs: RESEARCHER_IDLE_MS,
+          totalMs: RESEARCHER_TOTAL_MS,
+          label: `researcher/iter-${i}`,
+        },
+      );
 
       const block = session.getBlock(researchBlockId);
 

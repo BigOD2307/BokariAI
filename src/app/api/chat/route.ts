@@ -9,6 +9,7 @@ import supabase from '@/lib/db';
 import UploadManager from '@/lib/uploads/manager';
 import { createServerClient } from '@/lib/supabase/server';
 import { startTimer, logStage } from '@/lib/observability/latence';
+import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -133,7 +134,10 @@ export const POST = async (req: Request) => {
       embed: body.embeddingModel.key,
     });
 
-    const history: ChatTurnMessage[] = body.history.map((msg) =>
+    const history: ChatTurnMessage[] = truncateHistory(
+      body.history,
+      MAX_HISTORY_ENTRIES,
+    ).map((msg) =>
       msg[0] === 'human'
         ? { role: 'user', content: msg[1] }
         : { role: 'assistant', content: msg[1] },

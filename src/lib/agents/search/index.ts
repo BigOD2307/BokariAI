@@ -6,6 +6,20 @@ import { getWriterPrompt } from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
 import supabase from '@/lib/db';
 import { TextBlock } from '@/lib/types';
+import { withTimeout } from '@/lib/utils/streamTimeout';
+
+/** Per-call LLM stream budgets.  These are the caps that prevent a
+ *  stalled upstream (Groq / OpenRouter / Ollama) from pinning a
+ *  Bokari request forever.  See `src/lib/utils/streamTimeout.ts`. */
+const LLM_FIRST_CHUNK_MS = 60_000;
+const LLM_IDLE_MS = 30_000;
+const LLM_TOTAL_MS = 5 * 60_000;
+
+/** Cap on the number of search results injected into the writer
+ *  prompt.  Without this, a deep-search with 100+ sources produces a
+ *  200k+ token prompt that the LLM rejects or truncates, causing
+ *  the writer to loop or hang. */
+const MAX_WRITER_RESULTS = 8;
 
 /**
  * Fetch conversation memory for the current user/chat.
@@ -152,6 +166,7 @@ class SearchAgent {
 
     const finalContext =
       searchResults?.searchFindings
+        .slice(0, MAX_WRITER_RESULTS)
         .map(
           (f, index) =>
             `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
@@ -171,13 +186,21 @@ class SearchAgent {
       memory || undefined,
     );
 
-    const answerStream = input.config.llm.streamText({
-      messages: [
-        { role: 'system', content: writerPrompt },
-        ...input.chatHistory,
-        { role: 'user', content: input.followUp },
-      ],
-    });
+    const answerStream = withTimeout(
+      input.config.llm.streamText({
+        messages: [
+          { role: 'system', content: writerPrompt },
+          ...input.chatHistory,
+          { role: 'user', content: input.followUp },
+        ],
+      }),
+      {
+        firstChunkMs: LLM_FIRST_CHUNK_MS,
+        idleMs: LLM_IDLE_MS,
+        totalMs: LLM_TOTAL_MS,
+        label: 'search-agent/writer',
+      },
+    );
 
     let responseBlockId = '';
 
