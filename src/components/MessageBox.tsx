@@ -29,6 +29,7 @@ import { ResearchBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
 import ImageBlock from './MessageRenderer/ImageBlock';
+import ChartBlock from './MessageRenderer/ChartBlock';
 
 const ThinkTagProcessor = ({
   children,
@@ -200,6 +201,15 @@ const MessageBox = ({
 
           {/* Widgets */}
           {section.widgets.length > 0 && <Renderer widgets={section.widgets} />}
+
+          {/* Charts (auto-detected from query) */}
+          {section.message.charts && section.message.charts.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {section.message.charts.map((c: import('@/lib/types/multimodal').ChartSpec) => (
+                <ChartBlock key={c.id} spec={c} />
+              ))}
+            </div>
+          )}
 
           {/* Answer */}
           <div className="flex flex-col gap-2">
