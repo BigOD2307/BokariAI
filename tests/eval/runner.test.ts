@@ -135,4 +135,45 @@ describe('runEval', () => {
     expect(report.perQuery).toHaveLength(1);
     expect(report.bm25Only.ndcgAtK).toBeGreaterThan(0);
   });
+
+  it('does not include a reranked column when rerank is unset', async () => {
+    const report = await runEval([], [{ query: 'whatever', topic: 'africa' }], async () => [[1]]);
+    expect(report.reranked).toBeNull();
+    expect(report.rerankConfig).toBeNull();
+    for (const pq of report.perQuery) {
+      expect(pq.reranked).toBeNull();
+    }
+  });
+
+  it('includes a reranked column when rerank is enabled (offline mode)', async () => {
+    const report = await runEval(
+      [makeArticle({ id: 'a1', topic: 'africa', title: 'Mali Bamako president' })],
+      [{ query: 'Mali Bamako president', topic: 'africa' }],
+      async () => [[1]],
+      { rerank: { topN: 5, mode: 'offline' } },
+    );
+    expect(report.reranked).not.toBeNull();
+    expect(report.rerankConfig).toEqual({
+      topN: 5,
+      candidatePool: 50,
+      mode: 'offline',
+    });
+    for (const pq of report.perQuery) {
+      expect(pq.reranked).not.toBeNull();
+    }
+  });
+
+  it('records the rerank config metadata (topN, candidatePool, mode)', async () => {
+    const report = await runEval(
+      [],
+      [{ query: 'whatever', topic: 'africa' }],
+      async () => [[1]],
+      { rerank: { topN: 10, candidatePool: 100, mode: 'offline' } },
+    );
+    expect(report.rerankConfig).toEqual({
+      topN: 10,
+      candidatePool: 100,
+      mode: 'offline',
+    });
+  });
 });

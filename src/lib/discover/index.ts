@@ -7,6 +7,7 @@
 
 export { runDiscoverPipeline, TOPIC_LABELS } from './pipeline';
 export { rank } from './ranker';
+export { rerankTopN, type RerankStageOptions } from './rerank';
 export { classifyQuery, expandQuery, isAfricanContext, normalizeQuery } from './query';
 export { detectLanguage } from './language';
 export { tokenize, bm25Score, buildBM25Index } from './bm25';

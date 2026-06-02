@@ -83,6 +83,12 @@ export type ScoreBreakdown = {
   cosine: number;
   /** Final combined score used for sorting. */
   final: number;
+  /**
+   * Cross-encoder rerank signal.  Set by `rerankTopN` in `discover/rerank.ts`
+   * when a rerank stage is applied.  Absent (undefined) for the BM25/hybrid
+   * pre-rerank path so the breakdown is forward-compatible.
+   */
+  rerank?: { score: number; rankBeforeRerank: number };
 };
 
 export type ScoredArticle = Article & {

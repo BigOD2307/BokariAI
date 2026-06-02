@@ -14,6 +14,7 @@
  *   npx tsx scripts/check-retrieval.ts --precomputed      # cached BGE-M3 vectors, full hybrid gate
  *   npx tsx scripts/check-retrieval.ts --threshold=0.05
  *   npx tsx scripts/check-retrieval.ts --update-baseline
+ *   npx tsx scripts/check-retrieval.ts --rerank           # include cross-encoder rerank in the gate
  *
  * The baseline lives at `docs/eval/baseline.json` and is updated
  * manually (or via `--update-baseline`) when the eval is intentionally
@@ -23,6 +24,10 @@
  * .github/workflows/retrieval-regression.yml).  It uses the
  * BGE-M3 vectors in `docs/eval/query-embeddings.json` so the gate
  * catches hybrid regressions, not just BM25 regressions.
+ *
+ * `--rerank` is opt-in: it adds the `reranked` column to the gate.
+ * Use it locally to validate a rerank change; CI stays on hybrid-only
+ * until the rerank signal has been in production for a week.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -42,6 +47,8 @@ function arg(flag: string, fallback: string | null = null): string | null {
 const offline = args.includes('--offline');
 const precomputed = args.includes('--precomputed');
 const updateBaseline = args.includes('--update-baseline');
+const rerank = args.includes('--rerank');
+const rerankMode: 'live' | 'offline' = arg('--rerank-mode', 'offline') === 'live' ? 'live' : 'offline';
 const threshold = Number(arg('--threshold', '0.02'));
 const cosineWeight = Number(arg('--cosine-weight', '0.3'));
 const baselinePath = resolve('docs/eval/baseline.json');
@@ -49,10 +56,12 @@ const baselinePath = resolve('docs/eval/baseline.json');
 type Baseline = {
   bm25Only: { ndcgAtK: number; mrr: number; hitRateAtK: number };
   hybrid: { ndcgAtK: number; mrr: number; hitRateAtK: number };
+  reranked: { ndcgAtK: number; mrr: number; hitRateAtK: number } | null;
   queries: number;
   corpusSize: number;
   k: number;
   cosineWeight: number;
+  rerankConfig: { topN: number; candidatePool: number; mode: 'live' | 'offline' } | null;
   model: string;
   recordedAt: string;
 };
@@ -97,24 +106,31 @@ async function main() {
     mode = 'live';
   }
 
-  console.log(`[check-retrieval] Mode: ${mode}  Cosine weight: ${cosineWeight.toFixed(2)}`);
+  console.log(`[check-retrieval] Mode: ${mode}  Cosine weight: ${cosineWeight.toFixed(2)}  Rerank: ${rerank}`);
   console.log('[check-retrieval] Running eval…');
   const t0 = Date.now();
   const report = await runEval(
     FIXTURE_CORPUS_EMBEDDED,
     AFRICAN_EVAL_QUERIES,
     embedFn,
-    { cosineWeight },
+    {
+      cosineWeight,
+      ...(rerank
+        ? { rerank: { topN: 10, mode: rerankMode } }
+        : {}),
+    },
   );
   console.log(`[check-retrieval] Done in ${Date.now() - t0}ms.`);
 
   const current: Baseline = {
     bm25Only: report.bm25Only,
     hybrid: report.hybrid,
+    reranked: report.reranked,
     queries: report.queries,
     corpusSize: FIXTURE_CORPUS_EMBEDDED.length,
     k: report.k,
     cosineWeight,
+    rerankConfig: report.rerankConfig,
     model:
       mode === 'precomputed'
         ? 'baai/bge-m3 (precomputed)'
@@ -127,6 +143,9 @@ async function main() {
   console.log('\n[check-retrieval] Current metrics:');
   console.log(`  BM25-only  NDCG@${current.k}: ${current.bm25Only.ndcgAtK.toFixed(3)}  MRR: ${current.bm25Only.mrr.toFixed(3)}  Hit: ${current.bm25Only.hitRateAtK.toFixed(3)}`);
   console.log(`  Hybrid     NDCG@${current.k}: ${current.hybrid.ndcgAtK.toFixed(3)}  MRR: ${current.hybrid.mrr.toFixed(3)}  Hit: ${current.hybrid.hitRateAtK.toFixed(3)}`);
+  if (current.reranked) {
+    console.log(`  Reranked   NDCG@${current.k}: ${current.reranked.ndcgAtK.toFixed(3)}  MRR: ${current.reranked.mrr.toFixed(3)}  Hit: ${current.reranked.hitRateAtK.toFixed(3)}`);
+  }
 
   if (updateBaseline) {
     mkdirSync(dirname(baselinePath), { recursive: true });
@@ -145,14 +164,25 @@ async function main() {
   console.log(`\n[check-retrieval] Baseline (${baseline.recordedAt}, w=${baseline.cosineWeight.toFixed(2)}):`);
   console.log(`  BM25-only  NDCG@${baseline.k}: ${baseline.bm25Only.ndcgAtK.toFixed(3)}  MRR: ${baseline.bm25Only.mrr.toFixed(3)}  Hit: ${baseline.bm25Only.hitRateAtK.toFixed(3)}`);
   console.log(`  Hybrid     NDCG@${baseline.k}: ${baseline.hybrid.ndcgAtK.toFixed(3)}  MRR: ${baseline.hybrid.mrr.toFixed(3)}  Hit: ${baseline.hybrid.hitRateAtK.toFixed(3)}`);
+  if (baseline.reranked) {
+    console.log(`  Reranked   NDCG@${baseline.k}: ${baseline.reranked.ndcgAtK.toFixed(3)}  MRR: ${baseline.reranked.mrr.toFixed(3)}  Hit: ${baseline.reranked.hitRateAtK.toFixed(3)}`);
+  }
 
-  // Per-metric deltas.  The hybrid is the metric we care about —
-  // BM25-only is informational.
+  // Per-metric deltas.  Hybrid is the primary metric; reranked is
+  // checked only when both `rerank` is enabled AND the baseline has
+  // a `reranked` block.  BM25-only is informational.
   const deltas: Array<{ metric: string; baseline: number; current: number; drop: number }> = [
     { metric: 'hybrid.ndcg', baseline: baseline.hybrid.ndcgAtK, current: current.hybrid.ndcgAtK, drop: 0 },
     { metric: 'hybrid.mrr',  baseline: baseline.hybrid.mrr,     current: current.hybrid.mrr,     drop: 0 },
     { metric: 'hybrid.hit',  baseline: baseline.hybrid.hitRateAtK, current: current.hybrid.hitRateAtK, drop: 0 },
   ];
+  if (rerank && baseline.reranked && current.reranked) {
+    deltas.push(
+      { metric: 'reranked.ndcg', baseline: baseline.reranked.ndcgAtK, current: current.reranked.ndcgAtK, drop: 0 },
+      { metric: 'reranked.mrr',  baseline: baseline.reranked.mrr,     current: current.reranked.mrr,     drop: 0 },
+      { metric: 'reranked.hit',  baseline: baseline.reranked.hitRateAtK, current: current.reranked.hitRateAtK, drop: 0 },
+    );
+  }
   for (const d of deltas) d.drop = d.baseline - d.current;
 
   console.log('\n[check-retrieval] Deltas (negative = regression):');

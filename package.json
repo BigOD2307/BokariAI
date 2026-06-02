@@ -14,14 +14,19 @@
     "eval": "npx tsx scripts/run-eval.ts",
     "eval:offline": "npx tsx scripts/run-eval.ts --offline",
     "eval:precomputed": "npx tsx scripts/run-eval.ts --precomputed",
+    "eval:rerank": "npx tsx scripts/run-eval.ts --precomputed --rerank",
+    "eval:rerank:live": "npx tsx scripts/run-eval.ts --precomputed --rerank --rerank-mode=live",
     "eval:check": "npx tsx scripts/check-retrieval.ts --precomputed",
+    "eval:check:rerank": "npx tsx scripts/check-retrieval.ts --precomputed --rerank",
     "eval:update-baseline": "npx tsx scripts/check-retrieval.ts --precomputed --update-baseline",
+    "eval:update-baseline:rerank": "npx tsx scripts/check-retrieval.ts --precomputed --rerank --update-baseline",
     "eval:embed-fixture": "npx tsx scripts/embed-fixture.ts",
     "eval:precompute": "npx tsx scripts/precompute-query-embeddings.ts",
     "eval:sweep": "npx tsx scripts/sweep-cosine-weight.ts",
     "feedback:export": "npx tsx scripts/export-feedback.ts",
     "feedback:export:positive": "npx tsx scripts/export-feedback.ts --positive",
-    "feedback:export:negative": "npx tsx scripts/export-feedback.ts --negative"
+    "feedback:export:negative": "npx tsx scripts/export-feedback.ts --negative",
+    "smoke:rerank": "npx tsx scripts/smoke-reranker.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

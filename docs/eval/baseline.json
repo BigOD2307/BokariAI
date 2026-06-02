@@ -9,10 +9,20 @@
     "mrr": 0.892156862745098,
     "hitRateAtK": 0.9705882352941176
   },
+  "reranked": {
+    "ndcgAtK": 0.8979481239026303,
+    "mrr": 0.9068627450980392,
+    "hitRateAtK": 0.9705882352941176
+  },
   "queries": 34,
   "corpusSize": 53,
   "k": 10,
   "cosineWeight": 0.3,
+  "rerankConfig": {
+    "topN": 10,
+    "candidatePool": 50,
+    "mode": "offline"
+  },
   "model": "baai/bge-m3 (precomputed)",
-  "recordedAt": "2026-06-02T01:15:43.586Z"
+  "recordedAt": "2026-06-02T03:45:05.344Z"
 }
