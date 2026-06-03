@@ -5,9 +5,16 @@ import MessageInput from './MessageInput';
 import MessageBox from './MessageBox';
 import MessageBoxLoading from './MessageBoxLoading';
 import { useChat } from '@/lib/hooks/useChat';
+import { useAutoTitle } from '@/lib/hooks/useAutoTitle';
 
 const Chat = () => {
-  const { sections, loading, messageAppeared, messages } = useChat();
+  const { sections, loading, messageAppeared, messages, chatId } = useChat();
+  const firstHuman = messages[0];
+  useAutoTitle({
+    chatId: chatId ?? null,
+    firstMessage: firstHuman?.query ?? null,
+    enabled: Boolean(chatId && firstHuman?.query && firstHuman.query.length >= 6),
+  });
 
   const [dividerWidth, setDividerWidth] = useState(0);
   const dividerRef = useRef<HTMLDivElement | null>(null);
