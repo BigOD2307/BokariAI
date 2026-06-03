@@ -7,6 +7,11 @@ import { WidgetExecutor } from './widgets';
 import supabase from '@/lib/db';
 import { TextBlock } from '@/lib/types';
 import { withTimeout } from '@/lib/utils/streamTimeout';
+import {
+  looksLikeChartRequest,
+  extractChartSpec,
+  type LlmCallable,
+} from '@/lib/agents/multimodal/charts';
 
 /** Per-call LLM stream budgets.  These are the caps that prevent a
  *  stalled upstream (Groq / OpenRouter / Ollama) from pinning a
@@ -163,6 +168,29 @@ class SearchAgent {
     ]);
 
     session.emit('data', { type: 'researchComplete' });
+
+    if (looksLikeChartRequest(input.followUp)) {
+      const findings = searchResults?.searchFindings ?? [];
+      const chartSources = findings
+        .slice(0, MAX_WRITER_RESULTS)
+        .map((f, index) => ({
+          id: index + 1,
+          title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
+          content: f.content,
+        }));
+      try {
+        const chart = await extractChartSpec(
+          input.followUp,
+          chartSources,
+          input.config.llm as unknown as LlmCallable,
+        );
+        if (chart) {
+          session.emit('data', { type: 'chart', chart });
+        }
+      } catch (chartErr) {
+        console.warn('[Bokari] chart extraction failed:', chartErr);
+      }
+    }
 
     const finalContext =
       searchResults?.searchFindings

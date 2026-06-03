@@ -3,12 +3,19 @@ import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import Optimization from './MessageInputActions/Optimization';
 import Attach from './MessageInputActions/Attach';
+import MultimodalButton from './MessageInput/MultimodalButton';
+import AttachmentPreview from './MessageInput/AttachmentPreview';
 import { useChat } from '@/lib/hooks/useChat';
 import { useElevenLabsSTT } from '@/lib/hooks/useElevenLabsSTT';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 const EmptyChatMessageInput = () => {
-  const { sendMessage } = useChat();
+  const {
+    sendMessage,
+    pendingAttachments,
+    addAttachment,
+    removeAttachment,
+  } = useChat();
   const { isRecording, isTranscribing, startRecording, stopRecording } = useElevenLabsSTT();
   const { requireAuth } = useAuth();
 
@@ -93,12 +100,26 @@ const EmptyChatMessageInput = () => {
           />
         </div>
 
+        {/* Attachment previews */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-5 pb-2">
+            {pendingAttachments.map((att) => (
+              <AttachmentPreview
+                key={att.id}
+                attachment={att}
+                onRemove={() => removeAttachment(att.id)}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="flex items-center justify-between px-3 pb-3">
           {/* Left tools */}
           <div className="flex items-center gap-0.5">
             <Optimization />
             <Attach />
+            <MultimodalButton onAttach={addAttachment} />
           </div>
 
           {/* Right tools */}

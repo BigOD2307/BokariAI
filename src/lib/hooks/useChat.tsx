@@ -3,8 +3,10 @@
 import { Block } from '@/lib/types';
 import type { Message, Widget } from '@/lib/types/window';
 import type { Section } from '@/lib/types/section';
+import type { Attachment } from '@/lib/types/multimodal';
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -53,6 +55,10 @@ type ChatContext = {
   setSources: (sources: string[]) => void;
   setFiles: (files: File[]) => void;
   setFileIds: (fileIds: string[]) => void;
+  pendingAttachments: Attachment[];
+  addAttachment: (att: Attachment) => void;
+  removeAttachment: (id: string) => void;
+  clearAttachments: () => void;
   sendMessage: (
     message: string,
     messageId?: string,
@@ -266,6 +272,10 @@ export const chatContext = createContext<ChatContext>({
   setChatModelProvider: () => {},
   setEmbeddingModelProvider: () => {},
   setResearchEnded: () => {},
+  pendingAttachments: [],
+  addAttachment: () => {},
+  removeAttachment: () => {},
+  clearAttachments: () => {},
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
@@ -287,6 +297,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [files, setFiles] = useState<File[]>([]);
   const [fileIds, setFileIds] = useState<string[]>([]);
+
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>(
+    [],
+  );
+  const addAttachment = useCallback((att: Attachment) => {
+    setPendingAttachments((prev) => [...prev, att]);
+  }, []);
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+  const clearAttachments = useCallback(() => {
+    setPendingAttachments([]);
+  }, []);
 
   const [sources, setSources] = useState<string[]>(['web']);
   const [optimizationMode, setOptimizationMode] = useState('speed');
@@ -642,6 +665,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
+      if (data.type === 'chart' && data.chart) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.messageId === messageId) {
+              const existing = msg.charts ?? [];
+              return { ...msg, charts: [...existing, data.chart] };
+            }
+            return msg;
+          }),
+        );
+      }
+
       if (data.type === 'updateBlock') {
         setMessages((prev) =>
           prev.map((msg) => {
@@ -772,6 +807,48 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     setMessages((prevMessages) => [...prevMessages, newMessage]);
 
+    const attachmentsToSend = pendingAttachments;
+    const attachmentsForMessage: Attachment[] = [];
+    const visionResultsForMessage: import('@/lib/types/multimodal').VisionResult[] = [];
+
+    if (attachmentsToSend.length > 0 && !rewrite) {
+      try {
+        for (const att of attachmentsToSend) {
+          const fd = new FormData();
+          fd.append('file', dataUrlToBlob(att));
+          fd.append('prompt', message);
+          const mmRes = await authFetch('/api/multimodal', {
+            method: 'POST',
+            body: fd,
+          });
+          if (mmRes.ok) {
+            const mmData = await mmRes.json();
+            if (mmData.attachment) attachmentsForMessage.push(mmData.attachment);
+            if (mmData.vision) visionResultsForMessage.push(mmData.vision);
+          }
+        }
+        if (attachmentsForMessage.length > 0) {
+          newMessage.attachments = attachmentsForMessage;
+          newMessage.visionResults = visionResultsForMessage;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.messageId === newMessage.messageId
+                ? {
+                    ...m,
+                    attachments: attachmentsForMessage,
+                    visionResults: visionResultsForMessage,
+                  }
+                : m,
+            ),
+          );
+        }
+      } catch (err) {
+        toast.error('Erreur analyse image');
+      } finally {
+        clearAttachments();
+      }
+    }
+
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
     const res = await authFetch('/api/chat', {
@@ -890,6 +967,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setChatModelProvider,
         chatModelProvider,
         embeddingModelProvider,
+        pendingAttachments,
+        addAttachment,
+        removeAttachment,
+        clearAttachments,
         setEmbeddingModelProvider,
         researchEnded,
         setResearchEnded,
@@ -904,3 +985,12 @@ export const useChat = () => {
   const ctx = useContext(chatContext);
   return ctx;
 };
+
+function dataUrlToBlob(att: Attachment): Blob {
+  const [meta, b64] = att.dataUrl.split(',');
+  const mime = /data:([^;]+)/.exec(meta)?.[1] ?? att.mimeType;
+  const binary = atob(b64 ?? '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
