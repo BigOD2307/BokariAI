@@ -34,7 +34,6 @@ interface AuthContextType {
   accessToken: string | null;
   signInWithWhatsApp: (phone: string) => Promise<{ ok: boolean; message?: string; cooldownSeconds?: number }>;
   verifyWhatsAppOtp: (phone: string, code: string) => Promise<{ ok: boolean; message?: string; isNew?: boolean }>;
-  guest: GuestSessionState;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -49,33 +48,40 @@ const AuthContext = createContext<AuthContextType>({
   accessToken: null,
   signInWithWhatsApp: async () => ({ ok: false }),
   verifyWhatsAppOtp: async () => ({ ok: false }),
-  guest: {
-    isGuest: true,
-    id: '',
-    queriesCount: 0,
-    queriesRemaining: 3,
-    isLimitReached: false,
-    increment: async () => {},
-    refresh: async () => {},
-  },
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-const useGuestSession = (): GuestSessionState => {
-  const ctx = useContext(AuthContext);
-  const user = ctx.user;
+const GUEST_DAILY_LIMIT = 3;
+const GUEST_NOOP_STATE: GuestSessionState = {
+  isGuest: true,
+  id: '',
+  queriesCount: 0,
+  queriesRemaining: GUEST_DAILY_LIMIT,
+  isLimitReached: false,
+  increment: async () => {},
+  refresh: async () => {},
+};
+
+export const useGuestSession = (): GuestSessionState => {
+  const { user } = useContext(AuthContext);
   const [state, setState] = useState<Omit<GuestSessionState, 'increment' | 'refresh'>>({
     isGuest: !user,
     id: '',
     queriesCount: 0,
-    queriesRemaining: 3,
+    queriesRemaining: GUEST_DAILY_LIMIT,
     isLimitReached: false,
   });
 
   const refresh = useCallback(async () => {
     if (user) {
-      setState({ isGuest: false, id: '', queriesCount: 0, queriesRemaining: 3, isLimitReached: false });
+      setState({
+        isGuest: false,
+        id: '',
+        queriesCount: 0,
+        queriesRemaining: GUEST_DAILY_LIMIT,
+        isLimitReached: false,
+      });
       return;
     }
     try {
@@ -300,8 +306,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  const guestState = useGuestSession();
-
   return (
     <AuthContext.Provider
       value={{
@@ -316,7 +320,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         accessToken,
         signInWithWhatsApp,
         verifyWhatsAppOtp,
-        guest: guestState,
       }}
     >
       {children}
