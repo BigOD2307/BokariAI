@@ -205,8 +205,9 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 - `src/lib/hooks/useChat.tsx` : `createShare(chatId)` action
 
 **JSON-LD** : `QAPage` + `Article` schema
-**Defaults** : `is_indexed=true` (décision Ousmane 3 juin 2026 : tout indexé par défaut), `anonymous_author=false` (par défaut le user est nommé), opt-out accessible dans les settings (pas proéminent dans le share modal). DPO + CGU Afrique renforcés avant le ship.
+**Defaults** : `is_indexed=true` (décision Ousmane 3 juin 2026 : tout indexé par défaut, opt-out dans Settings > Privacy > Public chats — **caché**, pas dans le share modal). `anonymous_author=false` (par défaut le user est nommé). DPO + CGU Afrique renforcés avant le ship.
 **OG image** : `runtime = 'edge'`, font Inter TTF bundled
+**Settings UI** : `/settings/privacy` → section "Public chats" avec toggle "Autoriser Google à indexer mes chats partagés" (par défaut ON)
 
 **Tests** : 30+ nouveaux (share creation, RLS, OG image, JSON-LD)
 
