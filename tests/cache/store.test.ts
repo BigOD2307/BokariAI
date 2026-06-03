@@ -7,7 +7,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { SemanticCache, packEmbedding, cosineSimilarity } from '@/lib/cache/store';
+import { SemanticCache } from '@/lib/cache/store';
+import { packEmbedding, cosineSimilarity } from '@/lib/cache/vector';
 
 let tmp: string;
 let cache: SemanticCache;
