@@ -1,15 +1,7 @@
 import { z } from 'zod';
-import ModelRegistry from '@/lib/models/registry';
 import { ModelWithProvider } from '@/lib/models/types';
-import SearchAgent from '@/lib/agents/search';
-import SessionManager from '@/lib/session';
-import { ChatTurnMessage } from '@/lib/types';
-import { SearchSources } from '@/lib/agents/search/types';
-import supabase from '@/lib/db';
-import UploadManager from '@/lib/uploads/manager';
-import { createServerClient } from '@/lib/supabase/server';
 import { startTimer, logStage } from '@/lib/observability/latence';
-import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
+import { buildChatStream, ChatStreamBody } from './stream';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,14 +40,12 @@ const bodySchema = z.object({
   systemInstructions: z.string().nullable().optional().default(''),
 });
 
-type Body = z.infer<typeof bodySchema>;
-
 const safeValidateBody = (data: unknown) => {
   const result = bodySchema.safeParse(data);
   if (!result.success) {
     return {
       success: false,
-      error: result.error.issues.map((e: any) => ({
+      error: result.error.issues.map((e) => ({
         path: e.path.join('.'),
         message: e.message,
       })),
@@ -64,43 +54,11 @@ const safeValidateBody = (data: unknown) => {
   return { success: true, data: result.data };
 };
 
-const ensureChatExists = async (input: {
-  id: string;
-  sources: SearchSources[];
-  query: string;
-  fileIds: string[];
-  userId?: string;
-}) => {
-  try {
-    const { data: exists } = await supabase
-      .from('chats')
-      .select('id')
-      .eq('id', input.id)
-      .maybeSingle();
-
-    if (!exists) {
-      await supabase.from('chats').insert({
-        id: input.id,
-        user_id: input.userId || null,
-        title: input.query,
-        sources: input.sources || [],
-        files: input.fileIds.map((id) => ({
-          fileId: id,
-          name: UploadManager.getFile(id)?.name || 'Uploaded File',
-        })),
-      });
-    }
-  } catch (err) {
-    console.error('Failed to check/save chat:', err);
-  }
-};
-
 export const POST = async (req: Request) => {
   const tTotal = startTimer();
-  let tFirstBlock: (() => number) | null = null;
   try {
     const tParse = startTimer();
-    const reqBody = (await req.json()) as Body;
+    const reqBody = (await req.json()) as { optimizationMode?: string };
     const parseBody = safeValidateBody(reqBody);
     if (!parseBody.success) {
       return Response.json(
@@ -108,139 +66,18 @@ export const POST = async (req: Request) => {
         { status: 400 },
       );
     }
-    logStage('chat.parse', tParse(), { mode: (reqBody as any).optimizationMode });
+    logStage('chat.parse', tParse(), { mode: reqBody.optimizationMode });
 
-    const body = parseBody.data as Body;
-    const { message } = body;
-
-    if (message.content === '') {
+    const body = parseBody.data as ChatStreamBody;
+    if (body.message.content === '') {
       return Response.json(
         { message: 'Please provide a message to process' },
         { status: 400 },
       );
     }
 
-    const tLoad = startTimer();
-    const registry = new ModelRegistry();
-    const [llm, embedding] = await Promise.all([
-      registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
-      registry.loadEmbeddingModel(
-        body.embeddingModel.providerId,
-        body.embeddingModel.key,
-      ),
-    ]);
-    logStage('chat.load_models', tLoad(), {
-      chat: body.chatModel.key,
-      embed: body.embeddingModel.key,
-    });
-
-    const history: ChatTurnMessage[] = truncateHistory(
-      body.history,
-      MAX_HISTORY_ENTRIES,
-    ).map((msg) =>
-      msg[0] === 'human'
-        ? { role: 'user', content: msg[1] }
-        : { role: 'assistant', content: msg[1] },
-    );
-
-    const agent = new SearchAgent();
-    const session = SessionManager.createSession();
-    const responseStream = new TransformStream();
-    const writer = responseStream.writable.getWriter();
-    const encoder = new TextEncoder();
-
-    const disconnect = session.subscribe((event: string, data: any) => {
-      if (event === 'data') {
-        if (data.type === 'block') {
-          if (!tFirstBlock) {
-            tFirstBlock = startTimer();
-            logStage('chat.first_block', tFirstBlock());
-          }
-          writer.write(
-            encoder.encode(
-              JSON.stringify({ type: 'block', block: data.block }) + '\n',
-            ),
-          );
-        } else if (data.type === 'updateBlock') {
-          writer.write(
-            encoder.encode(
-              JSON.stringify({
-                type: 'updateBlock',
-                blockId: data.blockId,
-                patch: data.patch,
-              }) + '\n',
-            ),
-          );
-        } else if (data.type === 'researchComplete') {
-          writer.write(
-            encoder.encode(JSON.stringify({ type: 'researchComplete' }) + '\n'),
-          );
-        }
-      } else if (event === 'end') {
-        writer.write(encoder.encode(JSON.stringify({ type: 'messageEnd' }) + '\n'));
-        writer.close();
-        logStage('chat.total', tTotal(), { ok: true });
-        session.removeAllListeners();
-      } else if (event === 'error') {
-        writer.write(
-          encoder.encode(
-            JSON.stringify({ type: 'error', data: data.data }) + '\n',
-          ),
-        );
-        writer.close();
-        logStage('chat.total', tTotal(), { ok: false });
-        session.removeAllListeners();
-      }
-    });
-
-    const tAgent = startTimer();
-    agent
-      .searchAsync(session, {
-        chatHistory: history,
-        followUp: message.content,
-        chatId: body.message.chatId,
-        messageId: body.message.messageId,
-        config: {
-          llm,
-          embedding,
-          sources: body.sources as SearchSources[],
-          mode: body.optimizationMode,
-          fileIds: body.files,
-          systemInstructions: body.systemInstructions || 'None',
-        },
-      })
-      .then(() => logStage('chat.agent', tAgent()))
-      .catch((err) => {
-        console.error('[Bokari] Search agent error:', err);
-        logStage('chat.agent', tAgent(), { error: true });
-        session.emit('error', {
-          data: 'Une erreur est survenue lors de la recherche. Veuillez reessayer.',
-        });
-      });
-
-    // Get user from Supabase Auth (cookie/header) — fire-and-forget so it
-    // doesn't block the first byte.  We still await for `ensureChatExists`
-    // because that needs the user id.
-    const authClient = createServerClient(req);
-    const tAuth = startTimer();
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
-    logStage('chat.auth', tAuth(), { hasUser: !!user });
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: message.content,
-      userId: user?.id,
-    });
-
-    req.signal.addEventListener('abort', () => {
-      disconnect();
-      writer.close();
-    });
-
-    return new Response(responseStream.readable, {
+    const stream = buildChatStream(req, body, tTotal);
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         Connection: 'keep-alive',

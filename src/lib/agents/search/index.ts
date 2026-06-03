@@ -93,6 +93,15 @@ class SearchAgent {
       console.error('[Bokari] DB error on findFirst:', dbErr);
     }
 
+    // Sprint 3 C4: emit 'analyzing' events at every major step so
+    // the client can update its spinner message within a tick of
+    // each transition.  Without these, the user sees a blank
+    // spinner for 200-800ms before the first event.
+    session.emit('analyzing', {
+      step: 'init',
+      message: 'Préparation de la recherche…',
+    });
+
     try {
       if (!exists) {
         await supabase.from('messages').insert({
@@ -124,6 +133,10 @@ class SearchAgent {
       console.error('[Bokari] DB error on message insert/update:', dbErr);
     }
 
+    session.emit('analyzing', {
+      step: 'classifier',
+      message: 'Analyse de votre question…',
+    });
     const classification = await classify({
       chatHistory: input.chatHistory,
       enabledSources: input.config.sources,
@@ -131,6 +144,10 @@ class SearchAgent {
       llm: input.config.llm,
     });
 
+    session.emit('analyzing', {
+      step: 'widgets',
+      message: 'Chargement des widgets…',
+    });
     const widgetPromise = WidgetExecutor.executeAll({
       classification,
       chatHistory: input.chatHistory,
@@ -150,6 +167,10 @@ class SearchAgent {
     let searchPromise: Promise<ResearcherOutput> | null = null;
 
     if (!classification.classification.skipSearch) {
+      session.emit('analyzing', {
+        step: 'search',
+        message: 'Recherche en cours…',
+      });
       const researcher = new Researcher();
       searchPromise = researcher.research(session, {
         chatHistory: input.chatHistory,
@@ -161,6 +182,11 @@ class SearchAgent {
 
     const memoryPromise = fetchMemory(input.chatId);
 
+    session.emit('analyzing', {
+      step: 'reading',
+      message: 'Lecture des sources…',
+    });
+
     const [widgetOutputs, searchResults, memory] = await Promise.all([
       widgetPromise,
       searchPromise,
@@ -168,6 +194,11 @@ class SearchAgent {
     ]);
 
     session.emit('data', { type: 'researchComplete' });
+
+    session.emit('analyzing', {
+      step: 'chart',
+      message: 'Extraction du graphique…',
+    });
 
     if (looksLikeChartRequest(input.followUp)) {
       const findings = searchResults?.searchFindings ?? [];
@@ -191,6 +222,11 @@ class SearchAgent {
         console.warn('[Bokari] chart extraction failed:', chartErr);
       }
     }
+
+    session.emit('analyzing', {
+      step: 'writing',
+      message: 'Rédaction de la réponse…',
+    });
 
     const finalContext =
       searchResults?.searchFindings

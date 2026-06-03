@@ -23,6 +23,8 @@ import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
 import { truncateHistory } from '../utils/chatHistory';
 import { withTimeout } from '../utils/streamTimeout';
+import { startTimer } from '../observability/latence';
+import { recordTiming } from '../observability/ttfb';
 
 /** SSE stream budgets on the client.  These guard the user against
  *  a stalled backend — if no chunk arrives within these windows,
@@ -630,6 +632,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
+      // Sprint 3 C4: 'analyzing' fires early in the search agent
+      // so the UI can show "Analyse de votre question…" / "Recherche
+      // en cours…" instead of a blank spinner.  We just bump a
+      // timestamp so React re-renders any listening components.
+      if (data.type === 'analyzing') {
+        setResearchEnded(false);
+      }
+
       if (data.type === 'block') {
         setMessages((prev) =>
           prev.map((msg) => {
@@ -784,6 +794,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     rewrite = false,
   ) => {
     if (loading || !message) return;
+    const tSend = startTimer();
     setLoading(true);
     setResearchEnded(false);
     setMessageAppeared(false);
@@ -851,6 +862,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
+    const tRequest = startTimer();
     const res = await authFetch('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
@@ -885,6 +897,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     if (!res.body) throw new Error('No response body');
+
+    recordTiming('client.request_to_first_byte', tRequest());
 
     const reader = res.body?.getReader();
     const decoder = new TextDecoder('utf-8');
@@ -938,6 +952,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         /* noop */
       }
       throw err;
+    } finally {
+      recordTiming('client.send_total', tSend());
     }
   };
 
