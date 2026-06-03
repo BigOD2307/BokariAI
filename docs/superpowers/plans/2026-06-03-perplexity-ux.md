@@ -9,13 +9,17 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 
 **Recherche complète** : voir `docs/research/2026-06-03-sprint4-{auth,ux,virality,learn}.md` (4 fichiers, ~3000 lignes, 100+ sources 2026 vérifiées).
 
-## Décisions cadres (à valider)
+## Décisions cadres (validées 3 juin 2026 par Ousmane)
 
 1. **Phase order** : Auth → UX → Virality → Learn (fondations d'abord)
 2. **2 devs en parallèle** : Aoua (frontend) + Amadou (backend) sur phases Auth+UX, puis Virality+Learn
 3. **Feature flags** : tout derrière `flags.sprint4.*` dans PostHog, kill switch si bug
 4. **Pas de breaking change** : email signup reste actif, WhatsApp est en plus
 5. **Guest mode d'abord** : on peut lancer guest mode sans WhatsApp, c'est la priorité conversion
+6. **WhatsApp provider** : **Meta Cloud API direct** + custom OTP storage (pas Twilio Verify) — économie $0.055/OTP, +3-4 jours dev, code surface custom
+7. **Public chats** : **tout indexé par défaut** + opt-out accessible mais pas proéminent. DPO + CGU Afrique renforcés avant le ship
+8. **Learn mode** : **100% gratuit** (acquisition pure, monétisation via B2B écoles plus tard)
+9. **Search depth** : **2 niveaux** (search / deep_search)
 
 ## Stack confirmée
 
@@ -38,27 +42,61 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 
 ## Phase 1 — Auth (5 jours, 1 dev)
 
-### 1.1 WhatsApp OTP signup (3 jours)
+### 1.1 WhatsApp OTP signup (5 jours, +2j vs Twilio Verify pour custom code)
 
-**Provider** : Supabase Auth + Twilio Verify (channel: whatsapp). Coût : $0.059/OTP.
+**Provider** : **Meta WhatsApp Business Cloud API direct** (PAS Twilio Verify — décision validée 3 juin 2026 par Ousmane). Coût : $0.004/OTP (5.4 cents économisés par signup vs Twilio).
+
+**Architecture** : Custom OTP storage dans Supabase + custom JWT mint sur vérification réussie.
 
 **Fichiers à créer** :
-- `src/lib/auth/whatsapp.ts` : wrapper `signInWithWhatsApp(phone)`, `verifyWhatsAppOtp(phone, code)` (70 LOC)
+- `src/lib/auth/whatsapp/meta-client.ts` : wrapper Graph API `/v20.0/<phone-id>/messages` (envoi template `authenticate`) (120 LOC)
+- `src/lib/auth/whatsapp/otp-store.ts` : `createOtp(phone, code, expiresAt)`, `verifyOtp(phone, code)`, `incrementAttempts(phone)`, `resetOtp(phone)` (90 LOC)
+- `src/lib/auth/whatsapp/jwt.ts` : `mintSessionJwt(userId, phone)` via Supabase service_role + `signInWithIdToken` (60 LOC)
 - `src/lib/auth/country.ts` : `getDefaultCountry()` lit `cf-ipcountry` Cloudflare, fallback `SN` (40 LOC)
 - `src/components/Auth/PhoneInput.tsx` : wrapper `react-international-phone` + style shadcn (120 LOC)
 - `src/components/Auth/OtpInput.tsx` : 6-digit OTP avec auto-submit + countdown resend (100 LOC)
-- `src/app/api/auth/whatsapp/start/route.ts` : POST, valide E.164, appelle Supabase
-- `src/app/api/auth/whatsapp/verify/route.ts` : POST, vérifie OTP, set session cookie
+- `src/app/api/auth/whatsapp/start/route.ts` : POST, valide E.164, génère OTP 6-digit (hash bcrypt), stocke, appelle Meta
+- `src/app/api/auth/whatsapp/verify/route.ts` : POST, vérifie OTP + attempts < 3, mint JWT, set session cookie
+- `src/app/api/auth/whatsapp/webhook/route.ts` : GET webhook Meta (delivery status), ajuste UX (SMS fallback optionnel Sprint 5)
 - `src/components/Auth/WhatsAppAuthModal.tsx` : orchestrateur (étape 1: phone, étape 2: code) (200 LOC)
-- Migration Supabase : `alter table users add column phone_whatsapp text unique;`
+- Migration Supabase :
+  ```sql
+  create table phone_otps (
+    phone text primary key,            -- E.164 format
+    code_hash text not null,           -- bcrypt(code, 10)
+    attempts int default 0,
+    expires_at timestamptz not null,
+    last_sent_at timestamptz default now(),
+    verified_at timestamptz,
+    created_at timestamptz default now()
+  );
+  create index phone_otps_expires_idx on phone_otps(expires_at);
+  
+  alter table users add column phone_whatsapp text unique;
+  alter table users add column phone_verified_at timestamptz;
+  ```
 
 **Modifications** :
-- `src/lib/hooks/useAuth.tsx` : ajout `signInWithWhatsApp()`, `verifyWhatsAppOtp()`
+- `src/lib/hooks/useAuth.tsx` : ajout `signInWithWhatsApp(phone)`, `verifyWhatsAppOtp(phone, code)`
 - `src/components/AuthModal.tsx` : onglet "Email" / "WhatsApp" (tabs shadcn)
 - `src/middleware.ts` (ou `proxy.ts` Next.js 16) : lire `cf-ipcountry`, set cookie `_country`
 
-**Tests** : 30+ nouveaux (mock Twilio, E.164 parsing, OTP expiry, rate limit)
-**Docs** : `docs/auth/whatsapp.md` (setup Twilio, Meta WABA, rate limits)
+**Variables d'env** :
+- `META_WHATSAPP_TOKEN` (EAA... permanent token)
+- `META_WHATSAPP_PHONE_ID` (numeric ID)
+- `META_WHATSAPP_WABA_ID` (WhatsApp Business Account ID)
+- `META_WHATSAPP_TEMPLATE_NAME` (default: `bokari_otp`)
+
+**Rate limiting** : in-memory bucket (max 5 OTPs/phone/hour, 30 OTPs/IP/hour) + DB-persisted counter. Resend cooldown : 30s, expiré : 5min.
+
+**Tests** : 50+ nouveaux (mock Meta Graph API, E.164 parsing, bcrypt verify, attempts increment, rate limit, JWT mint)
+**Docs** : `docs/auth/whatsapp.md` (setup Meta WABA, business verification, template approval, env vars)
+
+**Setup requis avant dev** :
+- Facebook Business verification (1-3 jours)
+- WABA creation + phone number registration
+- Template `bokari_otp` submission (24-72h approval)
+- Rate testing avec Meta test number
 
 ### 1.2 Guest mode + blur (2 jours)
 
@@ -167,7 +205,7 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 - `src/lib/hooks/useChat.tsx` : `createShare(chatId)` action
 
 **JSON-LD** : `QAPage` + `Article` schema
-**Defaults** : `noindex=true`, `anonymousAuthor=true` (opt-in pour SEO)
+**Defaults** : `is_indexed=true` (décision Ousmane 3 juin 2026 : tout indexé par défaut), `anonymous_author=false` (par défaut le user est nommé), opt-out accessible dans les settings (pas proéminent dans le share modal). DPO + CGU Afrique renforcés avant le ship.
 **OG image** : `runtime = 'edge'`, font Inter TTF bundled
 
 **Tests** : 30+ nouveaux (share creation, RLS, OG image, JSON-LD)
@@ -190,9 +228,9 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 
 ## Phase 4 — Learn mode (7 jours, 1 dev fullstack)
 
-### 4.1 Mode Learn (Socratic + flashcards + quiz) (5 jours)
+### 4.1 Mode Learn (Socratic + flashcards + quiz) (4 jours, -1j car pas de paywall)
 
-**Pattern Perplexity/ChatGPT** : toggle `+ Apprendre` dans input bar → system prompt Socratic → inline flashcards + quiz.
+**Pattern Perplexity/ChatGPT** : toggle `+ Apprendre` dans input bar → system prompt Socratic → inline flashcards + quiz. **100% gratuit, pas de limite** (décision Ousmane 3 juin 2026 : acquisition pure, monétisation B2B écoles plus tard).
 
 **Fichiers à créer** :
 - `src/lib/agents/learn/prompt.ts` (60 LOC) : Socratic system prompt FR
@@ -217,7 +255,7 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 - `src/components/MessageInput/MessageInputActions.tsx` : ajout `<LearnToggle />`
 
 **Coût** : $0.004/session GPT-4o-mini ou $0.002/session Gemini Flash
-**Limite** : 3 sessions/jour gratuit, $1.99/mois illimité
+**Limite** : AUCUNE (gratuit illimité). Budget cible : < $2k/mois Learn (50k users × 0.5 sessions/j × 30% × $0.004)
 
 **Tests** : 40+ nouveaux (SM-2, card flip, quiz scoring, RLS)
 
@@ -249,7 +287,7 @@ Bokari doit devenir un **vrai concurrent de Perplexity** sur l'UX, tout en garda
 | WhatsApp OTP (Twilio Verify + Meta) | ~$900 |
 | Cloudflare Turnstile | $0 (free tier) |
 | Vercel (ISR + Edge functions) | $20 (Pro plan) |
-| LLM Learn mode (GPT-4o-mini, 3 sessions/j × 10k users × 30%) | $1,800 |
+| LLM Learn mode (GPT-4o-mini, illimité × 10k users × 30% × 0.5 sessions/j) | $1,800 |
 | Storage shares (Postgres, 10k shares × 50KB) | $5 |
 | Bandwidth (OG images, ISR cache) | $15 |
 | **Total infra** | **~$2,740/mo à 10k users** |
