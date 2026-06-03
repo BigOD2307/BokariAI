@@ -1,11 +1,18 @@
 'use client';
 
-import { PhoneInput as IntPhoneInput } from 'react-international-phone';
-import 'react-international-phone/style.css';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
-import { getDefaultCountry } from '@/lib/auth/country';
 import { isValidPhoneNumber } from 'libphonenumber-js';
-import { useMemo } from 'react';
+
+const PhoneInputClient = dynamic(
+  () => import('./PhoneInputClient'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-12 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] animate-pulse" />
+    ),
+  },
+);
 
 interface PhoneInputProps {
   value: string;
@@ -22,8 +29,6 @@ const PhoneInput = ({
   disabled,
   autoFocus,
 }: PhoneInputProps) => {
-  const defaultCountry = useMemo(() => getDefaultCountry(), []);
-
   return (
     <div className="w-full">
       <div
@@ -35,24 +40,11 @@ const PhoneInput = ({
           disabled && 'opacity-50',
         )}
       >
-        <IntPhoneInput
-          defaultCountry={defaultCountry}
+        <PhoneInputClient
           value={value}
-          onChange={(v: string | { phone: string; country: string }) => {
-            const next = typeof v === 'string' ? v : v.phone;
-            onChange(next);
-          }}
+          onChange={onChange}
           disabled={disabled}
           autoFocus={autoFocus}
-          inputClassName="w-full bg-transparent outline-none text-[14px] text-black/90 dark:text-white/90 placeholder:text-black/30 dark:placeholder:text-white/20"
-          countrySelectorStyleProps={{
-            buttonClassName:
-              '!bg-transparent !border-0 hover:!bg-black/[0.04] dark:hover:!bg-white/[0.04]',
-            dropdownStyleProps: {
-              className:
-                '!bg-white dark:!bg-dark-100 !text-black/90 dark:!text-white/90 !border !border-black/[0.08] dark:!border-white/[0.08] !rounded-xl',
-            },
-          }}
         />
       </div>
       {error && (
