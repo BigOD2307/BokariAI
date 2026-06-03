@@ -8,6 +8,18 @@ export interface User {
   name: string;
   email: string;
   plan: string;
+  phone?: string | null;
+  authProvider?: 'email' | 'whatsapp';
+}
+
+export interface GuestSessionState {
+  isGuest: boolean;
+  id: string;
+  queriesCount: number;
+  queriesRemaining: number;
+  isLimitReached: boolean;
+  increment: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 interface AuthContextType {
@@ -20,6 +32,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
   requireAuth: () => boolean;
   accessToken: string | null;
+  signInWithWhatsApp: (phone: string) => Promise<{ ok: boolean; message?: string; cooldownSeconds?: number }>;
+  verifyWhatsAppOtp: (phone: string, code: string) => Promise<{ ok: boolean; message?: string; isNew?: boolean }>;
+  guest: GuestSessionState;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -32,9 +47,83 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   requireAuth: () => false,
   accessToken: null,
+  signInWithWhatsApp: async () => ({ ok: false }),
+  verifyWhatsAppOtp: async () => ({ ok: false }),
+  guest: {
+    isGuest: true,
+    id: '',
+    queriesCount: 0,
+    queriesRemaining: 3,
+    isLimitReached: false,
+    increment: async () => {},
+    refresh: async () => {},
+  },
 });
 
 export const useAuth = () => useContext(AuthContext);
+
+const useGuestSession = (): GuestSessionState => {
+  const ctx = useContext(AuthContext);
+  const user = ctx.user;
+  const [state, setState] = useState<Omit<GuestSessionState, 'increment' | 'refresh'>>({
+    isGuest: !user,
+    id: '',
+    queriesCount: 0,
+    queriesRemaining: 3,
+    isLimitReached: false,
+  });
+
+  const refresh = useCallback(async () => {
+    if (user) {
+      setState({ isGuest: false, id: '', queriesCount: 0, queriesRemaining: 3, isLimitReached: false });
+      return;
+    }
+    try {
+      const response = await fetch('/api/guest/track', { method: 'GET' });
+      const data = await response.json();
+      if (data.ok && data.session) {
+        setState({
+          isGuest: true,
+          id: data.session.id,
+          queriesCount: data.session.queriesCount,
+          queriesRemaining: data.session.queriesRemaining,
+          isLimitReached: data.session.isLimitReached,
+        });
+      }
+    } catch {
+      // keep previous state on network error
+    }
+  }, [user]);
+
+  const increment = useCallback(async () => {
+    if (user) return;
+    try {
+      const response = await fetch('/api/guest/track', { method: 'POST' });
+      const data = await response.json();
+      if (data.ok && data.session) {
+        setState({
+          isGuest: true,
+          id: data.session.id,
+          queriesCount: data.session.queriesCount,
+          queriesRemaining: data.session.queriesRemaining,
+          isLimitReached: data.session.isLimitReached,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return {
+    ...state,
+    increment,
+    refresh,
+  };
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -43,12 +132,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const initialized = useRef(false);
 
-  // Listen to Supabase auth state changes
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({
@@ -62,7 +149,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     });
 
-    // Listen for auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user) {
@@ -167,6 +253,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return true;
   }, [user]);
 
+  const signInWithWhatsApp = useCallback(async (phone: string) => {
+    try {
+      const response = await fetch('/api/auth/whatsapp/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        return {
+          ok: false,
+          message: data.message ?? 'Impossible d\'envoyer le code',
+          cooldownSeconds: data.cooldownSeconds,
+        };
+      }
+      return { ok: true, message: data.message };
+    } catch {
+      return { ok: false, message: 'Erreur réseau' };
+    }
+  }, []);
+
+  const verifyWhatsAppOtp = useCallback(async (phone: string, code: string) => {
+    try {
+      const response = await fetch('/api/auth/whatsapp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        return { ok: false, message: data.message ?? 'Code incorrect' };
+      }
+      setUser({
+        id: data.user.id,
+        name: data.user.phone,
+        email: data.user.email,
+        plan: 'free',
+        phone: data.user.phone,
+        authProvider: 'whatsapp',
+      });
+      setShowAuthModal(false);
+      return { ok: true, isNew: data.user.isNew };
+    } catch {
+      return { ok: false, message: 'Erreur réseau' };
+    }
+  }, []);
+
+  const guestState = useGuestSession();
+
   return (
     <AuthContext.Provider
       value={{
@@ -179,6 +314,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         requireAuth,
         accessToken,
+        signInWithWhatsApp,
+        verifyWhatsAppOtp,
+        guest: guestState,
       }}
     >
       {children}

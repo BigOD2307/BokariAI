@@ -12,6 +12,26 @@ export const users = sqliteTable('users', {
   plan: text('plan').default('free'),
   questionsToday: integer('questionsToday').default(0),
   lastQuestionDate: text('lastQuestionDate'),
+  phoneWhatsapp: text('phoneWhatsapp'),
+  phoneVerifiedAt: text('phoneVerifiedAt'),
+  authProvider: text('authProvider', { enum: ['email', 'whatsapp'] }).default('email'),
+});
+
+export const phoneOtps = sqliteTable('phone_otps', {
+  phone: text('phone').primaryKey(),
+  codeHash: text('codeHash').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: text('expiresAt').notNull(),
+  lastSentAt: text('lastSentAt').notNull(),
+  verifiedAt: text('verifiedAt'),
+  createdAt: text('createdAt').notNull(),
+});
+
+export const guestSessions = sqliteTable('guest_sessions', {
+  id: text('id').primaryKey(),
+  queriesCount: integer('queriesCount').notNull().default(0),
+  lastResetAt: text('lastResetAt').notNull(),
+  createdAt: text('createdAt').notNull(),
 });
 
 export const messages = sqliteTable('messages', {
