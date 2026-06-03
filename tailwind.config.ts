@@ -1,4 +1,6 @@
 import type { Config } from 'tailwindcss';
+import typography from '@tailwindcss/typography';
+import headlessui from '@headlessui/tailwindcss';
 
 const config: Config = {
   content: [
@@ -122,8 +124,8 @@ const config: Config = {
     },
   },
   plugins: [
-    require('@tailwindcss/typography'),
-    require('@headlessui/tailwindcss')({ prefix: 'headless' }),
+    typography,
+    headlessui({ prefix: 'headless' }),
   ],
 };
 export default config;
