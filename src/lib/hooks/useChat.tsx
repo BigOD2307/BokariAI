@@ -749,6 +749,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         );
       }
 
+      if (data.type === 'richBlock' && data.block) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? { ...msg, richBlocks: [...(msg.richBlocks ?? []), data.block] }
+              : msg,
+          ),
+        );
+      }
+
       if (data.type === 'updateBlock') {
         setMessages((prev) =>
           prev.map((msg) => {

@@ -7,8 +7,8 @@
  * JSON format the client expects, and writes it to the stream.
  *
  * Preserved event names (don't break the client protocol):
- *   open, block, updateBlock, researchComplete, chart, faithfulness,
- *   analyzing, messageEnd, error.
+ *   open, block, updateBlock, researchComplete, chart, richBlock,
+ *   faithfulness, analyzing, messageEnd, error.
  */
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { recordTiming } from '@/lib/observability/ttfb';
@@ -59,6 +59,10 @@ export const wireSessionToWriter = (
           await safeWrite(JSON.stringify({ type: 'researchComplete' }));
         } else if (data.type === 'chart') {
           await safeWrite(JSON.stringify({ type: 'chart', chart: data.chart }));
+        } else if (data.type === 'richBlock') {
+          await safeWrite(
+            JSON.stringify({ type: 'richBlock', block: data.block }),
+          );
         } else if (data.type === 'faithfulness') {
           await safeWrite(
             JSON.stringify({

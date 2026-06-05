@@ -33,6 +33,9 @@ import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
 import ImageBlock from './MessageRenderer/ImageBlock';
 import ChartBlock from './MessageRenderer/ChartBlock';
+import VerdictBlock from './MessageRenderer/VerdictBlock';
+import EntityCardBlock from './MessageRenderer/EntityCardBlock';
+import ComparisonTableBlock from './MessageRenderer/ComparisonTableBlock';
 
 const ThinkTagProcessor = ({
   children,
@@ -230,6 +233,22 @@ const MessageBox = ({
               ))}
             </div>
           )}
+
+          {/* Rich illustration blocks (verdict / entity card / comparison) */}
+          {section.message.richBlocks &&
+            section.message.richBlocks.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {section.message.richBlocks.map(
+                  (b: import('@/lib/types/multimodal').RichBlock) => {
+                    if (b.kind === 'verdict')
+                      return <VerdictBlock key={b.id} spec={b} />;
+                    if (b.kind === 'entity_card')
+                      return <EntityCardBlock key={b.id} spec={b} />;
+                    return <ComparisonTableBlock key={b.id} spec={b} />;
+                  },
+                )}
+              </div>
+            )}
 
           {/* Answer */}
           <div className="flex flex-col gap-2">

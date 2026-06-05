@@ -14,6 +14,16 @@ import {
 } from '@/lib/agents/multimodal/charts';
 import { pickWriterLlm } from './routing';
 import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
+import {
+  isRichBlocksEnabled,
+  looksLikeComparisonRequest,
+  looksLikeEntityRequest,
+  looksLikeVerdictRequest,
+  extractComparisonTable,
+  extractEntityCard,
+  extractVerdict,
+} from './richBlocks';
+import type { RichBlock } from '@/lib/types/multimodal';
 
 /** Per-call LLM stream budgets.  These are the caps that prevent a
  *  stalled upstream (Groq / OpenRouter / Ollama) from pinning a
@@ -224,6 +234,46 @@ class SearchAgent {
         }
       } catch (chartErr) {
         console.warn('[Bokari] chart extraction failed:', chartErr);
+      }
+    }
+
+    // Rich illustration blocks (comparison table, entity card, fact-check
+    // verdict) — opt-in via BOKARI_RICH_BLOCKS_ENABLED. Same post-research slot
+    // as chart extraction (parallel, before the writer streams) so it adds no
+    // serial latency. Each extractor fails closed to prose.
+    if (isRichBlocksEnabled()) {
+      const richSources = (searchResults?.searchFindings ?? [])
+        .slice(0, MAX_WRITER_RESULTS)
+        .map((f, index) => ({
+          id: index + 1,
+          title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
+          content: f.content,
+        }));
+      if (richSources.length > 0) {
+        const richLlm = input.config.llm as unknown as LlmCallable;
+        const jobs: Promise<RichBlock | null>[] = [];
+        // Verdict first — the category-defining trust block.
+        if (looksLikeVerdictRequest(input.followUp)) {
+          jobs.push(extractVerdict(input.followUp, richSources, richLlm));
+        }
+        if (looksLikeEntityRequest(input.followUp)) {
+          jobs.push(extractEntityCard(input.followUp, richSources, richLlm));
+        }
+        if (looksLikeComparisonRequest(input.followUp)) {
+          jobs.push(
+            extractComparisonTable(input.followUp, richSources, richLlm),
+          );
+        }
+        if (jobs.length > 0) {
+          try {
+            const blocks = await Promise.all(jobs);
+            for (const block of blocks) {
+              if (block) session.emit('data', { type: 'richBlock', block });
+            }
+          } catch (richErr) {
+            console.warn('[Bokari] rich block extraction failed:', richErr);
+          }
+        }
       }
     }
 
