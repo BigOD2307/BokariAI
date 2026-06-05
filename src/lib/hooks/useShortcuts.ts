@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { freshChatId } from '@/lib/uploads/landingHandoff';
 
 type ShortcutHandler = (event: KeyboardEvent) => void;
 
@@ -51,5 +52,5 @@ export const useToggleSidebarShortcut = (toggle: () => void): void => {
 
 export const useNewThreadShortcut = (): void => {
   const router = useRouter();
-  useShortcuts({ [`${modKey}+k`]: () => router.push('/') });
+  useShortcuts({ [`${modKey}+k`]: () => router.push(`/c/${freshChatId()}`) });
 };

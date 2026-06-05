@@ -45,6 +45,20 @@ export function consumeFreshChat(id: string): boolean {
 }
 
 /**
+ * Mint a fresh chat id (40-hex, same scheme as the landing composer), flag it
+ * as fresh, and return it. Used by the "Nouveau fil" button + the new-thread
+ * shortcut so they open an empty `/c/<id>` (with the sidebar + composer)
+ * instead of bouncing to the marketing home.
+ */
+export function freshChatId(): string {
+  const arr = new Uint8Array(20);
+  globalThis.crypto.getRandomValues(arr);
+  const id = Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+  markFreshChat(id);
+  return id;
+}
+
+/**
  * The query typed on the landing, carried (race-free) into the chat so the
  * auto-send doesn't depend on `useSearchParams()` updating across the client
  * navigation — which can lag and leave the chat hanging on "loading".

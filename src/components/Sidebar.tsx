@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import { Search, Compass, Plus, Menu, User } from 'lucide-react';
 import Link from 'next/link';
-import { useSelectedLayoutSegments } from 'next/navigation';
+import { useSelectedLayoutSegments, useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Layout from './Layout';
@@ -13,6 +13,7 @@ import { useNewThreadShortcut } from '@/lib/hooks/useShortcuts';
 import HistoryBand from './Sidebar/HistoryBand';
 import BokariAvatar from '@/components/BokariAvatar';
 import MobileActionsMenu from './Sidebar/MobileActionsMenu';
+import { freshChatId } from '@/lib/uploads/landingHandoff';
 
 // Bokari Canvas recipes (light "paper" world — shared with the marketing site).
 const NAV_ACTIVE =
@@ -30,9 +31,18 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
 
   useNewThreadShortcut();
 
+  const router = useRouter();
+
   const openSettings = () => {
     setSettingsOpen(true);
     setMobileOpen(false);
+  };
+
+  // Start a real new conversation: mint a fresh chat id and open the empty
+  // /c/<id> (sidebar + composer), instead of bouncing to the marketing home.
+  const startNewThread = () => {
+    setMobileOpen(false);
+    router.push(`/c/${freshChatId()}`);
   };
 
   const navLinks = [
@@ -44,11 +54,11 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
     <>
       {/* Nouveau fil (first element — no top toggle row) */}
       <div className="px-3 pb-2 pt-3">
-        <Link
-          href="/"
-          onClick={() => setMobileOpen(false)}
+        <button
+          type="button"
+          onClick={startNewThread}
           className={cn(
-            'group flex items-center gap-2.5 rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_3px_0_rgba(15,23,42,0.10)] transition-transform hover:-translate-y-px active:translate-y-px',
+            'group flex w-full items-center gap-2.5 rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_3px_0_rgba(15,23,42,0.10)] transition-transform hover:-translate-y-px active:translate-y-px',
             collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
           )}
         >
@@ -58,7 +68,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
               Nouveau fil
             </span>
           )}
-        </Link>
+        </button>
       </div>
 
       {/* Nav */}
