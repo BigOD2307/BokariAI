@@ -8,7 +8,7 @@
  * @author Amadou — Dicken AI
  * @version 1.0.0
  */
-import { Block } from './types';
+import { Block } from '@/lib/types';
 import type {
   Attachment,
   ChartSpec,

@@ -64,7 +64,7 @@ export function withTimeout<T>(
     | AsyncIterator<T>
     | { [Symbol.asyncIterator](): AsyncIterator<T> },
   opts: StreamTimeoutOptions = {},
-): AsyncIterable<T> {
+): AsyncIterableIterator<T> {
   const cfg = { ...DEFAULTS, ...opts };
   const label = opts.label ?? 'stream';
   const iter: AsyncIterator<T> =

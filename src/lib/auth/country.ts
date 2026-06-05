@@ -57,7 +57,9 @@ export const setCountryCookie = (country: CountryCode): void => {
   document.cookie = `${COUNTRY_COOKIE_NAME}=${safe}; Path=/; Max-Age=${COUNTRY_COOKIE_MAX_AGE}; SameSite=Lax`;
 };
 
-export const parseCfIpCountry = (headerValue: string | null): CountryCode => {
+export const parseCfIpCountry = (
+  headerValue: string | null | undefined,
+): CountryCode => {
   if (!headerValue) return DEFAULT_COUNTRY;
   return normalizeCountry(headerValue);
 };

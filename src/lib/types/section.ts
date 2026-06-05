@@ -7,7 +7,7 @@
  * @author Amadou — Dicken AI
  * @version 1.0.0
  */
-import type { Message, Widget } from './types/window';
+import type { Message, Widget } from './window';
 
 export type Section = {
   message: Message;
