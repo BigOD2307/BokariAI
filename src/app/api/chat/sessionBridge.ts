@@ -31,7 +31,7 @@ export const wireSessionToWriter = (
   session: SessionManager,
   safeWrite: Writer,
   onFirstBlock: () => void,
-  onEnd?: () => void | Promise<void>,
+  onEnd?: (cache: boolean) => void | Promise<void>,
 ): SessionBridge => {
   let firstBlock = false;
   const disconnect = session.subscribe((event: string, data: any) => {
@@ -67,11 +67,19 @@ export const wireSessionToWriter = (
           }),
         );
       } else if (event === 'end') {
-        if (onEnd) await onEnd();
+        // Send the terminal event FIRST, while the stream is still open.
+        // `onEnd` closes the writer (cache write → onClose → writer.close), so
+        // writing messageEnd AFTER it hits the `closed` guard in safeWrite and
+        // is silently DROPPED — leaving the client stuck "thinking" forever on
+        // every live (non-cached) answer. messageEnd → THEN cache + close.
         await safeWrite(JSON.stringify({ type: 'messageEnd' }));
+        if (onEnd) await onEnd(true);
         session.removeAllListeners();
       } else if (event === 'error') {
+        // Emit the error AND close the stream (don't cache a broken answer,
+        // don't leave the connection dangling).
         await safeWrite(JSON.stringify({ type: 'error', data: data.data }));
+        if (onEnd) await onEnd(false);
         session.removeAllListeners();
       }
     })();

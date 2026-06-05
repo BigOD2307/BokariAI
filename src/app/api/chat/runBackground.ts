@@ -122,11 +122,12 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
       session,
       safeWrite,
       () => undefined,
-      async () => {
-        // 'end' event: cache the response, log, then close.
+      async (cache: boolean) => {
+        // Terminal: cache the response only on success ('end'), never on error,
+        // log, then close the stream.
         if (!session) return;
-        await writeCacheAfterEnd(session);
-        logStage('chat.total', tTotal(), { ok: true, live: true });
+        if (cache) await writeCacheAfterEnd(session);
+        logStage('chat.total', tTotal(), { ok: cache, live: true });
         onClose();
         try { await writer.close(); } catch { /* noop */ }
       },

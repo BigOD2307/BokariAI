@@ -13,10 +13,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import crypto from 'crypto';
 import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/supabase/fetch';
+import {
+  takePendingLandingAttachments,
+  consumeFreshChat,
+  takePendingLandingQuery,
+} from '@/lib/uploads/landingHandoff';
 import { getSuggestions } from '../actions';
 import { MinimalProvider } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
@@ -25,6 +29,13 @@ import { truncateHistory } from '../utils/chatHistory';
 import { withTimeout } from '../utils/streamTimeout';
 import { startTimer } from '../observability/latence';
 import { recordTiming } from '../observability/ttfb';
+
+/** Browser/Node-safe random hex id via Web Crypto (no node:crypto polyfill needed). */
+const randomHex = (bytes: number): string => {
+  const arr = new Uint8Array(bytes);
+  globalThis.crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+};
 
 /** SSE stream budgets on the client.  These guard the user against
  *  a stalled backend — if no chunk arrives within these windows,
@@ -123,8 +134,9 @@ const checkConfig = async (
     }
 
     const chatModelProvider =
-      providers.find((p) => p.id === chatModelProviderId) ??
-      providers.find((p) => p.chatModels.length > 0);
+      providers.find(
+        (p) => p.id === chatModelProviderId && p.chatModels.length > 0,
+      ) ?? providers.find((p) => p.chatModels.length > 0);
 
     if (!chatModelProvider) {
       throw new Error(
@@ -140,8 +152,9 @@ const checkConfig = async (
     chatModelKey = chatModel.key;
 
     const embeddingModelProvider =
-      providers.find((p) => p.id === embeddingModelProviderId) ??
-      providers.find((p) => p.embeddingModels.length > 0);
+      providers.find(
+        (p) => p.id === embeddingModelProviderId && p.embeddingModels.length > 0,
+      ) ?? providers.find((p) => p.embeddingModels.length > 0);
 
     if (!embeddingModelProvider) {
       throw new Error(
@@ -172,6 +185,10 @@ const checkConfig = async (
       providerId: embeddingModelProviderId,
     });
 
+    console.debug('[Bokari] config ready', {
+      chat: `${chatModelProviderId}/${chatModelKey}`,
+      embed: `${embeddingModelProviderId}/${embeddingModelKey}`,
+    });
     setIsConfigReady(true);
   } catch (err: any) {
     console.error('An error occurred while checking the configuration:', err);
@@ -190,13 +207,21 @@ const loadMessages = async (
   setNotFound: (notFound: boolean) => void,
   setFiles: (files: File[]) => void,
   setFileIds: (fileIds: string[]) => void,
+  treatMissingAsNew = false,
+  setNewChatCreated?: (created: boolean) => void,
 ) => {
   const res = await authFetch(`/api/chats/${chatId}`, {
     method: 'GET',
   });
 
   if (res.status === 404) {
-    setNotFound(true);
+    // A missing chat is treated as a fresh / empty chat — the user can type, or
+    // a pending `?q=` auto-send can run. We never show a hard 404 page here: a
+    // chat can legitimately have no DB row yet (fresh landing chat, or a
+    // cache-served answer that wasn't persisted), and a reload must not 404.
+    void treatMissingAsNew;
+    void setNotFound;
+    setNewChatCreated?.(true);
     setIsMessagesLoaded(true);
     return;
   }
@@ -288,6 +313,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [chatId, setChatId] = useState<string | undefined>(params.chatId);
   const [newChatCreated, setNewChatCreated] = useState(false);
+  // Query carried from the landing search box (race-free; see landingHandoff).
+  const [autoSendQuery, setAutoSendQuery] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [messageAppeared, setMessageAppeared] = useState(false);
@@ -547,20 +574,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       !isMessagesLoaded &&
       messages.length === 0
     ) {
-      loadMessages(
-        chatId,
-        setMessages,
-        setIsMessagesLoaded,
-        chatHistory,
-        setSources,
-        setNotFound,
-        setFiles,
-        setFileIds,
-      );
+      if (consumeFreshChat(chatId)) {
+        // A brand-new chat minted by the landing search box — it doesn't exist
+        // in the DB yet, so skip loadMessages entirely (no GET, no 404, no
+        // notFound) and go straight to the new-chat path so the search starts.
+        // The query rides along the handoff (not ?q=) so the auto-send is
+        // race-free regardless of when useSearchParams catches up.
+        const handoffQuery = takePendingLandingQuery();
+        if (handoffQuery) setAutoSendQuery(handoffQuery);
+        setNewChatCreated(true);
+        setIsMessagesLoaded(true);
+      } else {
+        // Existing chat → load its history (with a 404-fallback to a new chat
+        // only if it's genuinely missing AND a `?q=` is pending).
+        loadMessages(
+          chatId,
+          setMessages,
+          setIsMessagesLoaded,
+          chatHistory,
+          setSources,
+          setNotFound,
+          setFiles,
+          setFileIds,
+          !!initialMessage,
+          setNewChatCreated,
+        );
+      }
     } else if (!chatId) {
       setNewChatCreated(true);
       setIsMessagesLoaded(true);
-      setChatId(crypto.randomBytes(20).toString('hex'));
+      setChatId(randomHex(20));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, isMessagesLoaded, newChatCreated, messages.length]);
@@ -570,6 +613,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   }, [messages]);
 
   useEffect(() => {
+    console.debug('[Bokari] ready check', {
+      isMessagesLoaded,
+      isConfigReady,
+      newChatCreated,
+    });
     if (isMessagesLoaded && isConfigReady && newChatCreated) {
       setIsReady(true);
       console.debug(new Date(), 'app:ready');
@@ -594,15 +642,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    if (isReady && initialMessage && isConfigReady) {
-      if (!isConfigReady) {
-        toast.error('Cannot send message before the configuration is ready');
-        return;
-      }
-      sendMessage(initialMessage);
+    const query = autoSendQuery ?? initialMessage;
+    console.debug('[Bokari] autosend eval', {
+      isReady,
+      isConfigReady,
+      hasQuery: !!query,
+    });
+    if (isReady && isConfigReady && query) {
+      console.debug('[Bokari] autosend FIRING:', query);
+      setAutoSendQuery(null);
+      sendMessage(query);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigReady, isReady, initialMessage]);
+  }, [isConfigReady, isReady, initialMessage, autoSendQuery]);
 
   const getMessageHandler = (message: Message) => {
     const messageId = message.messageId;
@@ -739,11 +791,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         setLoading(false);
 
-        const lastMsg = messagesRef.current[messagesRef.current.length - 1];
+        const lastMsg =
+          messagesRef.current[messagesRef.current.length - 1] ?? currentMsg;
 
         const autoMediaSearch = getAutoMediaSearch();
 
-        if (autoMediaSearch) {
+        if (autoMediaSearch && lastMsg) {
           setTimeout(() => {
             document
               .getElementById(`search-images-${lastMsg.messageId}`)
@@ -767,7 +820,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (hasSourceBlocks && !hasSuggestions) {
           const suggestions = await getSuggestions(newHistory);
           const suggestionBlock: Block = {
-            id: crypto.randomBytes(7).toString('hex'),
+            id: randomHex(7),
             type: 'suggestion',
             data: suggestions,
           };
@@ -794,6 +847,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     rewrite = false,
   ) => {
     if (loading || !message) return;
+    console.debug('[Bokari] sendMessage enter:', String(message).slice(0, 40));
+    // Don't send before the models are configured — posting empty model ids
+    // makes the backend reject with a 400 (plain JSON, not an SSE stream),
+    // which the client can't finalize → the UI hangs on "loading" forever.
+    // This is the "create account → use the app → it never finishes" path.
+    if (
+      !chatModelProvider?.providerId ||
+      !chatModelProvider?.key ||
+      !embeddingModelProvider?.providerId ||
+      !embeddingModelProvider?.key
+    ) {
+      console.debug('[Bokari] sendMessage BLOCKED: models not ready', {
+        chat: chatModelProvider,
+        embed: embeddingModelProvider,
+      });
+      toast.error('Un instant, les modèles se chargent…');
+      return;
+    }
     const tSend = startTimer();
     setLoading(true);
     setResearchEnded(false);
@@ -803,8 +874,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       window.history.replaceState(null, '', `/c/${chatId}`);
     }
 
-    messageId = messageId ?? crypto.randomBytes(7).toString('hex');
-    const backendId = crypto.randomBytes(20).toString('hex');
+    messageId = messageId ?? randomHex(7);
+    const backendId = randomHex(20);
 
     const newMessage: Message = {
       messageId,
@@ -818,7 +889,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     setMessages((prevMessages) => [...prevMessages, newMessage]);
 
-    const attachmentsToSend = pendingAttachments;
+    // Merge any files attached on the landing search box (carried via the
+    // module-level hand-off) with the in-chat pending attachments.
+    const attachmentsToSend = [
+      ...takePendingLandingAttachments(),
+      ...pendingAttachments,
+    ];
     const attachmentsForMessage: Attachment[] = [];
     const visionResultsForMessage: import('@/lib/types/multimodal').VisionResult[] = [];
 
@@ -896,6 +972,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       }),
     });
 
+    console.debug('[Bokari] POST /api/chat ->', res.status);
+    // A non-2xx is a JSON error (e.g. 400 validation), NOT an SSE stream —
+    // reading it as a stream would never yield a messageEnd and hang the UI.
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Chat request failed (${res.status}) ${detail.slice(0, 200)}`);
+    }
     if (!res.body) throw new Error('No response body');
 
     recordTiming('client.request_to_first_byte', tRequest());
@@ -941,17 +1024,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           console.warn('Incomplete JSON, waiting for next chunk...');
         }
       }
+
+      // Safety net: the stream ended.  If no `messageEnd` was processed (e.g.
+      // the terminal event was dropped server-side), finalize the message here
+      // so the UI never stays stuck "thinking".  Idempotent via the ref.
+      if (!handledMessageEndRef.current.has(messageId)) {
+        messageHandler({ type: 'messageEnd' });
+      }
     } catch (err: any) {
-      // Stream stalled.  Mark the message as errored so the UI
-      // does not stay in the 'answering' state.  The user can
-      // retry from the message actions.
-      console.error('[Bokari] SSE stream stalled:', err?.message);
+      // Stream stalled or the request failed (timeout, 4xx/5xx, network).
+      // Clear loading + mark the message errored so the UI never stays stuck
+      // "thinking".  The user can retry from the message actions.
+      console.error('[Bokari] SSE stream error:', err?.message);
       try {
         await reader.cancel();
       } catch {
         /* noop */
       }
-      throw err;
+      setLoading(false);
+      if (!handledMessageEndRef.current.has(messageId)) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? { ...msg, status: 'error' as const }
+              : msg,
+          ),
+        );
+      }
+      toast.error('La réponse a échoué. Réessaie.');
     } finally {
       recordTiming('client.send_total', tSend());
     }
