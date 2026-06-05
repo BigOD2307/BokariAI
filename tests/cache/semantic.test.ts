@@ -38,14 +38,17 @@ describe('normaliseQuery', () => {
     expect(normaliseQuery('Hello, World!')).toBe('hello world');
   });
 
-  it('drops English stop words', () => {
+  it('drops English stop words (incl. interrogatives like "what")', () => {
+    // The multilingual cache treats interrogatives as fillers so
+    // "what is the capital of France" collides with "capital of France".
     expect(normaliseQuery('What is the capital of France?'))
-      .toBe('capital france what');
+      .toBe('capital france');
   });
 
   it('preserves numbers', () => {
+    // "who" is dropped as a filler; the salient number/terms survive.
     expect(normaliseQuery('Who won the 2022 World Cup?'))
-      .toBe('2022 cup who won world');
+      .toBe('2022 cup won world');
   });
 
   it('is order-insensitive for word re-orderings', () => {

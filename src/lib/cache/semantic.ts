@@ -22,12 +22,24 @@
  */
 import { SemanticCache, cosineSimilarity } from './store';
 
-/** Cosine similarity above this number is treated as the same intent. */
-export const COSINE_THRESHOLD = 0.92;
+/**
+ * Cosine similarity above this number is treated as the same intent.
+ * Env-tunable via `BOKARI_CACHE_COSINE_THRESHOLD`.  Default 0.90 — slightly
+ * more recall than the old 0.92 (so French/African paraphrases collide) while
+ * staying precision-favouring enough to avoid serving a wrong cached answer.
+ */
+export const COSINE_THRESHOLD = (() => {
+  const raw = Number(process.env.BOKARI_CACHE_COSINE_THRESHOLD);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.9;
+})();
 
 /** Default TTL: 7 days, in ms.  Long enough to cover the typical
  *  "I asked this yesterday" pattern, short enough to bound storage. */
 export const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Volatile answers (news / price / election / live score / "aujourd'hui"…)
+ *  get a short TTL so a cached "who won the election" can't go stale. */
+export const FRESH_TTL_MS = 30 * 60 * 1000;
 
 /** A single embedding result. */
 export type Embedder = (text: string) => Promise<number[]>;
@@ -47,34 +59,38 @@ export type CachedResponse = {
  *  France" and "capital of France" hash the same.  We deliberately
  *  do NOT include domain terms (model names, country names, etc). */
 const STOP_WORDS = new Set([
-  'a',
-  'an',
-  'the',
-  'of',
-  'in',
-  'on',
-  'at',
-  'to',
-  'for',
-  'is',
-  'are',
-  'was',
-  'were',
-  'be',
-  'been',
-  'being',
-  'do',
-  'does',
-  'did',
-  'i',
-  'you',
-  'we',
-  'they',
-  'me',
-  'my',
-  'your',
-  'our',
+  // English fillers
+  'a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'for', 'is', 'are', 'was',
+  'were', 'be', 'been', 'being', 'do', 'does', 'did', 'i', 'you', 'we', 'they',
+  'me', 'my', 'your', 'our', 'what', 'whats', 'how', 'why', 'when', 'where', 'who',
+  // French fillers + elisions (apostrophes are stripped → bare single letters)
+  'le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'et', 'ou', 'au', 'aux',
+  'ce', 'cet', 'cette', 'ces', 'est', 'sont', 'etre', 'qui', 'que', 'quoi',
+  'quel', 'quelle', 'quels', 'quelles', 'comment', 'pourquoi', 'dans', 'sur',
+  'pour', 'par', 'avec', 'en', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils',
+  'elles', 'on', 'te', 'se', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son',
+  'sa', 'ses', 'notre', 'nos', 'votre', 'vos', 'leur', 'leurs', 'ne', 'pas',
+  'plus', 'ca', 'cela', 'ceci',
+  'c', 'd', 'j', 'l', 'm', 'n', 's', 't', 'qu',
 ]);
+
+/** Strip accents/diacritics so "élection" == "election" and accented FR /
+ *  African paraphrases collide on the same cache key. */
+function foldDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/** Keywords that make an answer time-sensitive (it goes stale fast). */
+const VOLATILE_RE =
+  /\b(aujourd|maintenant|actuel|actuelle|dernier|derniere|recent|recente|news|actu|actualite|prix|cours|taux|change|election|elections|resultat|resultats|score|match|meteo|weather|today|now|latest|breaking|live|direct|hier|demain|2026)\b/;
+
+/**
+ * True if the answer to this query is likely to go stale quickly (news, price,
+ * live score, election, "aujourd'hui"…) — such answers get a short cache TTL.
+ */
+export function isVolatileQuery(query: string): boolean {
+  return VOLATILE_RE.test(foldDiacritics(query.toLowerCase()));
+}
 
 /**
  * Lowercase, strip punctuation, drop stop words, sort the surviving
@@ -83,8 +99,7 @@ const STOP_WORDS = new Set([
  * order.  See the unit tests for the contract.
  */
 export function normaliseQuery(input: string): string {
-  return input
-    .toLowerCase()
+  return foldDiacritics(input.toLowerCase())
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((w) => w.length > 0 && !STOP_WORDS.has(w))
@@ -185,13 +200,15 @@ export async function cacheResponse(
 ): Promise<number> {
   const store = opts.store ?? defaultStore();
   const normalised = normaliseQuery(query);
+  // Volatile (news/price/election) answers expire fast so they can't go stale.
+  const volatile = isVolatileQuery(query);
   return store.upsert({
     query: normalised,
     queryHash: hashQuery(normalised),
     embedding,
     response,
-    metadata: opts.metadata,
-    ttlMs: opts.ttlMs ?? DEFAULT_TTL_MS,
+    metadata: { ...(opts.metadata ?? {}), freshnessClass: volatile ? 'volatile' : 'stable' },
+    ttlMs: opts.ttlMs ?? (volatile ? FRESH_TTL_MS : DEFAULT_TTL_MS),
   });
 }
 
