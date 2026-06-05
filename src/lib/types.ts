@@ -115,9 +115,47 @@ export type ResearchBlock = {
   };
 };
 
+export interface Flashcard {
+  id?: string;
+  front: string;
+  back: string;
+  bloomLevel?: string;
+  easeFactor?: number;
+  interval?: number;
+  repetitions?: number;
+  dueAt?: string;
+}
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  bloomLevel?: string;
+}
+
+export type FlashcardBlock = {
+  id: string;
+  type: 'flashcard';
+  data: {
+    flashcards: Flashcard[];
+    deckId?: string;
+  };
+};
+
+export type QuizBlock = {
+  id: string;
+  type: 'quiz';
+  data: {
+    questions: QuizQuestion[];
+  };
+};
+
 export type Block =
   | TextBlock
   | SourceBlock
   | SuggestionBlock
   | WidgetBlock
-  | ResearchBlock;
+  | ResearchBlock
+  | FlashcardBlock
+  | QuizBlock;

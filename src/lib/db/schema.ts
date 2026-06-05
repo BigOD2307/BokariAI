@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { text, integer, sqliteTable } from 'drizzle-orm/sqlite-core';
+import { text, integer, real, sqliteTable } from 'drizzle-orm/sqlite-core';
 import { Block } from '../types';
 import { SearchSources } from '../agents/search/types';
 
@@ -68,3 +68,25 @@ export const chats = sqliteTable('chats', {
     .$type<DBFile[]>()
     .default(sql`'[]'`),
 });
+
+export const flashcardDecks = sqliteTable('flashcard_decks', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  sourceQuery: text('sourceQuery').notNull(),
+  subject: text('subject'),
+  createdAt: text('createdAt').notNull(),
+});
+
+export const flashcards = sqliteTable('flashcards', {
+  id: text('id').primaryKey(),
+  deckId: text('deckId').notNull().references(() => flashcardDecks.id, { onDelete: 'cascade' }),
+  front: text('front').notNull(),
+  back: text('back').notNull(),
+  easeFactor: real('easeFactor').notNull().default(2.5),
+  interval: integer('interval').notNull().default(0),
+  repetitions: integer('repetitions').notNull().default(0),
+  dueAt: text('dueAt').notNull(),
+  lastReviewedAt: text(),
+});
+
