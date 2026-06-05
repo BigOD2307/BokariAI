@@ -26,8 +26,8 @@ const embeddingModelSchema: z.ZodType<ModelWithProvider> = z.object({
 
 const bodySchema = z.object({
   message: messageSchema,
-  optimizationMode: z.enum(['speed', 'balanced', 'quality'], {
-    message: 'Optimization mode must be one of: speed, balanced, quality',
+  optimizationMode: z.enum(['speed', 'balanced', 'quality', 'learn'], {
+    message: 'Optimization mode must be one of: speed, balanced, quality, learn',
   }),
   sources: z.array(z.string()).optional().default([]),
   history: z

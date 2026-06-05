@@ -1,4 +1,4 @@
-const getModeInstructions = (mode: 'speed' | 'balanced' | 'quality') => {
+const getModeInstructions = (mode: 'speed' | 'balanced' | 'quality' | 'learn') => {
   switch (mode) {
     case 'speed':
       return `
@@ -13,6 +13,7 @@ const getModeInstructions = (mode: 'speed' | 'balanced' | 'quality') => {
     - PAS de sous-titres (##) sauf si vraiment necessaire. Reste compact.`;
 
     case 'balanced':
+    case 'learn':
       return `
     ### MODE EQUILIBRE — Article synthetique
     - Ta reponse doit faire entre **500 et 1000 mots**.
@@ -39,7 +40,7 @@ const getModeInstructions = (mode: 'speed' | 'balanced' | 'quality') => {
 export const getWriterPrompt = (
   context: string,
   systemInstructions: string,
-  mode: 'speed' | 'balanced' | 'quality',
+  mode: 'speed' | 'balanced' | 'quality' | 'learn',
   memory?: string,
 ) => {
   return `

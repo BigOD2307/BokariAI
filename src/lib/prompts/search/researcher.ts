@@ -243,7 +243,7 @@ const getQualityPrompt = (
 
 export const getResearcherPrompt = (
   actionDesc: string,
-  mode: 'speed' | 'balanced' | 'quality',
+  mode: 'speed' | 'balanced' | 'quality' | 'learn',
   i: number,
   maxIteration: number,
   fileIds: string[],

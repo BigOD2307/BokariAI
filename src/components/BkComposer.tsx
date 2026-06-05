@@ -14,6 +14,7 @@ import {
   Zap,
   Gauge,
   Layers,
+  GraduationCap,
   Check,
   X,
   Image as ImageIcon,
@@ -38,12 +39,13 @@ import { useElevenLabsSTT } from '@/lib/hooks/useElevenLabsSTT';
  *  - variant="compact" → the in-chat follow-up bar (tighter).
  */
 
-type OptMode = 'speed' | 'balanced' | 'quality';
+type OptMode = 'speed' | 'balanced' | 'quality' | 'learn';
 
 const MODES: { key: OptMode; label: string; Icon: LucideIcon }[] = [
   { key: 'speed', label: 'Rapide', Icon: Zap },
   { key: 'balanced', label: 'Standard', Icon: Gauge },
   { key: 'quality', label: 'Approfondi', Icon: Layers },
+  { key: 'learn', label: 'Apprendre', Icon: GraduationCap },
 ];
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,image/gif,application/pdf';
@@ -357,7 +359,7 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
                       className="animate-fade-in absolute bottom-full left-0 z-30 mb-2 w-56 rounded-xl border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-1.5 shadow-[0_8px_0_rgba(15,23,42,0.06)]"
                     >
                       <p className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                        Mode de recherche
+                        Mode
                       </p>
                       {MODES.map((m) => {
                         const active = m.key === mode;

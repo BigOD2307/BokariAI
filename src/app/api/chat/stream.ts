@@ -25,7 +25,7 @@ import { createServerClient } from '@/lib/supabase/server';
  *  route's validated body. */
 export type ChatStreamBody = {
   message: { messageId: string; chatId: string; content: string };
-  optimizationMode: 'speed' | 'balanced' | 'quality';
+  optimizationMode: 'speed' | 'balanced' | 'quality' | 'learn';
   sources: string[];
   history: [string, string][];
   files: string[];

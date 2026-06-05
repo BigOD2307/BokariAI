@@ -27,7 +27,7 @@ type Writer = (line: string) => Promise<void>;
  */
 export const tryServeCacheHit = async (
   query: string,
-  mode: 'speed' | 'balanced' | 'quality',
+  mode: 'speed' | 'balanced' | 'quality' | 'learn',
   safeWrite: Writer,
   tTotal: () => number,
 ): Promise<string | null> => {
