@@ -12,6 +12,8 @@ import {
   extractChartSpec,
   type LlmCallable,
 } from '@/lib/agents/multimodal/charts';
+import { pickWriterLlm } from './routing';
+import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
 
 /** Per-call LLM stream budgets.  These are the caps that prevent a
  *  stalled upstream (Groq / OpenRouter / Ollama) from pinning a
@@ -137,11 +139,13 @@ class SearchAgent {
       step: 'classifier',
       message: 'Analyse de votre question…',
     });
+    // Classification is a cheap structured call — run it on the fast tier when
+    // configured (the 8B handles label assignment + complexity scoring fine).
     const classification = await classify({
       chatHistory: input.chatHistory,
       enabledSources: input.config.sources,
       query: input.followUp,
-      llm: input.config.llm,
+      llm: input.config.fastLlm ?? input.config.llm,
     });
 
     session.emit('analyzing', {
@@ -250,8 +254,16 @@ class SearchAgent {
       memory || undefined,
     );
 
+    // Route the writer: the fast tier for simple queries, the default
+    // (70B-class) for complex ones — model-tier routing. Safe fallback to the
+    // default when no fast tier is configured.
+    const writerLlm = pickWriterLlm(
+      classification.complexity,
+      input.config.llm,
+      input.config.fastLlm,
+    );
     const answerStream = withTimeout(
-      input.config.llm.streamText({
+      writerLlm.streamText({
         messages: [
           { role: 'system', content: writerPrompt },
           ...input.chatHistory,
@@ -284,6 +296,39 @@ class SearchAgent {
         session.updateBlock(block.id, [
           { op: 'replace', path: '/data', value: block.data },
         ]);
+      }
+    }
+
+    // Citation faithfulness gate (NLI) — opt-in via BOKARI_FAITHFULNESS_ENABLED.
+    // Runs *after* the answer has fully streamed (the user already sees the
+    // text); it checks each cited claim against its source extract and emits a
+    // verdict the UI can badge. Never alters or blocks the answer.
+    if (isFaithfulnessEnabled() && responseBlockId) {
+      const answerText =
+        (session.getBlock(responseBlockId) as TextBlock | null)?.data ?? '';
+      const sources = (searchResults?.searchFindings ?? [])
+        .slice(0, MAX_WRITER_RESULTS)
+        .map((f) => ({
+          content: f.content,
+          title: (f.metadata?.title as string) ?? undefined,
+        }));
+      if (answerText && sources.length > 0) {
+        session.emit('analyzing', {
+          step: 'verifying',
+          message: 'Vérification des citations…',
+        });
+        try {
+          const report = await checkFaithfulness(
+            answerText,
+            sources,
+            input.config.fastLlm ?? input.config.llm,
+          );
+          if (report.total > 0) {
+            session.emit('data', { type: 'faithfulness', faithfulness: report });
+          }
+        } catch (verifyErr) {
+          console.warn('[Bokari] faithfulness gate failed:', verifyErr);
+        }
       }
     }
 

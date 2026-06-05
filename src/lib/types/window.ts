@@ -10,6 +10,7 @@
  */
 import { Block } from './types';
 import type { Attachment, ChartSpec, VisionResult } from './multimodal';
+import type { FaithfulnessReport } from '@/lib/agents/search/faithfulness';
 
 export interface BaseMessage {
   chatId: string;
@@ -25,6 +26,8 @@ export interface Message extends BaseMessage {
   attachments?: Attachment[];
   visionResults?: VisionResult[];
   charts?: ChartSpec[];
+  /** Per-claim citation faithfulness verdict (NLI gate), when enabled. */
+  faithfulness?: FaithfulnessReport;
 }
 
 export interface File {

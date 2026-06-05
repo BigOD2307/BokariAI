@@ -739,6 +739,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         );
       }
 
+      if (data.type === 'faithfulness' && data.faithfulness) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? { ...msg, faithfulness: data.faithfulness }
+              : msg,
+          ),
+        );
+      }
+
       if (data.type === 'updateBlock') {
         setMessages((prev) =>
           prev.map((msg) => {
