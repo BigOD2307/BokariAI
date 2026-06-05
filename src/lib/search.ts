@@ -67,31 +67,66 @@ function scoreResult(result: SearchResult): number {
   return score;
 }
 
+/** Reciprocal Rank Fusion constant. 60 is the canonical value (Cormack et al.)
+ *  — large enough that the curve is gentle, so rank 1 vs rank 5 matters but
+ *  rank 20 vs 25 barely does. */
+const RRF_K = 60;
+
 /**
- * Deduplicate results by URL domain+path, keeping the best version
+ * How much the African-domain / quality boost counts relative to RRF.
+ * `scoreResult` maxes ~15; one engine's rank-1 RRF contribution is ~1/61 ≈
+ * 0.0164. Scaling the boost by 1/600 makes a +10 African source worth roughly
+ * one extra rank-1 engine appearance — locality stays a first-class signal
+ * without overriding strong cross-engine consensus.
  */
-function deduplicateResults(results: SearchResult[]): SearchResult[] {
-  const seen = new Map<string, SearchResult>();
+const DOMAIN_BOOST_SCALE = 1 / 600;
 
-  for (const result of results) {
-    try {
-      const u = new URL(result.url);
-      const key = u.hostname + u.pathname;
-      const existing = seen.get(key);
+/**
+ * Reciprocal Rank Fusion across the engine result lists. A document that ranks
+ * well in MULTIPLE engines (DDG web + DDG news + Brave agree) beats one that
+ * ranks high in only one — the recall win over the old flat additive score.
+ * Dedup is by hostname+path (keeping the richest snippet); the African-domain
+ * boost is folded in as a tie-breaking nudge.
+ */
+export function reciprocalRankFusion(
+  lists: SearchResult[][],
+  k = RRF_K,
+): SearchResult[] {
+  const fused = new Map<string, { result: SearchResult; rrf: number }>();
 
+  for (const list of lists) {
+    list.forEach((result, idx) => {
+      let key: string;
+      try {
+        const u = new URL(result.url);
+        key = u.hostname + u.pathname;
+      } catch {
+        key = result.url;
+      }
+      const contribution = 1 / (k + idx + 1); // rank is 1-based
+      const existing = fused.get(key);
       if (!existing) {
-        seen.set(key, result);
+        fused.set(key, { result, rrf: contribution });
       } else {
-        if ((result.content?.length || 0) > (existing.content?.length || 0)) {
-          seen.set(key, result);
+        existing.rrf += contribution;
+        // Keep the richer snippet across engine duplicates.
+        if (
+          (result.content?.length || 0) >
+          (existing.result.content?.length || 0)
+        ) {
+          existing.result = result;
         }
       }
-    } catch {
-      seen.set(result.url, result);
-    }
+    });
   }
 
-  return Array.from(seen.values());
+  return Array.from(fused.values())
+    .map(({ result, rrf }) => ({
+      result,
+      score: rrf + scoreResult(result) * DOMAIN_BOOST_SCALE,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.result);
 }
 
 /**
@@ -248,19 +283,16 @@ const searchParallel = async (
 
   console.log(`[Bokari Search] DDG: ${ddgResults.length}, DDG News: ${ddgNewsResults.length}, Brave: ${braveResults.length}`);
 
-  // Merge: DDG standard first, then news, then Brave extras
-  const merged = [...ddgResults, ...ddgNewsResults, ...braveResults];
+  // Reciprocal Rank Fusion: reward cross-engine agreement (a result the web,
+  // news, and Brave all surface is stronger than one engine's top hit), fold
+  // in the African-domain boost, and dedup by hostname+path.
+  const results = reciprocalRankFusion([
+    ddgResults,
+    ddgNewsResults,
+    braveResults,
+  ]);
 
-  // Deduplicate
-  const unique = deduplicateResults(merged);
-
-  // Score and sort: African sources first, then by content quality
-  const scored = unique
-    .map((r) => ({ result: r, score: scoreResult(r) }))
-    .sort((a, b) => b.score - a.score)
-    .map((s) => s.result);
-
-  return { results: scored, suggestions: [] };
+  return { results, suggestions: [] };
 };
 
 /**
