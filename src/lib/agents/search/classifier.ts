@@ -17,6 +17,18 @@ const schema = z.object({
     discussionSearch: z
       .boolean()
       .describe('Indicates whether to perform a discussion search.'),
+    xSearch: z
+      .boolean()
+      .describe('Indicates whether to search X (Twitter) for posts.'),
+    redditSearch: z
+      .boolean()
+      .describe('Indicates whether to search Reddit for posts and threads.'),
+    linkedinSearch: z
+      .boolean()
+      .describe('Indicates whether to search LinkedIn for posts and articles.'),
+    youtubeSearch: z
+      .boolean()
+      .describe('Indicates whether to search YouTube for relevant videos.'),
     showWeatherWidget: z
       .boolean()
       .describe('Indicates whether to show the weather widget.'),

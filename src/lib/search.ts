@@ -362,6 +362,9 @@ const searchYouTube = async (
  * Main search function - backward compatible interface
  * Uses parallel multi-engine search (DDG + DDG News + Brave)
  */
+/** Social network engine names recognised by the `engines` convention. */
+const SOCIAL_ENGINES = new Set(['x', 'reddit', 'linkedin']);
+
 export const searchSearxng = async (
   query: string,
   opts?: SearchOptions,
@@ -370,8 +373,36 @@ export const searchSearxng = async (
     return searchImages(query);
   }
 
-  if (opts?.engines?.some((e) => e.toLowerCase().includes('youtube'))) {
+  // Internal raw-scrape engine: the YouTube provider's `scrape` adapter routes
+  // here to use the DDG site:youtube.com path WITHOUT re-entering the provider
+  // (which would recurse). Public callers use `youtube`.
+  if (opts?.engines?.some((e) => e.toLowerCase() === 'youtube_scrape')) {
     return searchYouTube(query);
+  }
+
+  // Public YouTube engine: route through the cached, env-selected provider
+  // (API / Bright Data / scrape) with graceful fallback. Dynamic import breaks
+  // the module cycle (the scrape adapter imports searchSearxng from here).
+  if (opts?.engines?.some((e) => e.toLowerCase().includes('youtube'))) {
+    const { cachedYouTubeSearch } = await import('@/lib/youtube/cache');
+    return cachedYouTubeSearch(query, {
+      language: opts?.language || 'fr',
+      maxResults: opts?.maxResults,
+    });
+  }
+
+  // Social dispatch: engines:['x'|'reddit'|'linkedin'] route to the social
+  // provider router (Bright Data or site-operator fallback). Dynamic import
+  // breaks the module cycle (the site adapter imports searchSearxng from here).
+  const socialEngine = opts?.engines?.find((e) =>
+    SOCIAL_ENGINES.has(e.toLowerCase()),
+  );
+  if (socialEngine) {
+    const { cachedSocialSearch } = await import('@/lib/social/cache');
+    return cachedSocialSearch(socialEngine.toLowerCase() as 'x' | 'reddit' | 'linkedin', query, {
+      language: opts?.language || 'fr',
+      maxResults: opts?.maxResults,
+    });
   }
 
   return searchParallel(query, opts?.language || 'fr');

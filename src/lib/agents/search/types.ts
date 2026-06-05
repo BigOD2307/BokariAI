@@ -4,7 +4,14 @@ import BaseEmbedding from '@/lib/models/base/embedding';
 import SessionManager from '@/lib/session';
 import { ChatTurnMessage, Chunk } from '@/lib/types';
 
-export type SearchSources = 'web' | 'discussions' | 'academic';
+export type SearchSources =
+  | 'web'
+  | 'discussions'
+  | 'academic'
+  | 'x'
+  | 'reddit'
+  | 'linkedin'
+  | 'youtube';
 
 export type SearchAgentConfig = {
   sources: SearchSources[];
@@ -57,6 +64,10 @@ export type ClassifierOutput = {
     personalSearch: boolean;
     academicSearch: boolean;
     discussionSearch: boolean;
+    xSearch: boolean;
+    redditSearch: boolean;
+    linkedinSearch: boolean;
+    youtubeSearch: boolean;
     showWeatherWidget: boolean;
     showStockWidget: boolean;
     showCalculationWidget: boolean;
@@ -70,6 +81,10 @@ export type AdditionalConfig = {
   embedding: BaseEmbedding<any>;
   session: SessionManager;
   mode?: SearchAgentConfig['mode'];
+  /** Enabled source toggles (for actions that fan out per source, e.g. social). */
+  sources?: SearchSources[];
+  /** Classifier output (for actions needing per-network booleans at execute time). */
+  classification?: ClassifierOutput;
 };
 
 export type ResearcherInput = {

@@ -9,6 +9,10 @@ import {
   GlobeIcon,
   GraduationCapIcon,
   NetworkIcon,
+  XLogoIcon,
+  RedditLogoIcon,
+  LinkedinLogoIcon,
+  YoutubeLogoIcon,
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -19,7 +23,7 @@ const sourcesList = [
     icon: <GlobeIcon className="h-[16px] w-auto" />,
   },
   {
-    name: 'Academic',
+    name: 'Académique',
     key: 'academic',
     icon: <GraduationCapIcon className="h-[16px] w-auto" />,
   },
@@ -27,6 +31,26 @@ const sourcesList = [
     name: 'Social',
     key: 'discussions',
     icon: <NetworkIcon className="h-[16px] w-auto" />,
+  },
+  {
+    name: 'X (Twitter)',
+    key: 'x',
+    icon: <XLogoIcon className="h-[16px] w-auto" />,
+  },
+  {
+    name: 'Reddit',
+    key: 'reddit',
+    icon: <RedditLogoIcon className="h-[16px] w-auto" />,
+  },
+  {
+    name: 'LinkedIn',
+    key: 'linkedin',
+    icon: <LinkedinLogoIcon className="h-[16px] w-auto" />,
+  },
+  {
+    name: 'Vidéos',
+    key: 'youtube',
+    icon: <YoutubeLogoIcon className="h-[16px] w-auto" />,
   },
 ];
 

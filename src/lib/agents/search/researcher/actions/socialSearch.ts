@@ -1,7 +1,31 @@
 import z from 'zod';
-import { ResearchAction } from '../../types';
+import { ResearchAction, SearchSources } from '../../types';
 import { Chunk, SearchResultsResearchBlock } from '@/lib/types';
 import { searchSearxng } from '@/lib/search';
+import type { SocialNetwork } from '@/lib/social/types';
+
+/**
+ * The social networks this action fans out to, derived from both the enabled
+ * `sources` (the source-selector toggles) and the classifier's per-network
+ * booleans. A network runs only when it is both selected AND classified
+ * relevant — except the legacy `discussions` source, which keeps mapping to
+ * Reddit so existing behaviour is preserved when no granular network is on.
+ */
+const resolveNetworks = (config: {
+  classification: { classification: Record<string, boolean> };
+  sources: SearchSources[];
+}): SocialNetwork[] => {
+  const cls = config.classification.classification;
+  const nets = new Set<SocialNetwork>();
+  if (config.sources.includes('x') && cls.xSearch) nets.add('x');
+  if (config.sources.includes('reddit') && cls.redditSearch) nets.add('reddit');
+  if (config.sources.includes('linkedin') && cls.linkedinSearch)
+    nets.add('linkedin');
+  // Legacy "Social" toggle → Reddit (the historical behaviour of this action).
+  if (config.sources.includes('discussions') && cls.discussionSearch)
+    nets.add('reddit');
+  return [...nets];
+};
 
 const schema = z.object({
   queries: z.array(z.string()).describe('List of social search queries'),
@@ -26,11 +50,27 @@ const socialSearchAction: ResearchAction<typeof schema> = {
   getToolDescription: () =>
     "Use this tool to perform social media searches for relevant posts, discussions, and trends related to the user's query. Provide a list of concise search queries that will help gather comprehensive social media information on the topic at hand.",
   enabled: (config) =>
-    config.sources.includes('discussions') &&
     config.classification.classification.skipSearch === false &&
-    config.classification.classification.discussionSearch === true,
+    resolveNetworks(config).length > 0,
   execute: async (input, additionalConfig) => {
     input.queries = input.queries.slice(0, 3);
+
+    // Resolve which networks to fan out to from the enabled sources +
+    // classifier booleans threaded through additionalConfig. Default to Reddit
+    // (the historical behaviour) when that context is absent.
+    const networks =
+      additionalConfig.classification && additionalConfig.sources
+        ? resolveNetworks({
+            classification: additionalConfig.classification,
+            sources: additionalConfig.sources,
+          })
+        : (['reddit'] as SocialNetwork[]);
+    const activeNetworks: SocialNetwork[] =
+      networks.length > 0 ? networks : ['reddit'];
+
+    // Cap fan-out (networks x queries) to respect the agent timeouts. Mirrors
+    // the MAX_WRITER_RESULTS discipline — keep total social calls bounded.
+    const MAX_SOCIAL_CALLS = 9;
 
     const researchBlock = additionalConfig.session.getBlock(
       additionalConfig.researchBlockId,
@@ -57,9 +97,9 @@ const socialSearchAction: ResearchAction<typeof schema> = {
 
     let results: Chunk[] = [];
 
-    const search = async (q: string) => {
+    const search = async ({ network, q }: { network: SocialNetwork; q: string }) => {
       const res = await searchSearxng(q, {
-        engines: ['reddit'],
+        engines: [network],
       });
 
       const resultChunks: Chunk[] = res.results.map((r) => ({
@@ -117,7 +157,15 @@ const socialSearchAction: ResearchAction<typeof schema> = {
       }
     };
 
-    await Promise.all(input.queries.map(search));
+    // Build the (network x query) fan-out, capped to MAX_SOCIAL_CALLS.
+    const jobs: { network: SocialNetwork; q: string }[] = [];
+    for (const network of activeNetworks) {
+      for (const q of input.queries) {
+        jobs.push({ network, q });
+      }
+    }
+
+    await Promise.all(jobs.slice(0, MAX_SOCIAL_CALLS).map(search));
 
     return {
       type: 'search_results',

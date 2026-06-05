@@ -185,6 +185,8 @@ class Researcher {
         researchBlockId: researchBlockId,
         fileIds: input.config.fileIds,
         mode: input.config.mode,
+        sources: input.config.sources,
+        classification: input.classification,
       });
 
       actionOutput.push(...actionResults);

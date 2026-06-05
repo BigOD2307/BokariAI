@@ -90,3 +90,23 @@ export const flashcards = sqliteTable('flashcards', {
   lastReviewedAt: text(),
 });
 
+/**
+ * Persistent YouTube cache (search result sets + video transcripts), keyed by a
+ * namespaced hash. Distinct from the in-memory SemanticCache exact-hash layer
+ * used at request time — this table survives restarts so a once-fetched
+ * transcript (especially the expensive STT path) is durable.
+ *
+ * `kind` discriminates 'search' vs 'transcript'; `payload` is the JSON-encoded
+ * result envelope. `expiresAt` is a unix-ms timestamp for TTL pruning.
+ */
+export const youtubeCache = sqliteTable('youtube_cache', {
+  cacheKey: text('cacheKey').primaryKey(),
+  kind: text('kind', { enum: ['search', 'transcript'] }).notNull(),
+  videoId: text('videoId'),
+  lang: text('lang'),
+  source: text('source'),
+  payload: text('payload', { mode: 'json' }).notNull(),
+  createdAt: integer('createdAt').notNull(),
+  expiresAt: integer('expiresAt').notNull(),
+});
+
