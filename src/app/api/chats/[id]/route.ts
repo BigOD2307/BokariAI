@@ -20,6 +20,15 @@ export const GET = async (
       return Response.json({ message: 'Chat not found' }, { status: 404 });
     }
 
+    // Owned chats are private to their owner. Unowned guest chats
+    // (user_id null) stay readable by anyone holding the 40-byte id.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (chat.user_id && (!user || chat.user_id !== user.id)) {
+      return Response.json({ message: 'Chat not found' }, { status: 404 });
+    }
+
     const { data: messages, error: msgError } = await supabase
       .from('messages')
       .select('*')
@@ -52,8 +61,32 @@ export const DELETE = async (
     const { id } = await params;
     const supabase = createServerClient(req);
 
+    // Require an authenticated owner — never delete a chat for an
+    // unauthenticated caller, and only the owner may delete their chat.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return Response.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: chat, error: chatError } = await supabase
+      .from('chats')
+      .select('user_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (chatError) throw chatError;
+    // 404 (not 403) when missing or not owned, so we don't leak existence.
+    if (!chat || chat.user_id !== user.id) {
+      return Response.json({ message: 'Chat not found' }, { status: 404 });
+    }
+
     await supabase.from('messages').delete().eq('chat_id', id);
-    const { error } = await supabase.from('chats').delete().eq('id', id);
+    const { error } = await supabase
+      .from('chats')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) throw error;
 
