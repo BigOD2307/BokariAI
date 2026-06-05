@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -9,10 +8,10 @@ type Props = {
 
 /**
  * BokariBot — the chatbot's avatar (the illustrated, tech-suit Bokari). Shown
- * next to assistant answers + the "thinking" indicator in the chat, the way
- * Claude/ChatGPT badge their responses. Served from /public/bokari-chatbot.png
- * (pre-cropped to head-and-shoulders, optimized). Dark-aware ring so it sits
- * well on both light and dark chat surfaces.
+ * next to assistant answers + the "thinking" indicator in the chat. Served from
+ * /public/bokari-chatbot.png (head-and-shoulders), rendered as a zoomed
+ * background focused on the FACE so it reads clearly at small sizes — same
+ * framing as BokariAvatar. Dark-aware ring for light + dark chat surfaces.
  */
 const BokariBot = ({ size = 28, className }: Props) => (
   <span
@@ -21,16 +20,17 @@ const BokariBot = ({ size = 28, className }: Props) => (
       className,
     )}
     style={{ width: size, height: size }}
+    role="img"
+    aria-label="Bokari"
   >
-    <img
-      src="/bokari-chatbot.png"
-      alt="Bokari"
-      width={size}
-      height={size}
-      loading="lazy"
-      decoding="async"
-      className="h-full w-full object-cover"
-      style={{ objectPosition: '50% 30%' }}
+    <span
+      className="block h-full w-full"
+      style={{
+        backgroundImage: "url('/bokari-chatbot.png')",
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: '148%',
+        backgroundPosition: '50% 18%',
+      }}
     />
   </span>
 );

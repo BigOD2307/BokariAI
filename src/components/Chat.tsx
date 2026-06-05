@@ -20,6 +20,26 @@ const Chat = () => {
   const dividerRef = useRef<HTMLDivElement | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
   const lastScrolledRef = useRef<number>(0);
+  // On mobile the composer is position:fixed, so the on-screen keyboard would
+  // cover it. Track the visual viewport and lift the composer by the keyboard
+  // height so it stays just above the keyboard. 0 on desktop / keyboard closed.
+  const [kbInset, setKbInset] = useState(0);
+
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const onViewport = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKbInset(inset);
+    };
+    vv.addEventListener('resize', onViewport);
+    vv.addEventListener('scroll', onViewport);
+    onViewport();
+    return () => {
+      vv.removeEventListener('resize', onViewport);
+      vv.removeEventListener('scroll', onViewport);
+    };
+  }, []);
 
   useEffect(() => {
     const updateDividerWidth = () => {
@@ -66,7 +86,7 @@ const Chat = () => {
   }, [messages]);
 
   return (
-    <div className="flex flex-col pt-6 pb-44 lg:pb-28 sm:mx-2 md:mx-4">
+    <div className="flex flex-col pt-6 pb-32 lg:pb-28 sm:mx-2 md:mx-4">
       {sections.map((section, i) => {
         const isLast = i === sections.length - 1;
 
@@ -88,8 +108,12 @@ const Chat = () => {
       <div ref={messageEnd} className="h-0" />
       {dividerWidth > 0 && (
         <div
-          className="fixed z-40 bottom-24 lg:bottom-6"
-          style={{ width: dividerWidth }}
+          className="fixed z-40 bottom-3 lg:bottom-6"
+          style={{
+            width: dividerWidth,
+            transform: kbInset > 0 ? `translateY(-${kbInset}px)` : undefined,
+            transition: 'transform 0.15s ease-out',
+          }}
         >
           {/* Fade gradient - light */}
           <div
