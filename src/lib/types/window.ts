@@ -9,7 +9,12 @@
  * @version 1.0.0
  */
 import { Block } from './types';
-import type { Attachment, ChartSpec, VisionResult } from './multimodal';
+import type {
+  Attachment,
+  ChartSpec,
+  RichBlock,
+  VisionResult,
+} from './multimodal';
 import type { FaithfulnessReport } from '@/lib/agents/search/faithfulness';
 
 export interface BaseMessage {
@@ -26,6 +31,8 @@ export interface Message extends BaseMessage {
   attachments?: Attachment[];
   visionResults?: VisionResult[];
   charts?: ChartSpec[];
+  /** Rich illustration blocks (comparison table / entity card / verdict). */
+  richBlocks?: RichBlock[];
   /** Per-claim citation faithfulness verdict (NLI gate), when enabled. */
   faithfulness?: FaithfulnessReport;
 }

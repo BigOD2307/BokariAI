@@ -20,6 +20,9 @@ process.env.META_WHATSAPP_APP_SECRET = process.env.META_WHATSAPP_APP_SECRET ?? '
 process.env.KAPSO_API_KEY = process.env.KAPSO_API_KEY ?? 'kapso_test_key';
 process.env.KAPSO_PHONE_NUMBER_ID = process.env.KAPSO_PHONE_NUMBER_ID ?? '1234567890';
 process.env.KAPSO_APP_SECRET = process.env.KAPSO_APP_SECRET ?? 'test-kapso-app-secret';
+// Opt-in engine features default OFF in tests so the agent path stays prose-only
+// and no extractor LLM calls fire.
+process.env.BOKARI_RICH_BLOCKS_ENABLED = 'false';
 
 export function cleanupTempDataDir() {
   try {

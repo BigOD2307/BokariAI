@@ -59,6 +59,60 @@ export interface ChartSpec {
   sourceIds?: number[];
 }
 
+/* ----------------------------------------------------------------------- *
+ * Rich illustration blocks — structured visual blocks rendered in the chat
+ * answer (Perplexity-style) when the query is about SHOWING something.
+ * Extracted post-research, kept OFF the writer's Block union so the streamed
+ * text path is never corrupted. See agents/search/richBlocks.ts.
+ * ----------------------------------------------------------------------- */
+
+export type RichBlockKind = 'comparison_table' | 'entity_card' | 'verdict';
+
+export interface ComparisonTableSpec {
+  id: string;
+  kind: 'comparison_table';
+  title?: string;
+  columns: string[];
+  rows: (string | number)[][];
+  /** 0-based column to accent (e.g. the "winner"). */
+  highlightCol?: number;
+  sourceIds?: number[];
+}
+
+export interface EntityAttribute {
+  label: string;
+  value: string;
+}
+
+export interface EntityCardSpec {
+  id: string;
+  kind: 'entity_card';
+  name: string;
+  entityType?: string;
+  image?: string;
+  summary: string;
+  attributes: EntityAttribute[];
+  sourceIds?: number[];
+}
+
+/** Fact-check verdict — the category-defining trust block. */
+export type VerdictLabel = 'vrai' | 'faux' | 'trompeur' | 'non_verifie';
+
+export interface VerdictSpec {
+  id: string;
+  kind: 'verdict';
+  claim: string;
+  verdict: VerdictLabel;
+  /** French display label (Vrai / Faux / Trompeur / Non vérifié). */
+  verdictLabel: string;
+  /** 0..1 confidence. */
+  confidence: number;
+  summary: string;
+  sourceIds?: number[];
+}
+
+export type RichBlock = ComparisonTableSpec | EntityCardSpec | VerdictSpec;
+
 export type ImageGenModel = 'flux.2-pro' | 'flux.2-dev' | 'dall-e-3';
 
 export interface ImageGenRequest {
