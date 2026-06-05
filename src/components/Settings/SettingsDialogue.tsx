@@ -7,7 +7,11 @@ import {
   Search,
   Sliders,
   ToggleRight,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/useAuth';
+import BokariAvatar from '@/components/BokariAvatar';
 import Preferences from './Sections/Preferences';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
@@ -65,6 +69,7 @@ const SettingsDialogue = ({
   const [config, setConfig] = useState<any>(null);
   const [activeSection, setActiveSection] = useState<string>(sections[0].key);
   const [selectedSection, setSelectedSection] = useState(sections[0]);
+  const { user, setShowAuthModal, logout } = useAuth();
 
   useEffect(() => {
     setSelectedSection(sections.find((s) => s.key === activeSection)!);
@@ -109,9 +114,9 @@ const SettingsDialogue = ({
         transition={{ duration: 0.1 }}
         className="fixed inset-0 flex w-screen items-center justify-center p-4 bg-black/30 backdrop-blur-sm h-screen"
       >
-        <DialogPanel className="space-y-4 border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary backdrop-blur-lg rounded-xl h-[calc(100vh-2%)] w-[calc(100vw-2%)] md:h-[calc(100vh-7%)] md:w-[calc(100vw-7%)] lg:h-[calc(100vh-20%)] lg:w-[calc(100vw-30%)] overflow-hidden flex flex-col">
+        <DialogPanel className="border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary backdrop-blur-lg rounded-xl h-[calc(100vh-2%)] w-[calc(100vw-2%)] md:h-[calc(100vh-7%)] md:w-[calc(100vw-7%)] lg:h-[calc(100vh-20%)] lg:w-[calc(100vw-30%)] overflow-hidden flex flex-col">
           {isLoading ? (
-            <div className="flex items-center justify-center h-full w-full">
+            <div className="flex flex-1 items-center justify-center">
               <Loader />
             </div>
           ) : (
@@ -213,6 +218,46 @@ const SettingsDialogue = ({
               </div>
             </div>
           )}
+
+          {/* Account / login — always visible, login lives here now. */}
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-light-200 px-5 py-3 dark:border-dark-200">
+            {user ? (
+              <>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <BokariAvatar size={30} />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-black/80 dark:text-white/80">
+                      {user.name}
+                    </p>
+                    <p className="truncate text-[11px] text-black/45 dark:text-white/40">{user.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => logout()}
+                  className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-[12px] text-black/60 transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:text-white/55"
+                >
+                  <LogOut size={14} />
+                  Se déconnecter
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-black/55 dark:text-white/50">
+                  Connecte-toi pour sauvegarder tes conversations.
+                </p>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setShowAuthModal(true);
+                  }}
+                  className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-bokari-500 px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-bokari-600"
+                >
+                  <LogIn size={14} />
+                  Se connecter
+                </button>
+              </>
+            )}
+          </div>
         </DialogPanel>
       </motion.div>
     </Dialog>

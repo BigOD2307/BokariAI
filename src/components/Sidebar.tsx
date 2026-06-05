@@ -6,8 +6,6 @@ import {
   Compass,
   BookOpenText,
   Plus,
-  LogIn,
-  LogOut,
   Settings,
   PanelLeftClose,
   PanelLeft,
@@ -16,19 +14,28 @@ import {
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import Layout from './Layout';
-import SettingsButton from './Settings/SettingsButton';
+import SettingsDialogue from './Settings/SettingsDialogue';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useToggleSidebarShortcut, useNewThreadShortcut } from '@/lib/hooks/useShortcuts';
 import HistoryBand from './Sidebar/HistoryBand';
+import BokariAvatar from '@/components/BokariAvatar';
 
 const COLLAPSE_KEY = 'bokari.sidebar.collapsed';
 
+// Bokari Canvas recipes (light "paper" world — shared with the marketing site).
+const NAV_ACTIVE =
+  'border-2 border-[color:var(--bk-teal-700,#0f766e)] bg-gradient-to-br from-[#14b8a6] to-[#0d9488] text-white shadow-[0_2px_0_var(--bk-teal-700,#0f766e)]';
+const NAV_IDLE =
+  'border-2 border-transparent text-[color:var(--bk-ink-soft,#334155)] hover:border-[color:var(--bk-ink,#0f172a)] hover:bg-[color:var(--bk-mint,#c8f4e0)]/40 hover:text-[color:var(--bk-ink,#0f172a)]';
+
 const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const segments = useSelectedLayoutSegments();
-  const { user, loading: authLoading, setShowAuthModal, logout } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(COLLAPSE_KEY);
@@ -45,175 +52,150 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
   useToggleSidebarShortcut(() => updateCollapsed(!collapsed));
   useNewThreadShortcut();
 
+  const openSettings = () => {
+    setSettingsOpen(true);
+    setMobileOpen(false);
+  };
+
   const navLinks = [
-    {
-      icon: Search,
-      href: '/',
-      active: segments.length === 0 || segments.includes('c'),
-      label: 'Recherche',
-    },
-    {
-      icon: Compass,
-      href: '/discover',
-      active: segments.includes('discover'),
-      label: 'Decouvrir',
-    },
-    {
-      icon: BookOpenText,
-      href: '/library',
-      active: segments.includes('library'),
-      label: 'Bibliotheque',
-    },
+    { icon: Search, href: '/', active: segments.length === 0 || segments.includes('c'), label: 'Recherche' },
+    { icon: Compass, href: '/discover', active: segments.includes('discover'), label: 'Découvrir' },
+    { icon: BookOpenText, href: '/library', active: segments.includes('library'), label: 'Bibliothèque' },
   ];
 
   const sidebarBody = (
     <>
-      <div className={cn('h-14 flex items-center justify-between', collapsed ? 'px-3' : 'px-4')}>
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-bokari-400 to-bokari-600 flex items-center justify-center shadow-sm flex-shrink-0">
-            <span className="text-white text-sm font-bold" style={{ fontFamily: 'Instrument Serif, serif' }}>B</span>
-          </div>
-          {!collapsed && (
-            <span
-              className="text-[17px] text-black/90 dark:text-white/90 tracking-tight"
-              style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic' }}
-            >
-              Bokari
-            </span>
-          )}
-        </Link>
-        {!collapsed && (
+      {/* Slim top row — collapse control only (no logo header). */}
+      {!collapsed && (
+        <div className="flex h-10 items-center justify-end px-2 pt-1">
           <button
             onClick={() => updateCollapsed(true)}
-            className="p-1.5 rounded-lg text-black/30 dark:text-white/30 hover:text-black/60 dark:hover:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
+            className="rounded-[8px] p-1.5 text-[color:var(--bk-ink,#0f172a)]/35 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
             title={`Replier (${typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'Cmd' : 'Ctrl'}+B)`}
             aria-label="Replier la barre laterale"
           >
-            <PanelLeftClose size={16} />
+            <PanelLeftClose size={16} strokeWidth={2} />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className={cn('pb-3', collapsed ? 'px-3' : 'px-3')}>
+      {/* Nouveau fil */}
+      <div className={cn('pb-2', collapsed ? 'px-3 pt-3' : 'px-3')}>
         <Link
           href="/"
           onClick={() => setMobileOpen(false)}
           className={cn(
-            'flex items-center gap-2.5 rounded-xl border border-black/[0.08] dark:border-white/[0.08] transition-all duration-200 group hover:border-bokari-500/30 hover:bg-bokari-500/[0.03]',
+            'group flex items-center gap-2.5 rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_3px_0_rgba(15,23,42,0.10)] transition-transform hover:-translate-y-px active:translate-y-px',
             collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
           )}
         >
-          <Plus size={16} className="text-black/50 dark:text-white/50 group-hover:text-bokari-500 transition-colors flex-shrink-0" />
+          <Plus size={16} strokeWidth={2.5} className="flex-shrink-0 text-[color:var(--bk-teal-600,#0d9488)]" />
           {!collapsed && (
-            <span className="text-[13px] text-black/60 dark:text-white/50 group-hover:text-black/80 dark:group-hover:text-white/70 transition-colors">
+            <span className="font-hand text-[15px] uppercase tracking-wide text-[color:var(--bk-ink,#0f172a)]">
               Nouveau fil
             </span>
           )}
         </Link>
       </div>
 
-      <nav
-        aria-label="Navigation principale"
-        className={cn('space-y-0.5 px-2', collapsed ? '' : '')}
-      >
+      {/* Nav */}
+      <nav aria-label="Navigation principale" className="space-y-1 px-2">
         {navLinks.map((link, i) => (
           <Link
             key={i}
             href={link.href}
             onClick={() => setMobileOpen(false)}
+            aria-current={link.active ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-xl transition-all duration-200',
+              'flex items-center gap-3 rounded-[10px] transition-colors',
               collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
-              link.active
-                ? 'bg-black/[0.05] dark:bg-white/[0.06] text-black dark:text-white'
-                : 'text-black/50 dark:text-white/40 hover:text-black/80 dark:hover:text-white/70 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]',
+              link.active ? NAV_ACTIVE : NAV_IDLE,
             )}
             title={collapsed ? link.label : undefined}
           >
-            <link.icon size={18} strokeWidth={link.active ? 2 : 1.5} className="flex-shrink-0" />
-            {!collapsed && (
-              <span className={cn('text-[13px]', link.active ? 'font-medium' : 'font-normal')}>
-                {link.label}
-              </span>
-            )}
+            <link.icon size={18} strokeWidth={2} className="flex-shrink-0" />
+            {!collapsed && <span className="font-hand text-[15px]">{link.label}</span>}
           </Link>
         ))}
       </nav>
 
-      {!collapsed && user && (
-        <div className="flex-1 flex flex-col min-h-0 mt-3 border-t border-black/[0.06] dark:border-white/[0.06] pt-3">
-          <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-black/30 dark:text-white/25">
+      {/* Historique — the chat list, directly in the sidebar (ChatGPT-style). */}
+      {!collapsed && user ? (
+        <div className="mt-3 flex min-h-0 flex-1 flex-col border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/12 pt-3">
+          <p className="font-hand px-3 pb-1 text-[12px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
             Historique
           </p>
           <HistoryBand onItemClick={() => setMobileOpen(false)} />
         </div>
+      ) : (
+        <div className="flex-1" />
       )}
 
-      {!collapsed && !user && <div className="flex-1" />}
+      {/* Paramètres entry */}
+      <div className="px-2 pt-1">
+        <button
+          onClick={openSettings}
+          className={cn(
+            'flex w-full items-center gap-3 rounded-[10px] transition-colors',
+            collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
+            NAV_IDLE,
+          )}
+          title={collapsed ? 'Paramètres' : undefined}
+        >
+          <Settings size={18} strokeWidth={2} className="flex-shrink-0" />
+          {!collapsed && <span className="font-hand text-[15px]">Paramètres</span>}
+        </button>
+      </div>
 
-      <div className={cn('pb-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.06] space-y-0.5', collapsed ? 'px-2' : 'px-2')}>
+      {/* Bottom: Bokari avatar → opens settings (account / login live there). */}
+      <div className="space-y-1 border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/12 px-2 pb-3 pt-2">
         {collapsed && (
           <button
             onClick={() => updateCollapsed(false)}
-            className="w-full flex items-center justify-center p-2.5 rounded-xl text-black/40 dark:text-white/40 hover:text-black/70 dark:hover:text-white/60 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
+            className="flex w-full items-center justify-center rounded-[10px] p-2.5 text-[color:var(--bk-ink,#0f172a)]/40 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40 hover:text-[color:var(--bk-ink,#0f172a)]"
             aria-label="Deployer la barre laterale"
           >
-            <PanelLeft size={18} />
+            <PanelLeft size={18} strokeWidth={2} />
           </button>
         )}
 
         {!authLoading && (
-          user ? (
-            <div className={cn('flex items-center rounded-xl', collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5')}>
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-bokari-400 to-bokari-600 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-[11px] font-semibold">
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
+          <button
+            onClick={openSettings}
+            className={cn(
+              'flex w-full items-center rounded-[10px] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40',
+              collapsed ? 'justify-center p-1.5' : 'gap-2.5 p-2',
+            )}
+            title="Paramètres & compte"
+          >
+            <BokariAvatar size={32} />
+            {!collapsed && (
+              <div className="min-w-0 flex-1 text-left">
+                <p className="truncate text-[13px] font-medium text-[color:var(--bk-ink,#0f172a)]">
+                  {user ? user.name : 'Mon compte'}
+                </p>
+                <p className="font-hand truncate text-[11px] text-[color:var(--bk-teal-700,#0f766e)]">
+                  {user
+                    ? user.plan === 'free'
+                      ? 'Plan Gratuit'
+                      : user.plan === 'pro'
+                        ? 'Plan Pro'
+                        : 'Enterprise'
+                    : 'Se connecter'}
+                </p>
               </div>
-              {!collapsed && (
-                <>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-black/80 dark:text-white/80 font-medium truncate">
-                      {user.name}
-                    </p>
-                    <p className="text-[10px] text-black/35 dark:text-white/30 truncate">
-                      {user.plan === 'free' ? 'Plan Gratuit' : user.plan === 'pro' ? 'Plan Pro' : 'Enterprise'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="p-1.5 rounded-lg text-black/25 dark:text-white/25 hover:text-red-500 hover:bg-red-500/5 transition-colors"
-                    title="Se deconnecter"
-                    aria-label="Se deconnecter"
-                  >
-                    <LogOut size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className={cn(
-                'w-full flex items-center rounded-xl text-black/50 dark:text-white/40 hover:text-black/80 dark:hover:text-white/70 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-all',
-                collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5',
-              )}
-            >
-              <LogIn size={18} strokeWidth={1.5} className="flex-shrink-0" />
-              {!collapsed && <span className="text-[13px]">Se connecter</span>}
-            </button>
-          )
+            )}
+          </button>
         )}
-        {!collapsed && <SettingsButton />}
       </div>
     </>
   );
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       <aside
         className={cn(
-          'hidden lg:flex flex-col h-full flex-shrink-0 bg-light-100 dark:bg-dark-50 border-r border-black/[0.06] dark:border-white/[0.06] transition-all duration-300',
+          'hidden h-full flex-shrink-0 flex-col border-r-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] transition-all duration-300 lg:flex',
           collapsed ? 'w-[68px]' : 'w-[260px]',
         )}
         aria-label="Barre laterale"
@@ -223,13 +205,13 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
 
       {mobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-[color:var(--bk-ink,#0f172a)]/40 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
       <aside
         className={cn(
-          'lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[300px] max-w-[85vw] flex flex-col bg-light-100 dark:bg-dark-50 border-r border-black/[0.06] dark:border-white/[0.06] transition-transform duration-300',
+          'fixed bottom-0 left-0 top-0 z-50 flex w-[300px] max-w-[85vw] flex-col border-r-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] transition-transform duration-300 lg:hidden',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
         aria-label="Menu mobile"
@@ -237,70 +219,64 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         {sidebarBody}
       </aside>
 
-      <div className="lg:hidden fixed top-0 w-full z-30 h-14 flex items-center justify-between px-4 bg-light-primary/90 dark:bg-dark-primary/90 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.06]">
+      {/* Mobile top bar */}
+      <div className="fixed top-0 z-30 flex h-14 w-full items-center justify-between border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/90 px-4 backdrop-blur-md lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
-          className="p-2 rounded-xl text-black/40 dark:text-white/40 hover:text-black/70 dark:hover:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
+          className="rounded-[10px] p-2 text-[color:var(--bk-ink,#0f172a)]/45 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
           aria-label="Ouvrir le menu"
         >
-          <Menu size={20} />
+          <Menu size={20} strokeWidth={2} />
         </button>
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-bokari-400 to-bokari-600 flex items-center justify-center shadow-sm">
-            <span className="text-white text-sm font-bold" style={{ fontFamily: 'Instrument Serif, serif' }}>B</span>
-          </div>
-          <span
-            className="text-[15px] text-black/80 dark:text-white/80"
-            style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic' }}
-          >
+          <BokariAvatar size={30} />
+          <span className="font-display text-[18px] leading-none text-[color:var(--bk-ink,#0f172a)]">
             Bokari
           </span>
         </Link>
         <div className="flex items-center gap-1.5">
-          {!authLoading && !user && (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="text-bokari-600 dark:text-bokari-400 text-xs font-medium px-3.5 py-1.5 rounded-full bg-bokari-500/8 dark:bg-bokari-500/10 hover:bg-bokari-500/12 transition-colors"
-            >
-              Connexion
-            </button>
-          )}
-          {!authLoading && user && (
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-bokari-400 to-bokari-600 flex items-center justify-center">
-              <span className="text-white text-[11px] font-semibold">
-                {user.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <button
+            onClick={openSettings}
+            className="rounded-full"
+            aria-label="Paramètres & compte"
+          >
+            <BokariAvatar size={30} />
+          </button>
           <Link
             href="/"
-            className="p-2 rounded-xl text-black/40 dark:text-white/40 hover:text-black/70 dark:hover:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
+            className="rounded-[10px] p-2 text-[color:var(--bk-ink,#0f172a)]/45 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
             aria-label="Nouveau fil"
           >
-            <Plus size={20} />
+            <Plus size={20} strokeWidth={2.25} />
           </Link>
         </div>
       </div>
 
-      <div className="fixed bottom-0 w-full z-30 flex items-center justify-around bg-light-primary/90 dark:bg-dark-primary/90 backdrop-blur-xl px-2 py-2 lg:hidden border-t border-black/[0.06] dark:border-white/[0.06] safe-area-bottom">
+      {/* Mobile bottom bar */}
+      <div className="safe-area-bottom fixed bottom-0 z-30 flex w-full items-center justify-around border-t-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/90 px-2 py-2 backdrop-blur-md lg:hidden">
         {navLinks.map((link, i) => (
           <Link
             href={link.href}
             key={i}
+            aria-current={link.active ? 'page' : undefined}
             className={cn(
-              'flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all',
+              'flex flex-col items-center gap-0.5 rounded-[10px] px-4 py-1.5 transition-colors',
               link.active
-                ? 'text-bokari-500'
-                : 'text-black/35 dark:text-white/35',
+                ? 'text-[color:var(--bk-teal-600,#0d9488)]'
+                : 'text-[color:var(--bk-ink,#0f172a)]/40',
             )}
           >
-            <link.icon size={20} strokeWidth={link.active ? 2 : 1.5} />
-            <span className="text-[10px] font-medium">{link.label}</span>
+            <link.icon size={20} strokeWidth={link.active ? 2.25 : 2} />
+            <span className="font-hand text-[11px]">{link.label}</span>
           </Link>
         ))}
       </div>
 
       <Layout>{children}</Layout>
+
+      <AnimatePresence>
+        {settingsOpen && <SettingsDialogue isOpen={settingsOpen} setIsOpen={setSettingsOpen} />}
+      </AnimatePresence>
     </div>
   );
 };

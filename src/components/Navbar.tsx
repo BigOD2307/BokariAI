@@ -167,32 +167,32 @@ const Navbar = () => {
   }, []);
 
   return (
-    <div className="sticky -mx-4 lg:mx-0 top-0 z-40 bg-white/80 dark:bg-dark-primary/80 backdrop-blur-xl border-b border-black/[0.05] dark:border-white/[0.05]">
+    <div className="sticky -mx-4 lg:mx-0 top-0 z-40 border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/85 backdrop-blur-md">
       <div className="px-4 lg:px-2 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center min-w-0">
             <a
               href="/"
-              className="lg:hidden mr-2 p-2 -ml-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors duration-200"
+              className="lg:hidden mr-2 p-2 -ml-2 rounded-xl hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
             >
-              <ChevronLeft size={18} className="text-black/50 dark:text-white/50" />
+              <ChevronLeft size={18} className="text-[color:var(--bk-ink-soft,#334155)]" />
             </a>
-            <div className="hidden lg:flex items-center gap-2 text-black/30 dark:text-white/25">
+            <div className="hidden lg:flex items-center gap-2 text-[color:var(--bk-ink,#0f172a)]/40">
               <Clock size={12} />
               <span className="text-[11px]">{timeAgo}</span>
             </div>
           </div>
 
           <div className="flex-1 mx-4 min-w-0">
-            <h1 className="text-center text-[13px] text-black/60 dark:text-white/50 truncate font-medium">
+            <h1 className="truncate text-center text-[13px] font-medium text-[color:var(--bk-ink,#0f172a)]/75">
               {title || 'Nouvelle conversation'}
             </h1>
           </div>
 
           <div className="flex items-center gap-0.5 min-w-0">
             <Popover className="relative">
-              <PopoverButton className="p-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors duration-200 outline-none">
-                <Share size={15} className="text-black/35 dark:text-white/30" />
+              <PopoverButton className="p-2 rounded-xl hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200 outline-none">
+                <Share size={15} className="text-[color:var(--bk-ink-soft,#334155)]" />
               </PopoverButton>
               <Transition
                 as={Fragment}
@@ -203,26 +203,26 @@ const Navbar = () => {
                 leaveFrom="opacity-100 translate-y-0"
                 leaveTo="opacity-0 translate-y-1"
               >
-                <PopoverPanel className="absolute right-0 mt-2 w-52 origin-top-right rounded-xl bg-white dark:bg-dark-200 border border-black/[0.08] dark:border-white/[0.08] shadow-elevated z-50 overflow-hidden">
+                <PopoverPanel className="absolute right-0 z-50 mt-2 w-52 origin-top-right overflow-hidden rounded-[14px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_12px_28px_-12px_rgba(15,23,42,0.35)]">
                   <div className="p-1.5">
-                    <p className="text-[10px] font-medium text-black/30 dark:text-white/25 uppercase tracking-wider px-2.5 py-2">
+                    <p className="font-hand px-2.5 py-2 text-[11px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
                       Exporter
                     </p>
                     <button
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors duration-200"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
                       onClick={() => exportAsMarkdown(sections, title || '')}
                     >
                       <FileText size={14} className="text-bokari-500" />
-                      <span className="text-[13px] text-black/70 dark:text-white/60">
+                      <span className="text-[13px] text-[color:var(--bk-ink,#0f172a)]">
                         Markdown
                       </span>
                     </button>
                     <button
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors duration-200"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
                       onClick={() => exportAsPDF(sections, title || '')}
                     >
                       <FileDown size={14} className="text-bokari-500" />
-                      <span className="text-[13px] text-black/70 dark:text-white/60">
+                      <span className="text-[13px] text-[color:var(--bk-ink,#0f172a)]">
                         PDF
                       </span>
                     </button>

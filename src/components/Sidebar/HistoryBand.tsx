@@ -4,6 +4,7 @@ import { useChatHistory, type ChatSummary } from '@/lib/hooks/useChatHistory';
 import { useState, useMemo } from 'react';
 import { Search, Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/supabase/fetch';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
@@ -57,7 +58,7 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await fetch(`/api/chats/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/chats/${id}`, { method: 'DELETE' });
       await refresh();
     } catch {
       // ignore
@@ -69,8 +70,8 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
       <div className="px-3 pb-2">
         <div className="relative">
           <Search
-            size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-black/30 dark:text-white/25"
+            size={13}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/55"
           />
           <input
             type="text"
@@ -80,7 +81,7 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
               search(e.target.value);
             }}
             placeholder="Rechercher dans l'historique"
-            className="w-full pl-7 pr-3 py-1.5 bg-black/[0.03] dark:bg-white/[0.04] border border-transparent rounded-lg text-[12px] text-black/85 dark:text-white/85 placeholder:text-black/30 dark:placeholder:text-white/25 outline-none focus:border-bokari-500/30 focus:bg-black/[0.04] dark:focus:bg-white/[0.05] transition-colors"
+            className="w-full rounded-[8px] border-2 border-[color:var(--bk-ink,#0f172a)]/12 bg-white py-1.5 pl-7 pr-3 text-[12px] text-[color:var(--bk-ink,#0f172a)] outline-none transition-colors placeholder:text-[color:var(--bk-ink,#0f172a)]/35 focus:border-[color:var(--bk-teal,#14b8a6)]"
             aria-label="Rechercher dans l'historique"
           />
         </div>
@@ -113,7 +114,7 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
 
         {ORDER.filter((k) => groups.has(k)).map((groupName) => (
           <div key={groupName} className="mb-3">
-            <p className="px-2 pt-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-black/30 dark:text-white/25">
+            <p className="font-hand px-2 pb-1 pt-1 text-[11px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
               {groupName}
             </p>
             <ul className="space-y-0.5">
@@ -132,10 +133,10 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
                       href={`/c/${chat.id}`}
                       onClick={onItemClick}
                       className={cn(
-                        'group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors',
+                        'group flex items-center gap-2 rounded-[8px] border-2 px-2 py-1.5 transition-colors',
                         isActive
-                          ? 'bg-bokari-500/10 text-bokari-600 dark:text-bokari-400'
-                          : 'text-black/55 dark:text-white/45 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:text-black/85 dark:hover:text-white/75',
+                          ? 'border-[color:var(--bk-mint-edge,#93e6c4)] bg-[color:var(--bk-mint,#c8f4e0)]/60 text-[color:var(--bk-ink,#0f172a)]'
+                          : 'border-transparent text-[color:var(--bk-ink-soft,#334155)] hover:bg-[color:var(--bk-mint,#c8f4e0)]/30 hover:text-[color:var(--bk-ink,#0f172a)]',
                       )}
                       title={chat.title}
                     >

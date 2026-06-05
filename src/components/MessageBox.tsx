@@ -11,7 +11,6 @@ import {
   Layers3,
   ArrowRight,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
@@ -23,6 +22,9 @@ import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
 import ThinkBox from './ThinkBox';
 import { useChat, Section } from '@/lib/hooks/useChat';
+import { useAuth } from '@/lib/hooks/useAuth';
+import BlurredResponse from './Message/BlurredResponse';
+import BokariBot from './BokariBot';
 import { useElevenLabsTTS } from '@/lib/hooks/useElevenLabsTTS';
 import Citation from './MessageRenderer/Citation';
 import AssistantSteps from './AssistantSteps';
@@ -63,6 +65,7 @@ const MessageBox = ({
     researchEnded,
     chatHistory,
   } = useChat();
+  const { user } = useAuth();
 
   const { speak, stop, isPlaying, isLoading: ttsLoading } = useElevenLabsTTS();
 
@@ -119,6 +122,22 @@ const MessageBox = ({
       speak(cleanText);
     }
   };
+
+  const answerMarkdown = (
+    <Markdown
+      className={cn(
+        'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-semibold prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-medium dark:prose-invert prose-p:leading-[1.75] prose-pre:p-0',
+        'max-w-none break-words text-black/80 dark:text-white/80 text-[15px]',
+        'prose-a:text-bokari-600 dark:prose-a:text-bokari-400 prose-a:no-underline hover:prose-a:underline',
+        'prose-strong:text-black/90 dark:prose-strong:text-white/90 prose-strong:font-semibold',
+        'prose-li:text-black/75 dark:prose-li:text-white/75',
+        'prose-blockquote:border-bokari-500/30 prose-blockquote:text-black/60 dark:prose-blockquote:text-white/50',
+      )}
+      options={markdownOverrides}
+    >
+      {parsedMessage}
+    </Markdown>
+  );
 
   return (
     <div className="bokari-fade-in">
@@ -189,6 +208,7 @@ const MessageBox = ({
               (b) => b.type === 'research' && b.data.subSteps.length > 0,
             ) && (
               <div className="flex items-center gap-3 py-4">
+                <BokariBot size={26} />
                 <div className="flex gap-1">
                   <div className="w-1.5 h-1.5 bg-bokari-500 rounded-full typing-dot" />
                   <div className="w-1.5 h-1.5 bg-bokari-500 rounded-full typing-dot" />
@@ -216,13 +236,7 @@ const MessageBox = ({
           <div className="flex flex-col gap-2">
             {sources.length > 0 && hasContent && (
               <div className="flex items-center gap-2">
-                <Sparkles
-                  className={cn(
-                    'text-bokari-500',
-                    isLast && loading ? 'animate-spin-slow' : '',
-                  )}
-                  size={16}
-                />
+                <BokariBot size={22} />
                 <h3 className="text-black/80 dark:text-white/80 font-medium text-sm">
                   Reponse
                 </h3>
@@ -231,22 +245,14 @@ const MessageBox = ({
 
             {hasContent && (
               <>
-                <Markdown
-                  className={cn(
-                    'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-semibold prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-medium dark:prose-invert prose-p:leading-[1.75] prose-pre:p-0',
-                    'max-w-none break-words text-black/80 dark:text-white/80 text-[15px]',
-                    'prose-a:text-bokari-600 dark:prose-a:text-bokari-400 prose-a:no-underline hover:prose-a:underline',
-                    'prose-strong:text-black/90 dark:prose-strong:text-white/90 prose-strong:font-semibold',
-                    'prose-li:text-black/75 dark:prose-li:text-white/75',
-                    'prose-blockquote:border-bokari-500/30 prose-blockquote:text-black/60 dark:prose-blockquote:text-white/50',
-                  )}
-                  options={markdownOverrides}
-                >
-                  {parsedMessage}
-                </Markdown>
+                {user ? (
+                  answerMarkdown
+                ) : (
+                  <BlurredResponse>{answerMarkdown}</BlurredResponse>
+                )}
 
-                {/* Action bar */}
-                {loading && isLast ? null : (
+                {/* Action bar (hidden until the answer is unlocked) */}
+                {user && !(loading && isLast) && (
                   <div className="flex items-center justify-between w-full pt-4 mt-2 border-t border-black/[0.05] dark:border-white/[0.05]">
                     <div className="flex items-center -ml-1.5">
                       <Rewrite
@@ -284,7 +290,8 @@ const MessageBox = ({
                 )}
 
                 {/* Related suggestions */}
-                {isLast &&
+                {user &&
+                  isLast &&
                   section.suggestions &&
                   section.suggestions.length > 0 &&
                   hasContent &&
