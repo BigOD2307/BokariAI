@@ -17,8 +17,9 @@ import { recordTiming } from '@/lib/observability/ttfb';
 import { tryGetCachedResponse, cacheResponse } from '@/lib/cache/semantic';
 import { embedOne } from '@/lib/ai/gateway';
 import { runChatBackground } from './runBackground';
-import { tryServeCacheHit } from './cacheHit';
+import { tryServeCacheHit, persistCacheHit } from './cacheHit';
 import { wireSessionToWriter } from './sessionBridge';
+import { createServerClient } from '@/lib/supabase/server';
 
 /** Body shape required by `buildChatStream`.  Matches the POST
  *  route's validated body. */
@@ -67,13 +68,32 @@ export const buildChatStream = (
   // All async work happens here, AFTER the stream is returned.
   void (async () => {
     try {
-      const cacheHit = await tryServeCacheHit(
+      const cachedText = await tryServeCacheHit(
         message.content,
         body.optimizationMode,
         safeWrite,
         tTotal,
       );
-      if (cacheHit) {
+      if (cachedText !== null) {
+        // Persist the cache-hit conversation so it shows up — and opens fully —
+        // in the user's history (the live agent path does this; the cache
+        // fast-path used to skip it, so repeat queries vanished from history).
+        try {
+          const {
+            data: { user },
+          } = await createServerClient(req).auth.getUser();
+          await persistCacheHit({
+            chatId: message.chatId,
+            messageId: message.messageId,
+            query: message.content,
+            sources: body.sources,
+            fileIds: body.files,
+            userId: user?.id,
+            responseText: cachedText,
+          });
+        } catch (e) {
+          console.warn('[Bokari] cache-hit persist error:', e);
+        }
         try { await writer.close(); } catch { /* noop */ }
         closed = true;
         return;
