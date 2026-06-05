@@ -95,10 +95,9 @@ const ChatWindow = () => {
     return <NextError statusCode={404} />;
   }
 
-  // Empty chat opened directly — let the user type.
+  // Empty chat / search page — just the chat box, no top bar.
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-2xl">
           <EmptyChatMessageInput />

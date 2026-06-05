@@ -30,9 +30,9 @@ vi.mock('@/lib/hooks/useChatHistory', () => ({
 import HistoryBand from '@/components/Sidebar/HistoryBand';
 
 describe('HistoryBand (SSR smoke)', () => {
-  it('renders the search input', () => {
+  it('no longer renders a history search input (removed by design)', () => {
     const html = renderToStaticMarkup(<HistoryBand />);
-    expect(html).toMatch(/Rechercher/);
+    expect(html).not.toMatch(/Rechercher/);
   });
 
   it('shows the empty state when no chats', () => {

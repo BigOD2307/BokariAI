@@ -16,7 +16,6 @@ import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
 import Rewrite from './MessageActions/Rewrite';
 import Feedback from './MessageActions/Feedback';
-import ShareButton from './MessageActions/ShareButton';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
@@ -24,6 +23,7 @@ import ThinkBox from './ThinkBox';
 import { useChat, Section } from '@/lib/hooks/useChat';
 import { useAuth } from '@/lib/hooks/useAuth';
 import BlurredResponse from './Message/BlurredResponse';
+import FaithfulnessBadge from './Message/FaithfulnessBadge';
 import BokariBot from './BokariBot';
 import { useElevenLabsTTS } from '@/lib/hooks/useElevenLabsTTS';
 import Citation from './MessageRenderer/Citation';
@@ -208,7 +208,6 @@ const MessageBox = ({
               (b) => b.type === 'research' && b.data.subSteps.length > 0,
             ) && (
               <div className="flex items-center gap-3 py-4">
-                <BokariBot size={26} />
                 <div className="flex gap-1">
                   <div className="w-1.5 h-1.5 bg-bokari-500 rounded-full typing-dot" />
                   <div className="w-1.5 h-1.5 bg-bokari-500 rounded-full typing-dot" />
@@ -251,6 +250,11 @@ const MessageBox = ({
                   <BlurredResponse>{answerMarkdown}</BlurredResponse>
                 )}
 
+                {/* Citation faithfulness badge (NLI gate, opt-in) */}
+                {user && section.message.faithfulness && (
+                  <FaithfulnessBadge report={section.message.faithfulness} />
+                )}
+
                 {/* Action bar (hidden until the answer is unlocked) */}
                 {user && !(loading && isLast) && (
                   <div className="flex items-center justify-between w-full pt-4 mt-2 border-t border-black/[0.05] dark:border-white/[0.05]">
@@ -262,7 +266,6 @@ const MessageBox = ({
                     </div>
                     <div className="flex items-center gap-0.5 -mr-1.5">
                       <Copy initialMessage={parsedMessage} section={section} />
-                      <ShareButton chatId={section.message.chatId} />
                       <Feedback section={section} />
                       <button
                         onClick={handleTTS}

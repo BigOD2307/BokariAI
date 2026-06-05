@@ -1,8 +1,8 @@
 'use client';
 
 import { useChatHistory, type ChatSummary } from '@/lib/hooks/useChatHistory';
-import { useState, useMemo } from 'react';
-import { Search, Loader2, MessageSquare, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/supabase/fetch';
 import Link from 'next/link';
@@ -47,10 +47,8 @@ interface HistoryBandProps {
 }
 
 const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
-  const { chats, loading, error, hasMore, loadMore, refresh, search, query } =
-    useChatHistory();
+  const { chats, loading, error, hasMore, loadMore, refresh } = useChatHistory();
   const pathname = usePathname();
-  const [searchInput, setSearchInput] = useState('');
 
   const groups = useMemo(() => groupChats(chats), [chats]);
 
@@ -67,26 +65,6 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
 
   return (
     <div className={cn('flex flex-col min-h-0', className)}>
-      <div className="px-3 pb-2">
-        <div className="relative">
-          <Search
-            size={13}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/55"
-          />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value);
-              search(e.target.value);
-            }}
-            placeholder="Rechercher dans l'historique"
-            className="w-full rounded-[8px] border-2 border-[color:var(--bk-ink,#0f172a)]/12 bg-white py-1.5 pl-7 pr-3 text-[12px] text-[color:var(--bk-ink,#0f172a)] outline-none transition-colors placeholder:text-[color:var(--bk-ink,#0f172a)]/35 focus:border-[color:var(--bk-teal,#14b8a6)]"
-            aria-label="Rechercher dans l'historique"
-          />
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-2">
         {loading && chats.length === 0 && (
           <div className="flex items-center justify-center py-6 text-black/35 dark:text-white/30">
@@ -105,9 +83,7 @@ const HistoryBand = ({ className, onItemClick }: HistoryBandProps) => {
               className="text-black/15 dark:text-white/15 mb-1.5"
             />
             <p className="text-[11px] text-black/35 dark:text-white/30 px-3 leading-snug">
-              {query.trim().length >= 2
-                ? 'Aucun résultat'
-                : 'Aucune conversation pour le moment'}
+              Aucune conversation pour le moment
             </p>
           </div>
         )}

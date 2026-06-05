@@ -1,8 +1,7 @@
-import { Clock, Edit, Share, FileText, FileDown, ChevronLeft } from 'lucide-react';
-import { Message } from './ChatWindow';
+import { ChevronLeft, Download, FileText, FileDown } from 'lucide-react';
 import { useEffect, useState, Fragment } from 'react';
-import { formatTimeDifference } from '@/lib/utils';
 import DeleteChat from './DeleteChat';
+import ShareButton from './MessageActions/ShareButton';
 import {
   Popover,
   PopoverButton,
@@ -28,9 +27,7 @@ const downloadFile = (filename: string, content: string, type: string) => {
 };
 
 const exportAsMarkdown = (sections: Section[], title: string) => {
-  const date = new Date(
-    sections[0].message.createdAt || Date.now(),
-  ).toLocaleString();
+  const date = new Date(sections[0].message.createdAt || Date.now()).toLocaleString();
   let md = `# Chat Export: ${title}\n\n`;
   md += `*Exporte le: ${date}*\n\n---\n`;
 
@@ -54,11 +51,7 @@ const exportAsMarkdown = (sections: Section[], title: string) => {
       (block) => block.type === 'source',
     ) as SourceBlock | undefined;
 
-    if (
-      sourceResponseBlock &&
-      sourceResponseBlock.data &&
-      sourceResponseBlock.data.length > 0
-    ) {
+    if (sourceResponseBlock && sourceResponseBlock.data && sourceResponseBlock.data.length > 0) {
       md += `\n**Sources:**\n`;
       sourceResponseBlock.data.forEach((src: any, i: number) => {
         const url = src.metadata?.url || '';
@@ -72,9 +65,7 @@ const exportAsMarkdown = (sections: Section[], title: string) => {
 
 const exportAsPDF = (sections: Section[], title: string) => {
   const doc = new jsPDF();
-  const date = new Date(
-    sections[0]?.message?.createdAt || Date.now(),
-  ).toLocaleString();
+  const date = new Date(sections[0]?.message?.createdAt || Date.now()).toLocaleString();
   let y = 15;
   const pageHeight = doc.internal.pageSize.height;
   doc.setFontSize(18);
@@ -90,7 +81,10 @@ const exportAsPDF = (sections: Section[], title: string) => {
   doc.setTextColor(30);
 
   sections.forEach((section) => {
-    if (y > pageHeight - 30) { doc.addPage(); y = 15; }
+    if (y > pageHeight - 30) {
+      doc.addPage();
+      y = 15;
+    }
     doc.setFont('helvetica', 'bold');
     doc.text('Utilisateur', 10, y);
     doc.setFont('helvetica', 'normal');
@@ -98,7 +92,10 @@ const exportAsPDF = (sections: Section[], title: string) => {
     doc.setFontSize(12);
     const userLines = doc.splitTextToSize(section.message.query, 180);
     for (let i = 0; i < userLines.length; i++) {
-      if (y > pageHeight - 20) { doc.addPage(); y = 15; }
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 15;
+      }
       doc.text(userLines[i], 12, y);
       y += 6;
     }
@@ -107,17 +104,20 @@ const exportAsPDF = (sections: Section[], title: string) => {
     y += 4;
 
     if (section.message.responseBlocks.length > 0) {
-      if (y > pageHeight - 30) { doc.addPage(); y = 15; }
+      if (y > pageHeight - 30) {
+        doc.addPage();
+        y = 15;
+      }
       doc.setFont('helvetica', 'bold');
       doc.text('Bokari', 10, y);
       doc.setFont('helvetica', 'normal');
       y += 6;
-      const assistantLines = doc.splitTextToSize(
-        section.parsedTextBlocks.join('\n'),
-        180,
-      );
+      const assistantLines = doc.splitTextToSize(section.parsedTextBlocks.join('\n'), 180);
       for (let i = 0; i < assistantLines.length; i++) {
-        if (y > pageHeight - 20) { doc.addPage(); y = 15; }
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          y = 15;
+        }
         doc.text(assistantLines[i], 12, y);
         y += 6;
       }
@@ -129,114 +129,85 @@ const exportAsPDF = (sections: Section[], title: string) => {
   doc.save(`${title || 'chat'}.pdf`);
 };
 
+/**
+ * Navbar — the chat top bar (active conversations). Perplexity-style, adapted to
+ * Bokari Canvas: the thread title on the left; on the right a "Partager" button
+ * (public link), a "Télécharger" menu (PDF / Markdown), and delete.
+ */
 const Navbar = () => {
   const [title, setTitle] = useState<string>('');
-  const [timeAgo, setTimeAgo] = useState<string>('');
-
   const { sections, chatId } = useChat();
 
   useEffect(() => {
     if (sections.length > 0 && sections[0].message) {
-      const newTitle =
-        sections[0].message.query.length > 40
-          ? `${sections[0].message.query.substring(0, 40).trim()}...`
-          : sections[0].message.query || 'Nouvelle conversation';
-
-      setTitle(newTitle);
-      const newTimeAgo = formatTimeDifference(
-        new Date(),
-        sections[0].message.createdAt,
-      );
-      setTimeAgo(newTimeAgo);
+      const q = sections[0].message.query;
+      setTitle(q.length > 48 ? `${q.substring(0, 48).trim()}…` : q || 'Nouvelle conversation');
     }
   }, [sections]);
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (sections.length > 0 && sections[0].message) {
-        const newTimeAgo = formatTimeDifference(
-          new Date(),
-          sections[0].message.createdAt,
-        );
-        setTimeAgo(newTimeAgo);
-      }
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const downloadBtn =
+    'font-hand inline-flex items-center gap-1.5 rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)]/15 px-3 py-1.5 text-[14px] uppercase tracking-wide text-[color:var(--bk-ink-soft,#334155)] transition-colors hover:border-[color:var(--bk-ink,#0f172a)] hover:text-[color:var(--bk-ink,#0f172a)] focus:outline-none';
 
   return (
-    <div className="sticky -mx-4 lg:mx-0 top-0 z-40 border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/85 backdrop-blur-md">
-      <div className="px-4 lg:px-2 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center min-w-0">
-            <a
-              href="/"
-              className="lg:hidden mr-2 p-2 -ml-2 rounded-xl hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
+    <div className="sticky -mx-4 top-0 z-40 border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/85 backdrop-blur-md lg:mx-0">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 lg:px-5">
+        {/* Left — back (mobile) + thread title */}
+        <div className="flex min-w-0 items-center gap-2">
+          <a
+            href="/"
+            className="-ml-1 rounded-[10px] p-1.5 text-[color:var(--bk-ink-soft,#334155)] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)] lg:hidden"
+            aria-label="Retour"
+          >
+            <ChevronLeft size={18} strokeWidth={2.2} />
+          </a>
+          <h1 className="truncate text-[14px] font-medium text-[color:var(--bk-ink,#0f172a)]">
+            {title || 'Nouvelle conversation'}
+          </h1>
+        </div>
+
+        {/* Right — Partager · Télécharger · Supprimer */}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {chatId && <ShareButton chatId={chatId} variant="button" />}
+
+          <Popover className="relative">
+            <PopoverButton className={downloadBtn} aria-label="Télécharger la conversation">
+              <Download size={15} strokeWidth={2.2} />
+              <span className="hidden sm:inline">PDF</span>
+            </PopoverButton>
+            <Transition
+              as={Fragment}
+              enter="transition ease-out duration-150"
+              enterFrom="opacity-0 translate-y-1"
+              enterTo="opacity-100 translate-y-0"
+              leave="transition ease-in duration-100"
+              leaveFrom="opacity-100 translate-y-0"
+              leaveTo="opacity-0 translate-y-1"
             >
-              <ChevronLeft size={18} className="text-[color:var(--bk-ink-soft,#334155)]" />
-            </a>
-            <div className="hidden lg:flex items-center gap-2 text-[color:var(--bk-ink,#0f172a)]/40">
-              <Clock size={12} />
-              <span className="text-[11px]">{timeAgo}</span>
-            </div>
-          </div>
+              <PopoverPanel className="absolute right-0 z-50 mt-2 w-52 origin-top-right overflow-hidden rounded-[12px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_12px_28px_-12px_rgba(15,23,42,0.35)]">
+                <div className="p-1.5">
+                  <p className="font-hand px-2.5 py-1.5 text-[11px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
+                    Télécharger
+                  </p>
+                  <button
+                    className="font-hand flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[14px] text-[color:var(--bk-ink,#0f172a)] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40"
+                    onClick={() => exportAsPDF(sections, title || '')}
+                  >
+                    <FileDown size={15} strokeWidth={2.2} className="text-[color:var(--bk-teal-600,#0d9488)]" />
+                    En PDF
+                  </button>
+                  <button
+                    className="font-hand flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[14px] text-[color:var(--bk-ink,#0f172a)] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40"
+                    onClick={() => exportAsMarkdown(sections, title || '')}
+                  >
+                    <FileText size={15} strokeWidth={2.2} className="text-[color:var(--bk-teal-600,#0d9488)]" />
+                    En Markdown
+                  </button>
+                </div>
+              </PopoverPanel>
+            </Transition>
+          </Popover>
 
-          <div className="flex-1 mx-4 min-w-0">
-            <h1 className="truncate text-center text-[13px] font-medium text-[color:var(--bk-ink,#0f172a)]/75">
-              {title || 'Nouvelle conversation'}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-0.5 min-w-0">
-            <Popover className="relative">
-              <PopoverButton className="p-2 rounded-xl hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200 outline-none">
-                <Share size={15} className="text-[color:var(--bk-ink-soft,#334155)]" />
-              </PopoverButton>
-              <Transition
-                as={Fragment}
-                enter="transition ease-out duration-200"
-                enterFrom="opacity-0 translate-y-1"
-                enterTo="opacity-100 translate-y-0"
-                leave="transition ease-in duration-150"
-                leaveFrom="opacity-100 translate-y-0"
-                leaveTo="opacity-0 translate-y-1"
-              >
-                <PopoverPanel className="absolute right-0 z-50 mt-2 w-52 origin-top-right overflow-hidden rounded-[14px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white shadow-[0_12px_28px_-12px_rgba(15,23,42,0.35)]">
-                  <div className="p-1.5">
-                    <p className="font-hand px-2.5 py-2 text-[11px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
-                      Exporter
-                    </p>
-                    <button
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
-                      onClick={() => exportAsMarkdown(sections, title || '')}
-                    >
-                      <FileText size={14} className="text-bokari-500" />
-                      <span className="text-[13px] text-[color:var(--bk-ink,#0f172a)]">
-                        Markdown
-                      </span>
-                    </button>
-                    <button
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left rounded-lg hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 transition-colors duration-200"
-                      onClick={() => exportAsPDF(sections, title || '')}
-                    >
-                      <FileDown size={14} className="text-bokari-500" />
-                      <span className="text-[13px] text-[color:var(--bk-ink,#0f172a)]">
-                        PDF
-                      </span>
-                    </button>
-                  </div>
-                </PopoverPanel>
-              </Transition>
-            </Popover>
-            <DeleteChat
-              redirect
-              chatId={chatId!}
-              chats={[]}
-              setChats={() => {}}
-            />
-          </div>
+          <DeleteChat redirect chatId={chatId!} chats={[]} setChats={() => {}} />
         </div>
       </div>
     </div>

@@ -1,28 +1,17 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import {
-  Search,
-  Compass,
-  BookOpenText,
-  Plus,
-  Settings,
-  PanelLeftClose,
-  PanelLeft,
-  Menu,
-} from 'lucide-react';
+import { Search, Compass, Plus, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Layout from './Layout';
 import SettingsDialogue from './Settings/SettingsDialogue';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useToggleSidebarShortcut, useNewThreadShortcut } from '@/lib/hooks/useShortcuts';
+import { useNewThreadShortcut } from '@/lib/hooks/useShortcuts';
 import HistoryBand from './Sidebar/HistoryBand';
 import BokariAvatar from '@/components/BokariAvatar';
-
-const COLLAPSE_KEY = 'bokari.sidebar.collapsed';
 
 // Bokari Canvas recipes (light "paper" world — shared with the marketing site).
 const NAV_ACTIVE =
@@ -33,23 +22,11 @@ const NAV_IDLE =
 const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const segments = useSelectedLayoutSegments();
   const { user, loading: authLoading } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  // Desktop sidebar is collapsed by default and slides open ON HOVER — no toggle.
+  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(COLLAPSE_KEY);
-    if (stored === 'true') setCollapsed(true);
-  }, []);
-
-  const updateCollapsed = (next: boolean) => {
-    setCollapsed(next);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(COLLAPSE_KEY, String(next));
-    }
-  };
-
-  useToggleSidebarShortcut(() => updateCollapsed(!collapsed));
   useNewThreadShortcut();
 
   const openSettings = () => {
@@ -60,27 +37,12 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const navLinks = [
     { icon: Search, href: '/', active: segments.length === 0 || segments.includes('c'), label: 'Recherche' },
     { icon: Compass, href: '/discover', active: segments.includes('discover'), label: 'Découvrir' },
-    { icon: BookOpenText, href: '/library', active: segments.includes('library'), label: 'Bibliothèque' },
   ];
 
-  const sidebarBody = (
+  const renderSidebar = (collapsed: boolean) => (
     <>
-      {/* Slim top row — collapse control only (no logo header). */}
-      {!collapsed && (
-        <div className="flex h-10 items-center justify-end px-2 pt-1">
-          <button
-            onClick={() => updateCollapsed(true)}
-            className="rounded-[8px] p-1.5 text-[color:var(--bk-ink,#0f172a)]/35 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
-            title={`Replier (${typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'Cmd' : 'Ctrl'}+B)`}
-            aria-label="Replier la barre laterale"
-          >
-            <PanelLeftClose size={16} strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      {/* Nouveau fil */}
-      <div className={cn('pb-2', collapsed ? 'px-3 pt-3' : 'px-3')}>
+      {/* Nouveau fil (first element — no top toggle row) */}
+      <div className="px-3 pb-2 pt-3">
         <Link
           href="/"
           onClick={() => setMobileOpen(false)}
@@ -91,7 +53,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         >
           <Plus size={16} strokeWidth={2.5} className="flex-shrink-0 text-[color:var(--bk-teal-600,#0d9488)]" />
           {!collapsed && (
-            <span className="font-hand text-[15px] uppercase tracking-wide text-[color:var(--bk-ink,#0f172a)]">
+            <span className="font-hand whitespace-nowrap text-[15px] uppercase tracking-wide text-[color:var(--bk-ink,#0f172a)]">
               Nouveau fil
             </span>
           )}
@@ -114,7 +76,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             title={collapsed ? link.label : undefined}
           >
             <link.icon size={18} strokeWidth={2} className="flex-shrink-0" />
-            {!collapsed && <span className="font-hand text-[15px]">{link.label}</span>}
+            {!collapsed && <span className="font-hand whitespace-nowrap text-[15px]">{link.label}</span>}
           </Link>
         ))}
       </nav>
@@ -131,34 +93,8 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         <div className="flex-1" />
       )}
 
-      {/* Paramètres entry */}
-      <div className="px-2 pt-1">
-        <button
-          onClick={openSettings}
-          className={cn(
-            'flex w-full items-center gap-3 rounded-[10px] transition-colors',
-            collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
-            NAV_IDLE,
-          )}
-          title={collapsed ? 'Paramètres' : undefined}
-        >
-          <Settings size={18} strokeWidth={2} className="flex-shrink-0" />
-          {!collapsed && <span className="font-hand text-[15px]">Paramètres</span>}
-        </button>
-      </div>
-
-      {/* Bottom: Bokari avatar → opens settings (account / login live there). */}
-      <div className="space-y-1 border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/12 px-2 pb-3 pt-2">
-        {collapsed && (
-          <button
-            onClick={() => updateCollapsed(false)}
-            className="flex w-full items-center justify-center rounded-[10px] p-2.5 text-[color:var(--bk-ink,#0f172a)]/40 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40 hover:text-[color:var(--bk-ink,#0f172a)]"
-            aria-label="Deployer la barre laterale"
-          >
-            <PanelLeft size={18} strokeWidth={2} />
-          </button>
-        )}
-
+      {/* Bottom: profile avatar → opens settings (account / login live there). */}
+      <div className="border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/12 px-2 pb-3 pt-2">
         {!authLoading && (
           <button
             onClick={openSettings}
@@ -166,7 +102,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
               'flex w-full items-center rounded-[10px] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40',
               collapsed ? 'justify-center p-1.5' : 'gap-2.5 p-2',
             )}
-            title="Paramètres & compte"
+            title="Profil & paramètres"
           >
             <BokariAvatar size={32} />
             {!collapsed && (
@@ -193,15 +129,20 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside
-        className={cn(
-          'hidden h-full flex-shrink-0 flex-col border-r-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] transition-all duration-300 lg:flex',
-          collapsed ? 'w-[68px]' : 'w-[260px]',
-        )}
-        aria-label="Barre laterale"
-      >
-        {sidebarBody}
-      </aside>
+      {/* Desktop: a 68px rail that expands over the content on hover. */}
+      <div className="relative hidden w-[68px] flex-shrink-0 lg:block">
+        <aside
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          className={cn(
+            'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] transition-[width] duration-200',
+            hovered ? 'w-[260px] shadow-[10px_0_30px_-12px_rgba(15,23,42,0.30)]' : 'w-[68px]',
+          )}
+          aria-label="Barre laterale"
+        >
+          {renderSidebar(!hovered)}
+        </aside>
+      </div>
 
       {mobileOpen && (
         <div
@@ -216,7 +157,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         )}
         aria-label="Menu mobile"
       >
-        {sidebarBody}
+        {renderSidebar(false)}
       </aside>
 
       {/* Mobile top bar */}
@@ -235,11 +176,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           </span>
         </Link>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={openSettings}
-            className="rounded-full"
-            aria-label="Paramètres & compte"
-          >
+          <button onClick={openSettings} className="rounded-full" aria-label="Profil & paramètres">
             <BokariAvatar size={30} />
           </button>
           <Link

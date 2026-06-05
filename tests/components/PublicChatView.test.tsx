@@ -73,8 +73,10 @@ describe('PublicChatView (SSR smoke)', () => {
 
   it('shows the blur CTA when user is not logged in', () => {
     const html = renderToStaticMarkup(<PublicChatView data={mockData} />);
-    expect(html).toMatch(/WhatsApp/);
-    expect(html).toMatch(/Cree ton compte|questions gratuites/);
+    // CTA migrated from WhatsApp to email sign-up.
+    expect(html).toMatch(/Créer mon compte gratuit/);
+    expect(html).toMatch(/questions gratuites/);
+    expect(html).not.toMatch(/WhatsApp/);
   });
 
   it('shows the noindex tag when share is not indexed', () => {
@@ -88,7 +90,7 @@ describe('PublicChatView (SSR smoke)', () => {
 
   it('renders the CTA card at the bottom', () => {
     const html = renderToStaticMarkup(<PublicChatView data={mockData} />);
-    expect(html).toMatch(/Ta propre reponse/);
+    expect(html).toMatch(/Ta propre réponse/);
     expect(html).toMatch(/Essayer Bokari/);
   });
 });

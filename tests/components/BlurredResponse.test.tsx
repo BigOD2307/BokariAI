@@ -37,13 +37,14 @@ describe('BlurredResponse (SSR smoke)', () => {
     expect(html).toMatch(/Crée ton compte gratuit/);
   });
 
-  it('renders the WhatsApp CTA', () => {
+  it('renders the email sign-up CTA (no longer WhatsApp)', () => {
     const html = renderToStaticMarkup(
       <BlurredResponse>
         <p>x</p>
       </BlurredResponse>,
     );
-    expect(html).toMatch(/Continuer avec WhatsApp/);
+    expect(html).toMatch(/Créer mon compte gratuit/);
+    expect(html).not.toMatch(/WhatsApp/);
   });
 
   it('applies blur to children', () => {
