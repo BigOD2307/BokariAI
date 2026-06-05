@@ -24,6 +24,7 @@ import {
   extractVerdict,
 } from './richBlocks';
 import type { RichBlock } from '@/lib/types/multimodal';
+import { runLearnBundle } from '@/lib/agents/learn/runLearnBundle';
 
 /** Per-call LLM stream budgets.  These are the caps that prevent a
  *  stalled upstream (Groq / OpenRouter / Ollama) from pinning a
@@ -208,6 +209,68 @@ class SearchAgent {
     ]);
 
     session.emit('data', { type: 'researchComplete' });
+
+    // Learn mode ("Apprendre"): instead of a prose answer, generate a Socratic
+    // reply + flashcards + a quiz from the research context and emit them as
+    // blocks. Skips the chart / rich-block / writer / faithfulness path.
+    if (input.config.mode === 'learn') {
+      session.emit('analyzing', {
+        step: 'learn',
+        message: 'Préparation de tes fiches…',
+      });
+      const learnContext =
+        (searchResults?.searchFindings ?? [])
+          .slice(0, MAX_WRITER_RESULTS)
+          .map(
+            (f, index) =>
+              `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
+          )
+          .join('\n') || '';
+      const bundle = await runLearnBundle(
+        input.followUp,
+        learnContext,
+        input.config.llm as unknown as LlmCallable,
+      );
+      if (bundle) {
+        session.emitBlock({
+          id: crypto.randomUUID(),
+          type: 'text',
+          data: bundle.socraticReply,
+        });
+        session.emitBlock({
+          id: crypto.randomUUID(),
+          type: 'flashcard',
+          data: { flashcards: bundle.flashcards },
+        });
+        if (bundle.quiz.length > 0) {
+          session.emitBlock({
+            id: crypto.randomUUID(),
+            type: 'quiz',
+            data: { questions: bundle.quiz },
+          });
+        }
+      } else {
+        session.emitBlock({
+          id: crypto.randomUUID(),
+          type: 'text',
+          data: "Je n'ai pas pu générer de fiches pour cette question. Reformule-la ou réessaie.",
+        });
+      }
+      session.emit('end', {});
+      try {
+        await supabase
+          .from('messages')
+          .update({
+            status: 'completed',
+            response_blocks: session.getAllBlocks(),
+          })
+          .eq('chat_id', input.chatId)
+          .eq('message_id', input.messageId);
+      } catch (dbErr) {
+        console.error('[Bokari] DB error on learn completion:', dbErr);
+      }
+      return;
+    }
 
     session.emit('analyzing', {
       step: 'chart',

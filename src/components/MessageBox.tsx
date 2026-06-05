@@ -28,7 +28,7 @@ import BokariBot from './BokariBot';
 import { useElevenLabsTTS } from '@/lib/hooks/useElevenLabsTTS';
 import Citation from './MessageRenderer/Citation';
 import AssistantSteps from './AssistantSteps';
-import { ResearchBlock } from '@/lib/types';
+import { ResearchBlock, Block, FlashcardBlock, QuizBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
 import CodeBlock from './MessageRenderer/CodeBlock';
 import ImageBlock from './MessageRenderer/ImageBlock';
@@ -36,6 +36,8 @@ import ChartBlock from './MessageRenderer/ChartBlock';
 import VerdictBlock from './MessageRenderer/VerdictBlock';
 import EntityCardBlock from './MessageRenderer/EntityCardBlock';
 import ComparisonTableBlock from './MessageRenderer/ComparisonTableBlock';
+import FlashcardDeck from './MessageRenderer/FlashcardDeck';
+import Quiz from './MessageRenderer/Quiz';
 
 const ThinkTagProcessor = ({
   children,
@@ -268,6 +270,22 @@ const MessageBox = ({
                 ) : (
                   <BlurredResponse>{answerMarkdown}</BlurredResponse>
                 )}
+
+                {/* Learn mode — flashcards + quiz */}
+                {(section.message.responseBlocks || [])
+                  .filter((b: Block): b is FlashcardBlock => b.type === 'flashcard')
+                  .map((b: FlashcardBlock) => (
+                    <FlashcardDeck
+                      key={b.id}
+                      flashcards={b.data.flashcards}
+                      deckId={b.data.deckId}
+                    />
+                  ))}
+                {(section.message.responseBlocks || [])
+                  .filter((b: Block): b is QuizBlock => b.type === 'quiz')
+                  .map((b: QuizBlock) => (
+                    <Quiz key={b.id} questions={b.data.questions} />
+                  ))}
 
                 {/* Citation faithfulness badge (NLI gate, opt-in) */}
                 {user && section.message.faithfulness && (
