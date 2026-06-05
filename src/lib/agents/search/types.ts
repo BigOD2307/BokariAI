@@ -10,6 +10,8 @@ export type SearchAgentConfig = {
   sources: SearchSources[];
   fileIds: string[];
   llm: BaseLLM<any>;
+  /** Optional fast tier (e.g. Groq Llama 3.1 8B) for simple queries. */
+  fastLlm?: BaseLLM<any>;
   embedding: BaseEmbedding<any>;
   mode: 'speed' | 'balanced' | 'quality';
   systemInstructions: string;
@@ -60,6 +62,7 @@ export type ClassifierOutput = {
     showCalculationWidget: boolean;
   };
   standaloneFollowUp: string;
+  complexity: 'simple' | 'complex';
 };
 
 export type AdditionalConfig = {

@@ -107,6 +107,24 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
     });
     recordTiming('chat.load_models', tLoad());
 
+    // Optional fast tier (e.g. Groq Llama 3.1 8B) for simple queries —
+    // env-gated, with a safe fallback to the default model when unset or
+    // unavailable. Set BOKARI_FAST_CHAT_PROVIDER_ID + BOKARI_FAST_CHAT_KEY to
+    // enable model-tier routing (see SearchAgent / pickWriterLlm).
+    let fastLlm: typeof llm | undefined;
+    const fastProviderId = process.env.BOKARI_FAST_CHAT_PROVIDER_ID;
+    const fastKey = process.env.BOKARI_FAST_CHAT_KEY;
+    if (fastProviderId && fastKey) {
+      try {
+        fastLlm = await registry.loadChatModel(fastProviderId, fastKey);
+      } catch (err) {
+        console.warn(
+          '[Bokari] fast chat model unavailable; routing disabled:',
+          err,
+        );
+      }
+    }
+
     const history: ChatTurnMessage[] = truncateHistory(
       body.history,
       MAX_HISTORY_ENTRIES,
@@ -150,6 +168,7 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
         messageId: body.message.messageId,
         config: {
           llm,
+          fastLlm,
           embedding,
           sources: body.sources as SearchSources[],
           mode: body.optimizationMode,

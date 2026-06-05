@@ -32,6 +32,11 @@ const schema = z.object({
     .describe(
       "A self-contained, context-independent reformulation of the user's question.",
     ),
+  complexity: z
+    .enum(['simple', 'complex'])
+    .describe(
+      "Query reasoning depth: 'simple' for a straightforward factual/lookup/calculation query answerable from a single source; 'complex' for multi-step reasoning, source comparison, or synthesis.",
+    ),
 });
 
 export const classify = async (input: ClassifierInput) => {
