@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Search, Compass, Plus, Menu, User } from 'lucide-react';
+import { Search, Compass, Plus, Menu, User, GraduationCap } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments, useRouter } from 'next/navigation';
 import React, { useState } from 'react';
@@ -48,6 +48,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const navLinks = [
     { icon: Search, href: '/', active: segments.length === 0 || segments.includes('c'), label: 'Recherche' },
     { icon: Compass, href: '/discover', active: segments.includes('discover'), label: 'Découvrir' },
+    { icon: GraduationCap, href: '/learn', active: segments.includes('learn'), label: 'Apprendre' },
   ];
 
   const renderSidebar = (collapsed: boolean) => (

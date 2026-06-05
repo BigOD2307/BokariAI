@@ -279,6 +279,7 @@ const MessageBox = ({
                       key={b.id}
                       flashcards={b.data.flashcards}
                       deckId={b.data.deckId}
+                      sourceQuery={section.message.query}
                     />
                   ))}
                 {(section.message.responseBlocks || [])

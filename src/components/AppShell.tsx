@@ -10,7 +10,7 @@ import Sidebar from './Sidebar';
  * rail.  The marketing landing ("/"), public share pages ("/p/...")
  * and the setup wizard render standalone — no sidebar, no app chrome.
  */
-const APP_PREFIXES = ['/c', '/library', '/discover'];
+const APP_PREFIXES = ['/c', '/library', '/discover', '/learn'];
 
 const AppShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname() || '/';
