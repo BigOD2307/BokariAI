@@ -32,8 +32,6 @@ interface AuthContextType {
   logout: () => Promise<void>;
   requireAuth: () => boolean;
   accessToken: string | null;
-  signInWithWhatsApp: (phone: string) => Promise<{ ok: boolean; message?: string; cooldownSeconds?: number }>;
-  verifyWhatsAppOtp: (phone: string, code: string) => Promise<{ ok: boolean; message?: string; isNew?: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -46,8 +44,6 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   requireAuth: () => false,
   accessToken: null,
-  signInWithWhatsApp: async () => ({ ok: false }),
-  verifyWhatsAppOtp: async () => ({ ok: false }),
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -277,53 +273,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return true;
   }, [user]);
 
-  const signInWithWhatsApp = useCallback(async (phone: string) => {
-    try {
-      const response = await fetch('/api/auth/whatsapp/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        return {
-          ok: false,
-          message: data.message ?? 'Impossible d\'envoyer le code',
-          cooldownSeconds: data.cooldownSeconds,
-        };
-      }
-      return { ok: true, message: data.message };
-    } catch {
-      return { ok: false, message: 'Erreur réseau' };
-    }
-  }, []);
-
-  const verifyWhatsAppOtp = useCallback(async (phone: string, code: string) => {
-    try {
-      const response = await fetch('/api/auth/whatsapp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        return { ok: false, message: data.message ?? 'Code incorrect' };
-      }
-      setUser({
-        id: data.user.id,
-        name: data.user.phone,
-        email: data.user.email,
-        plan: 'free',
-        phone: data.user.phone,
-        authProvider: 'whatsapp',
-      });
-      setShowAuthModal(false);
-      return { ok: true, isNew: data.user.isNew };
-    } catch {
-      return { ok: false, message: 'Erreur réseau' };
-    }
-  }, []);
-
   return (
     <AuthContext.Provider
       value={{
@@ -336,8 +285,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         requireAuth,
         accessToken,
-        signInWithWhatsApp,
-        verifyWhatsAppOtp,
       }}
     >
       {children}
