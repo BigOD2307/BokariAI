@@ -2,15 +2,19 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { X, Loader2, Mail, Lock, User, Eye, EyeOff, Check, MessageCircle } from 'lucide-react';
+import { X, Loader2, Mail, Lock, User, Eye, EyeOff, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import WhatsAppAuthModal from './Auth/WhatsAppAuthModal';
+import BokariAvatar from '@/components/BokariAvatar';
 
-type AuthTab = 'email' | 'whatsapp';
-
+/**
+ * AuthModal — email + password sign-in / sign-up (Supabase Auth), in the
+ * Bokari Canvas language: a white paper card with a 2px ink border, a Chewy
+ * heading, Patrick-Hand labels, a chunky 3D teal button, and mint accents.
+ * Light-only (matches the site). The legacy WhatsApp OTP flow is removed from
+ * the UI; its backend stays dormant — see docs/TODO-kapso-cleanup.md.
+ */
 const AuthModal = () => {
   const { showAuthModal, setShowAuthModal, login, register } = useAuth();
-  const [tab, setTab] = useState<AuthTab>('email');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -53,198 +57,155 @@ const AuthModal = () => {
     setError('');
   };
 
-  const switchTab = (next: AuthTab) => {
-    setTab(next);
-    setError('');
-  };
+  const inputClass =
+    'w-full pl-10 pr-4 py-3 rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)]/15 bg-white text-[14px] text-[color:var(--bk-ink,#0f172a)] placeholder:text-[color:var(--bk-ink,#0f172a)]/35 outline-none transition-colors focus:border-[color:var(--bk-teal,#14b8a6)]';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bokari-fade-in">
       <div
-        className="absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-[color:var(--bk-ink,#0f172a)]/35 backdrop-blur-sm"
         onClick={() => setShowAuthModal(false)}
       />
 
-      <div className="relative w-full max-w-md mx-4 bg-white dark:bg-dark-100 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-elevated overflow-hidden">
+      <div className="relative w-full max-w-md mx-4 overflow-hidden rounded-[20px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] shadow-[0_18px_44px_-14px_rgba(15,23,42,0.45)]">
         <button
           onClick={() => setShowAuthModal(false)}
-          className="absolute top-4 right-4 z-10 p-2 rounded-xl text-black/25 dark:text-white/25 hover:text-black/50 dark:hover:text-white/50 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-all"
+          className="absolute right-3.5 top-3.5 z-10 flex h-9 w-9 items-center justify-center rounded-[10px] text-[color:var(--bk-ink-soft,#334155)] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--bk-teal,#14b8a6)]"
           aria-label="Fermer"
         >
-          <X size={16} />
+          <X size={16} strokeWidth={2.25} />
         </button>
 
-        {tab === 'email' ? (
-          <>
-            <div className="relative px-7 pt-8 pb-5">
-              <div className="flex flex-col items-center">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-bokari-400 to-bokari-600 flex items-center justify-center mb-5 shadow-lg shadow-bokari-500/15">
-                  <span className="text-white text-lg font-bold" style={{ fontFamily: 'Instrument Serif, serif' }}>B</span>
-                </div>
-                <h2
-                  className="text-2xl text-black/90 dark:text-white/90 tracking-tight"
-                  style={{ fontFamily: 'Instrument Serif, Georgia, serif' }}
-                >
-                  {mode === 'login' ? 'Content de vous revoir' : 'Rejoignez Bokari'}
-                </h2>
-                <p className="text-[13px] text-black/40 dark:text-white/35 mt-1.5">
-                  {mode === 'login'
-                    ? 'Connectez-vous pour continuer'
-                    : 'Creez votre compte gratuitement'}
-                </p>
-              </div>
+        {/* Header */}
+        <div className="px-7 pt-8 pb-5">
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-4 rounded-2xl border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-1 shadow-[0_4px_0_rgba(15,23,42,0.12)]">
+              <BokariAvatar size={48} />
             </div>
-
-            <form onSubmit={handleSubmit} className="px-7 pb-6 space-y-3">
-              {mode === 'register' && (
-                <div className="relative">
-                  <User
-                    size={15}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/20"
-                  />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Votre nom"
-                    className="w-full pl-10 pr-4 py-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.08] dark:border-white/[0.08] rounded-xl text-[14px] text-black/90 dark:text-white/90 placeholder:text-black/30 dark:placeholder:text-white/20 outline-none focus:border-bokari-500/30 transition-colors"
-                    autoComplete="name"
-                  />
-                </div>
-              )}
-
-              <div className="relative">
-                <Mail
-                  size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/20"
-                />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
-                  className="w-full pl-10 pr-4 py-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.08] dark:border-white/[0.08] rounded-xl text-[14px] text-black/90 dark:text-white/90 placeholder:text-black/30 dark:placeholder:text-white/20 outline-none focus:border-bokari-500/30 transition-colors"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="relative">
-                <Lock
-                  size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/20"
-                />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mot de passe"
-                  className="w-full pl-10 pr-10 py-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.08] dark:border-white/[0.08] rounded-xl text-[14px] text-black/90 dark:text-white/90 placeholder:text-black/30 dark:placeholder:text-white/20 outline-none focus:border-bokari-500/30 transition-colors"
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-black/20 dark:text-white/20 hover:text-black/40 dark:hover:text-white/40 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/[0.06] border border-red-500/10">
-                  <p className="text-red-600 dark:text-red-400 text-[12px]">{error}</p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={cn(
-                  'w-full py-3 rounded-xl text-[14px] font-medium transition-all duration-200 mt-1',
-                  'bg-bokari-500 text-white hover:bg-bokari-600 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed',
-                  'shadow-sm shadow-bokari-500/15',
-                )}
-              >
-                {loading ? (
-                  <Loader2 size={18} className="animate-spin mx-auto" />
-                ) : mode === 'login' ? (
-                  'Se connecter'
-                ) : (
-                  'Creer mon compte'
-                )}
-              </button>
-
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={switchMode}
-                  className="text-[12px] text-black/35 dark:text-white/30 hover:text-bokari-500 dark:hover:text-bokari-400 transition-colors"
-                >
-                  {mode === 'login'
-                    ? 'Pas encore de compte ? Inscrivez-vous'
-                    : 'Deja un compte ? Connectez-vous'}
-                </button>
-              </div>
-            </form>
-
-            {mode === 'register' && (
-              <div className="px-7 pb-7">
-                <div className="rounded-xl bg-bokari-500/[0.04] border border-bokari-500/10 p-4">
-                  <p className="text-[12px] font-medium text-bokari-600 dark:text-bokari-400 mb-2.5">
-                    Plan Gratuit inclus
-                  </p>
-                  <ul className="space-y-2">
-                    {['5 recherches par jour', 'Acces a Bokari 1', 'Historique des conversations'].map((item, i) => (
-                      <li key={i} className="flex items-center gap-2.5 text-[12px] text-black/45 dark:text-white/35">
-                        <div className="w-4 h-4 rounded-full bg-bokari-500/10 flex items-center justify-center flex-shrink-0">
-                          <Check size={9} className="text-bokari-500" />
-                        </div>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <WhatsAppAuthModal
-            onSuccess={() => setShowAuthModal(false)}
-            onCancel={() => switchTab('email')}
-          />
-        )}
-
-        <div className="border-t border-black/[0.06] dark:border-white/[0.06] px-7 py-3 flex items-center gap-1 bg-black/[0.015] dark:bg-white/[0.01]">
-          <button
-            type="button"
-            onClick={() => switchTab('email')}
-            className={cn(
-              'flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
-              tab === 'email'
-                ? 'bg-bokari-500/10 text-bokari-600 dark:text-bokari-400'
-                : 'text-black/40 dark:text-white/35 hover:text-black/60 dark:hover:text-white/60',
-            )}
-          >
-            <Mail size={12} />
-            Email
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab('whatsapp')}
-            className={cn(
-              'flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
-              tab === 'whatsapp'
-                ? 'bg-bokari-500/10 text-bokari-600 dark:text-bokari-400'
-                : 'text-black/40 dark:text-white/35 hover:text-black/60 dark:hover:text-white/60',
-            )}
-          >
-            <MessageCircle size={12} />
-            WhatsApp
-          </button>
+            <h2 className="font-display text-[28px] leading-none text-[color:var(--bk-ink,#0f172a)]">
+              {mode === 'login' ? 'Content de te revoir' : 'Rejoins Bokari'}
+            </h2>
+            <p className="font-hand mt-2 text-[15px] text-[color:var(--bk-ink-soft,#334155)]">
+              {mode === 'login'
+                ? 'Connecte-toi pour continuer'
+                : 'Crée ton compte gratuitement'}
+            </p>
+          </div>
         </div>
+
+        <form onSubmit={handleSubmit} className="px-7 pb-6 space-y-3">
+          {mode === 'register' && (
+            <div className="relative">
+              <User
+                size={15}
+                strokeWidth={2}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/40"
+              />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ton nom"
+                className={inputClass}
+                autoComplete="name"
+              />
+            </div>
+          )}
+
+          <div className="relative">
+            <Mail
+              size={15}
+              strokeWidth={2}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/40"
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className={inputClass}
+              autoComplete="email"
+              required
+            />
+          </div>
+
+          <div className="relative">
+            <Lock
+              size={15}
+              strokeWidth={2}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/40"
+            />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mot de passe"
+              className={cn(inputClass, 'pr-10')}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              required
+              minLength={6}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[color:var(--bk-ink,#0f172a)]/35 transition-colors hover:text-[color:var(--bk-ink,#0f172a)]/70"
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+
+          {error && (
+            <div className="rounded-[10px] border-2 border-red-400 bg-red-50 px-3 py-2.5">
+              <p className="text-[12px] font-medium text-red-700">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="font-hand mt-1 flex w-full items-center justify-center rounded-[10px] border-2 border-[color:var(--bk-teal-700,#0f766e)] bg-[color:var(--bk-teal,#14b8a6)] py-3 text-[16px] uppercase tracking-wide text-white shadow-[0_4px_0_var(--bk-teal-700,#0f766e)] transition-transform duration-100 hover:-translate-y-px hover:bg-[#0d9488] active:translate-y-[2px] active:shadow-[0_2px_0_var(--bk-teal-700,#0f766e)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--bk-teal,#14b8a6)] focus-visible:ring-offset-2"
+          >
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : mode === 'login' ? (
+              'Se connecter'
+            ) : (
+              'Créer mon compte'
+            )}
+          </button>
+
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={switchMode}
+              className="font-hand text-[14px] text-[color:var(--bk-ink-soft,#334155)] transition-colors hover:text-[color:var(--bk-teal-600,#0d9488)]"
+            >
+              {mode === 'login'
+                ? 'Pas encore de compte ? Inscris-toi'
+                : 'Déjà un compte ? Connecte-toi'}
+            </button>
+          </div>
+        </form>
+
+        {mode === 'register' && (
+          <div className="px-7 pb-7">
+            <div className="rounded-[14px] border-2 border-[color:var(--bk-mint-edge,#93e6c4)] bg-[color:var(--bk-mint,#c8f4e0)]/40 p-4">
+              <p className="font-hand mb-2.5 text-[14px] uppercase tracking-wide text-[color:var(--bk-teal-700,#0f766e)]">
+                Plan gratuit inclus
+              </p>
+              <ul className="space-y-2">
+                {['5 recherches par jour', 'Accès à Bokari 1', 'Historique des conversations'].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-[13px] text-[color:var(--bk-ink-soft,#334155)]">
+                    <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-[color:var(--bk-teal,#14b8a6)]">
+                      <Check size={9} strokeWidth={3} className="text-white" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

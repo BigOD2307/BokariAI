@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  MessageCircle,
+  Mail,
   Lock,
   Eye,
   ArrowRight,
@@ -139,7 +139,7 @@ const PublicChatView = ({ data }: PublicChatViewProps) => {
 
         <section className="relative">
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/35 mb-3">
-            Reponse Bokari
+            Réponse Bokari
           </h2>
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-[15px] leading-relaxed text-black/85 dark:text-white/85"
@@ -167,19 +167,19 @@ const PublicChatView = ({ data }: PublicChatViewProps) => {
                 <h3 className="text-[16px] font-medium text-black/90 dark:text-white/90 mb-1.5">
                   {guest.queriesRemaining > 0
                     ? `Il te reste ${guest.queriesRemaining} question${guest.queriesRemaining > 1 ? 's' : ''} gratuite${guest.queriesRemaining > 1 ? 's' : ''}`
-                    : 'Cree ton compte pour voir la reponse'}
+                    : 'Crée ton compte pour voir la réponse'}
                 </h3>
                 <p className="text-[13px] text-black/45 dark:text-white/40 mb-5">
                   {guest.queriesRemaining > 0
-                    ? 'Inscris-toi pour debloquer les reponses illimitees et le mode Learn.'
-                    : 'Quelques secondes suffisent — WhatsApp ou email.'}
+                    ? 'Inscris-toi pour débloquer les réponses illimitées et le mode Learn.'
+                    : 'Quelques secondes suffisent — inscription gratuite par email.'}
                 </p>
                 <button
                   onClick={handleUnlock}
                   className="w-full py-3 rounded-xl text-[14px] font-medium bg-bokari-500 text-white hover:bg-bokari-600 active:scale-[0.99] transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm shadow-bokari-500/15"
                 >
-                  <MessageCircle size={16} />
-                  Continuer avec WhatsApp
+                  <Mail size={16} />
+                  Créer mon compte gratuit
                   <ArrowRight size={14} />
                 </button>
                 <p className="text-[11px] text-black/30 dark:text-white/25 mt-3">
@@ -192,7 +192,7 @@ const PublicChatView = ({ data }: PublicChatViewProps) => {
 
         <section className="mt-12 pt-8 border-t border-black/[0.06] dark:border-white/[0.06]">
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/35 mb-3">
-            La recherche qui a produit cette reponse
+            La recherche qui a produit cette réponse
           </h2>
           <div className="flex flex-wrap gap-2">
             <span className="px-2.5 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.05] text-[11px] text-black/60 dark:text-white/60">
@@ -208,7 +208,7 @@ const PublicChatView = ({ data }: PublicChatViewProps) => {
               Validation NLI
             </span>
             <span className="px-2.5 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.05] text-[11px] text-black/60 dark:text-white/60">
-              Redaction
+              Rédaction
             </span>
           </div>
         </section>
@@ -219,11 +219,11 @@ const PublicChatView = ({ data }: PublicChatViewProps) => {
               className="text-[20px] sm:text-[22px] text-black/90 dark:text-white/90 mb-2 tracking-tight"
               style={{ fontFamily: 'Instrument Serif, Georgia, serif' }}
             >
-              Ta propre reponse en 10 secondes
+              Ta propre réponse en 10 secondes
             </h3>
             <p className="text-[13px] text-black/50 dark:text-white/45 mb-5 max-w-md mx-auto">
               Pose ta question. Bokari cherche, valide chaque source par NLI,
-              et te donne une reponse avec des sources numerotees.
+              et te donne une réponse avec des sources numérotées.
             </p>
             <a
               href="/"

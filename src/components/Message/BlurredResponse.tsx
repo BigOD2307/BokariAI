@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { MessageCircle, Lock } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
@@ -58,15 +58,15 @@ const BlurredResponse = ({
           <p className="text-[13px] text-black/45 dark:text-white/40 mb-5">
             {variant === 'limit_reached'
               ? 'Inscris-toi pour continuer à explorer avec Bokari.'
-              : 'Quelques secondes suffisent — inscription par WhatsApp.'}
+              : 'Quelques secondes suffisent — inscription gratuite par email.'}
           </p>
           <button
             type="button"
             onClick={handleClick}
             className="w-full py-3 rounded-xl text-[14px] font-medium bg-bokari-500 text-white hover:bg-bokari-600 active:scale-[0.99] transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm shadow-bokari-500/15"
           >
-            <MessageCircle size={16} />
-            Continuer avec WhatsApp
+            <Mail size={16} />
+            Créer mon compte gratuit
           </button>
           <p className="text-[11px] text-black/30 dark:text-white/25 mt-3">
             C'est gratuit, sans carte bancaire.

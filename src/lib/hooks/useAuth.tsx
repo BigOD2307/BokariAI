@@ -190,13 +190,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.user) {
+        // signInWithPassword returns a session on success; if it's somehow
+        // absent, treat it as a failed login rather than a half-logged-in
+        // state (user set but no access token → protected calls would 401).
+        if (!data.session) {
+          return { success: false, message: 'Email ou mot de passe incorrect' };
+        }
         setUser({
           id: data.user.id,
           name: data.user.user_metadata?.name || '',
           email: data.user.email || '',
           plan: data.user.user_metadata?.plan || 'free',
         });
-        setAccessToken(data.session?.access_token || null);
+        setAccessToken(data.session.access_token);
         setShowAuthModal(false);
         return { success: true };
       }
@@ -228,13 +234,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.user) {
+        // Instant access: a session is returned only when email confirmation is
+        // DISABLED on the Supabase project (Authentication ▸ Providers ▸ Email ▸
+        // "Confirm email" = OFF). If confirmation is ON, signUp returns a user
+        // but NO session — surface that clearly instead of a half-logged-in
+        // state with no access token.
+        if (!data.session) {
+          return {
+            success: false,
+            message:
+              'Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.',
+          };
+        }
         setUser({
           id: data.user.id,
           name: data.user.user_metadata?.name || name,
           email: data.user.email || email,
           plan: 'free',
         });
-        setAccessToken(data.session?.access_token || null);
+        setAccessToken(data.session.access_token);
         setShowAuthModal(false);
         return { success: true };
       }
