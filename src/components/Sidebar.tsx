@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Search, Compass, Plus, Menu } from 'lucide-react';
+import { Search, Compass, Plus, Menu, User } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
 import React, { useState } from 'react';
@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useNewThreadShortcut } from '@/lib/hooks/useShortcuts';
 import HistoryBand from './Sidebar/HistoryBand';
 import BokariAvatar from '@/components/BokariAvatar';
+import MobileActionsMenu from './Sidebar/MobileActionsMenu';
 
 // Bokari Canvas recipes (light "paper" world — shared with the marketing site).
 const NAV_ACTIVE =
@@ -104,7 +105,9 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             )}
             title="Profil & paramètres"
           >
-            <BokariAvatar size={32} />
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-mint,#c8f4e0)]/40 text-[color:var(--bk-ink,#0f172a)]">
+              <User size={16} strokeWidth={2.2} />
+            </span>
             {!collapsed && (
               <div className="min-w-0 flex-1 text-left">
                 <p className="truncate text-[13px] font-medium text-[color:var(--bk-ink,#0f172a)]">
@@ -160,53 +163,24 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         {renderSidebar(false)}
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="fixed top-0 z-30 flex h-14 w-full items-center justify-between border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/90 px-4 backdrop-blur-md lg:hidden">
+      {/* Mobile top bar — single Bokari avatar (brand), burger (nav + settings
+          live in the drawer), and a "+" actions menu (new chat / share /
+          download). No bottom nav: Recherche & Découvrir are in the drawer. */}
+      <div className="fixed top-0 z-30 flex h-14 w-full items-center justify-between border-b-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/90 px-3 backdrop-blur-md lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
-          className="rounded-[10px] p-2 text-[color:var(--bk-ink,#0f172a)]/45 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
+          className="rounded-[10px] p-2 text-[color:var(--bk-ink,#0f172a)]/55 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
           aria-label="Ouvrir le menu"
         >
           <Menu size={20} strokeWidth={2} />
         </button>
-        <Link href="/" className="flex items-center gap-2">
-          <BokariAvatar size={30} />
-          <span className="font-display text-[18px] leading-none text-[color:var(--bk-ink,#0f172a)]">
+        <Link href="/" className="flex items-center gap-2" aria-label="Accueil Bokari">
+          <BokariAvatar size={38} />
+          <span className="font-display text-[19px] leading-none text-[color:var(--bk-ink,#0f172a)]">
             Bokari
           </span>
         </Link>
-        <div className="flex items-center gap-1.5">
-          <button onClick={openSettings} className="rounded-full" aria-label="Profil & paramètres">
-            <BokariAvatar size={30} />
-          </button>
-          <Link
-            href="/"
-            className="rounded-[10px] p-2 text-[color:var(--bk-ink,#0f172a)]/45 transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/50 hover:text-[color:var(--bk-ink,#0f172a)]"
-            aria-label="Nouveau fil"
-          >
-            <Plus size={20} strokeWidth={2.25} />
-          </Link>
-        </div>
-      </div>
-
-      {/* Mobile bottom bar */}
-      <div className="safe-area-bottom fixed bottom-0 z-30 flex w-full items-center justify-around border-t-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)]/90 px-2 py-2 backdrop-blur-md lg:hidden">
-        {navLinks.map((link, i) => (
-          <Link
-            href={link.href}
-            key={i}
-            aria-current={link.active ? 'page' : undefined}
-            className={cn(
-              'flex flex-col items-center gap-0.5 rounded-[10px] px-4 py-1.5 transition-colors',
-              link.active
-                ? 'text-[color:var(--bk-teal-600,#0d9488)]'
-                : 'text-[color:var(--bk-ink,#0f172a)]/40',
-            )}
-          >
-            <link.icon size={20} strokeWidth={link.active ? 2.25 : 2} />
-            <span className="font-hand text-[11px]">{link.label}</span>
-          </Link>
-        ))}
+        <MobileActionsMenu />
       </div>
 
       <Layout>{children}</Layout>
