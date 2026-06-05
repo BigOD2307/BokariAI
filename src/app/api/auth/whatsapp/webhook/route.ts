@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyWebhookSignature, loadMetaConfig } from '@/lib/auth/whatsapp/meta-client';
+import { verifyWebhookSignatureUnified, getProviderHealth } from '@/lib/auth/whatsapp/provider';
 
 export const runtime = 'nodejs';
 
@@ -46,19 +46,15 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const config = (() => {
-    try {
-      return loadMetaConfig();
-    } catch {
-      return null;
-    }
-  })();
-  if (!config) {
+  const health = getProviderHealth();
+  if (!health.kapso.appSecretSet && !process.env.META_WHATSAPP_APP_SECRET) {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
   const raw = await request.text();
-  const signature = request.headers.get('x-hub-signature-256');
-  const valid = verifyWebhookSignature(raw, signature, config.appSecret);
+  const signature =
+    request.headers.get('x-hub-signature-256') ??
+    request.headers.get('x-webhook-signature');
+  const valid = verifyWebhookSignatureUnified(raw, signature);
   if (!valid) {
     return NextResponse.json({ ok: false, error: 'INVALID_SIGNATURE' }, { status: 401 });
   }

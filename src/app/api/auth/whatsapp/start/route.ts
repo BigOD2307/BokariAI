@@ -6,7 +6,18 @@ import {
   getOtpStatus,
   OtpError,
 } from '@/lib/auth/whatsapp/otp-store';
-import { sendOtp, WhatsAppConfigError, WhatsAppTemplateError, WhatsAppNetworkError, WhatsAppRateLimitError } from '@/lib/auth/whatsapp/meta-client';
+import {
+  sendOtpUnified,
+  getProvider,
+  WhatsAppConfigError,
+  WhatsAppTemplateError,
+  WhatsAppNetworkError,
+  WhatsAppRateLimitError,
+  KapsoConfigError,
+  KapsoTemplateError,
+  KapsoNetworkError,
+  KapsoRateLimitError,
+} from '@/lib/auth/whatsapp/provider';
 import { checkRate } from '@/lib/auth/rate-limit';
 import { getDefaultCountry } from '@/lib/auth/country';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
@@ -89,16 +100,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    await sendOtp(e164, code, 'fr');
+    await sendOtpUnified(e164, code, 'fr');
   } catch (err) {
     if (
       err instanceof WhatsAppConfigError ||
       err instanceof WhatsAppTemplateError ||
       err instanceof WhatsAppNetworkError ||
-      err instanceof WhatsAppRateLimitError
+      err instanceof WhatsAppRateLimitError ||
+      err instanceof KapsoConfigError ||
+      err instanceof KapsoTemplateError ||
+      err instanceof KapsoNetworkError ||
+      err instanceof KapsoRateLimitError
     ) {
       return NextResponse.json(
-        { ok: false, error: 'WHATSAPP_FAILED', message: 'Impossible d\'envoyer le code WhatsApp' },
+        {
+          ok: false,
+          error: 'WHATSAPP_FAILED',
+          message: 'Impossible d\'envoyer le code WhatsApp',
+          provider: getProvider(),
+        },
         { status: 502 },
       );
     }
