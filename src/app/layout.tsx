@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
-import Sidebar from '@/components/Sidebar';
+import AppShell from '@/components/AppShell';
 import { Toaster } from 'sonner';
 import ThemeProvider from '@/components/theme/Provider';
 import { ChatProvider } from '@/lib/hooks/useChat';
@@ -31,11 +31,11 @@ export default function RootLayout({
 }>) {
   return (
     <html className="h-full" lang="fr" suppressHydrationWarning>
-      <body className={cn('h-full antialiased', inter.className)} suppressHydrationWarning>
+      <body className={cn('h-full antialiased bg-light-primary dark:bg-dark-primary', inter.className)} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             <ChatProvider>
-              <Sidebar>{children}</Sidebar>
+              <AppShell>{children}</AppShell>
               <AuthModal />
               <Toaster
                 toastOptions={{

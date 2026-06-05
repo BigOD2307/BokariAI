@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chewy&family=Patrick+Hand&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -313,3 +314,1342 @@
 .typing-dot:nth-child(1) { animation: typing 1.2s infinite 0ms; }
 .typing-dot:nth-child(2) { animation: typing 1.2s infinite 200ms; }
 .typing-dot:nth-child(3) { animation: typing 1.2s infinite 400ms; }
+
+/* Animated aurora mesh for the home hero (brand teal + warm sand) */
+.bokari-aurora {
+  position: absolute;
+  inset: -25% -10% auto -10%;
+  height: 150%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(38% 48% at 22% 18%, rgba(20, 184, 166, 0.20), transparent 70%),
+    radial-gradient(34% 44% at 80% 12%, rgba(212, 180, 131, 0.18), transparent 70%),
+    radial-gradient(46% 56% at 64% 78%, rgba(45, 212, 191, 0.14), transparent 70%);
+  filter: blur(48px);
+  opacity: 0.9;
+  will-change: transform;
+  animation: aurora-drift 20s ease-in-out infinite alternate;
+}
+
+.dark .bokari-aurora {
+  background:
+    radial-gradient(38% 48% at 22% 18%, rgba(20, 184, 166, 0.16), transparent 70%),
+    radial-gradient(34% 44% at 80% 12%, rgba(212, 180, 131, 0.10), transparent 70%),
+    radial-gradient(46% 56% at 64% 78%, rgba(45, 212, 191, 0.12), transparent 70%);
+  opacity: 0.7;
+}
+
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-3%, 2%, 0) scale(1.05); }
+  100% { transform: translate3d(3%, -2%, 0) scale(1.03); }
+}
+
+/* Soft brand halo behind the hero search box */
+.bokari-hero-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(680px, 92%);
+  height: 280px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(20, 184, 166, 0.14), transparent 100%);
+  filter: blur(28px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Respect reduced-motion: kill ambient + entrance animation */
+@media (prefers-reduced-motion: reduce) {
+  .bokari-orb,
+  .bokari-aurora,
+  .bokari-pulse,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-float-orb {
+    animation: none !important;
+  }
+  .animate-fade-in,
+  .animate-slide-up {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+
+/* @@BOKARI-CANVAS-START@@ */
+/* =========================================================================
+   BOKARI CANVAS DESIGN SYSTEM  ("bk-" namespace)
+   Playful-whiteboard aesthetic, Bokari teal primary + sand secondary.
+   Append this whole block to the END of globals.css (after the existing
+   bokari- system). Self-contained: tokens, primitives, keyframes,
+   reduced-motion. Layout is done with Tailwind utilities; these classes
+   own the signature canvas primitives.
+   ========================================================================= */
+
+:root {
+  /* ---- Canvas tokens (RGB-free hex for direct use) ---- */
+  --bk-ink:        #0f172a;   /* near-black ink for borders + text */
+  --bk-ink-soft:   #334155;   /* secondary ink text */
+  --bk-paper:      #ffffff;   /* canvas / card surface */
+  --bk-teal:       #14b8a6;   /* PRIMARY accent (fills / accents) */
+  --bk-teal-600:   #0d9488;   /* primary text-safe teal (contrast) */
+  --bk-teal-700:   #0f766e;   /* pressed / deep teal */
+  --bk-sand:       #d4b483;   /* secondary warm accent */
+  --bk-navy:       #07111F;   /* dark-section background */
+
+  /* ---- Sticky-note palette ---- */
+  --bk-mint:       #c8f4e0;
+  --bk-mint-edge:  #93e6c4;
+  --bk-yellow:     #fdf0b0;
+  --bk-yellow-edge:#f3df7a;
+  --bk-peach:      #ffd9b8;
+  --bk-peach-edge: #ffc18e;
+  --bk-cyan:       #cdeefb;
+  --bk-cyan-edge:  #a6dcf3;
+  --bk-pink:       #ffd4e1;
+  --bk-pink-edge:  #ffb3c9;
+
+  /* ---- Grid ---- */
+  --bk-grid-line:    rgba(15, 23, 42, 0.045);
+  --bk-grid-size:    48px;
+  --bk-grid-line-dk: rgba(255, 255, 255, 0.05);
+
+  /* ---- Shapes / shadows ---- */
+  --bk-radius-btn:   6px;
+  --bk-radius-card:  18px;
+  --bk-radius-note:  10px;
+  --bk-border-w:     2px;
+  --bk-shadow-3d:    0 4px 0 rgba(15, 23, 42, 0.10);
+  --bk-shadow-3d-sm: 0 3px 0 rgba(15, 23, 42, 0.10);
+  --bk-shadow-card:  0 10px 24px -12px rgba(15, 23, 42, 0.22);
+  --bk-shadow-note:  6px 8px 18px -10px rgba(15, 23, 42, 0.35);
+}
+
+/* =========================================================================
+   1. FAINT GRID BACKGROUND  (light "infinite canvas")
+   Use on a relatively-positioned wrapper; content should sit at z-10.
+   ========================================================================= */
+.bk-grid {
+  position: relative;
+  background-color: var(--bk-paper);
+  background-image:
+    linear-gradient(to right,  var(--bk-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bk-grid-line) 1px, transparent 1px);
+  background-size: var(--bk-grid-size) var(--bk-grid-size);
+}
+/* Soft fade so the grid never reaches a hard edge */
+.bk-grid-fade {
+  -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 35%, #000 55%, transparent 100%);
+          mask-image: radial-gradient(ellipse 120% 90% at 50% 35%, #000 55%, transparent 100%);
+}
+/* (.dark .bk-grid theme override removed — Canvas landing is theme-independent light) */
+
+/* =========================================================================
+   2. DARK SECTION  (deep navy + teal/sand radial glows + faint grid)
+   Markup: <section class="bk-dark"> ... white Chewy titles, bk-card inside.
+   ========================================================================= */
+.bk-dark {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--bk-navy);
+  color: #f1f5f9;
+  overflow: hidden;
+}
+.bk-dark::before {           /* radial glows: teal + warm sand/pink */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 55% at 18% 22%, rgba(20, 184, 166, 0.28), transparent 70%),
+    radial-gradient(40% 50% at 84% 18%, rgba(212, 180, 131, 0.20), transparent 70%),
+    radial-gradient(55% 60% at 70% 92%, rgba(255, 122, 158, 0.14), transparent 72%);
+  animation: bk-glow-drift 22s ease-in-out infinite alternate;
+}
+.bk-dark::after {            /* faint white grid overlay */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right,  var(--bk-grid-line-dk) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bk-grid-line-dk) 1px, transparent 1px);
+  background-size: var(--bk-grid-size) var(--bk-grid-size);
+  -webkit-mask-image: radial-gradient(ellipse 110% 100% at 50% 40%, #000 50%, transparent 100%);
+          mask-image: radial-gradient(ellipse 110% 100% at 50% 40%, #000 50%, transparent 100%);
+}
+@keyframes bk-glow-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-2.5%, 1.5%, 0) scale(1.06); }
+  100% { transform: translate3d(2.5%, -1.5%, 0) scale(1.03); }
+}
+
+/* =========================================================================
+   3. TYPOGRAPHY HELPERS
+   ========================================================================= */
+.bk-display {                /* huge hero word + big section titles (Chewy) */
+  font-family: 'Chewy', system-ui, cursive;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.5px;
+  color: var(--bk-ink);
+}
+.bk-hand {                   /* eyebrows / labels / sticky notes (Patrick Hand) */
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+.bk-eyebrow {                /* small playful label above titles */
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 0.95rem;
+  letter-spacing: 0.6px;
+  color: var(--bk-teal-600);
+  text-transform: none;
+}
+
+/* =========================================================================
+   4. HAND-DRAWN UNDERLINE  (rotated rounded bar under/behind a key word)
+   Markup: <span class="bk-underline">vérifié</span>
+   Variants: bk-underline--sand, bk-underline--ink.
+   ========================================================================= */
+.bk-underline {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+.bk-underline::after {
+  content: '';
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  bottom: 0.06em;
+  height: 0.34em;
+  background: var(--bk-teal);
+  border-radius: 999px;
+  transform: rotate(-1.6deg);
+  z-index: -1;
+  opacity: 0.85;
+  transform-origin: left center;
+  animation: bk-underline-draw 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.bk-underline--sand::after { background: var(--bk-sand); }
+.bk-underline--ink::after  { background: var(--bk-ink); opacity: 0.9; }
+.bk-dark .bk-underline::after { opacity: 0.95; }
+@keyframes bk-underline-draw {
+  from { transform: rotate(-1.6deg) scaleX(0); }
+  to   { transform: rotate(-1.6deg) scaleX(1); }
+}
+
+/* =========================================================================
+   5. HAND-DRAWN DOODLES  (SVG stroke-dash "draw")
+   Markup: <svg class="bk-doodle" ...><path class="bk-doodle-path" d=".."/></svg>
+   Put real path length via pathLength="100" on the <path> for consistency.
+   ========================================================================= */
+.bk-doodle {
+  overflow: visible;
+  color: var(--bk-ink);
+  pointer-events: none;
+}
+.bk-doodle-path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: bk-doodle-draw 1.1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.bk-doodle-path--teal { color: var(--bk-teal-600); }
+.bk-doodle-path--sand { color: var(--bk-sand); }
+/* stagger helpers for multiple doodle paths */
+.bk-doodle-delay-1 { animation-delay: 0.25s; }
+.bk-doodle-delay-2 { animation-delay: 0.5s; }
+.bk-doodle-delay-3 { animation-delay: 0.75s; }
+@keyframes bk-doodle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* =========================================================================
+   6. TAPED STICKY NOTES  (5 color variants + tape)
+   Markup:
+   <div class="bk-note bk-note-mint">
+     <span class="bk-tape"></span>
+     <Icon class="..." /> <span class="bk-hand">Multi-sources</span>
+   </div>
+   Add a rotation utility class (bk-rot-*) or inline style for variety.
+   ========================================================================= */
+.bk-note {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px 18px;
+  min-width: 116px;
+  border-radius: var(--bk-radius-note);
+  color: var(--bk-ink);
+  background: var(--bk-yellow);
+  box-shadow: var(--bk-shadow-note);
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  line-height: 1.15;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.25s ease;
+  transform: rotate(var(--bk-note-rot, -3deg));
+}
+.bk-note:hover {
+  transform: rotate(var(--bk-note-rot, -3deg)) translateY(-3px) scale(1.02);
+  box-shadow: 8px 12px 24px -10px rgba(15, 23, 42, 0.45);
+}
+/* the semi-transparent tape rectangle at the top */
+.bk-tape {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 54px;
+  height: 18px;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  border-radius: 2px;
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+}
+.bk-tape--sand { background: rgba(212, 180, 131, 0.4); border-color: rgba(212, 180, 131, 0.55); }
+/* color variants (paper + slightly darker edge tint for depth) */
+.bk-note-mint   { background: linear-gradient(160deg, var(--bk-mint)   0%, var(--bk-mint-edge)   140%); }
+.bk-note-yellow { background: linear-gradient(160deg, var(--bk-yellow) 0%, var(--bk-yellow-edge) 140%); }
+.bk-note-peach  { background: linear-gradient(160deg, var(--bk-peach)  0%, var(--bk-peach-edge)  140%); }
+.bk-note-cyan   { background: linear-gradient(160deg, var(--bk-cyan)   0%, var(--bk-cyan-edge)   140%); }
+.bk-note-pink   { background: linear-gradient(160deg, var(--bk-pink)   0%, var(--bk-pink-edge)   140%); }
+/* gentle ambient float for floating hero notes */
+.bk-note-float   { animation: bk-note-bob 6s ease-in-out infinite; }
+.bk-note-float-2 { animation: bk-note-bob 7.5s ease-in-out infinite 0.8s; }
+.bk-note-float-3 { animation: bk-note-bob 8.5s ease-in-out infinite 1.6s; }
+@keyframes bk-note-bob {
+  0%, 100% { transform: rotate(var(--bk-note-rot, -3deg)) translateY(0); }
+  50%      { transform: rotate(var(--bk-note-rot, -3deg)) translateY(-7px); }
+}
+/* rotation utilities for sprinkling variety */
+.bk-rot-n6 { --bk-note-rot: -6deg; }
+.bk-rot-n3 { --bk-note-rot: -3deg; }
+.bk-rot-0  { --bk-note-rot:  0deg; }
+.bk-rot-p3 { --bk-note-rot:  3deg; }
+.bk-rot-p6 { --bk-note-rot:  6deg; }
+
+/* =========================================================================
+   7. PLAYFUL BORDERED CARDS  (white, 2px ink border, soft shadow)
+   Markup: <div class="bk-card"> ... </div>
+   bk-card-hover adds lift; bk-card-canvas is the tiny faux-canvas for the
+   animated mini-illustration inside a feature card.
+   ========================================================================= */
+.bk-card {
+  position: relative;
+  background: var(--bk-paper);
+  border: var(--bk-border-w) solid var(--bk-ink);
+  border-radius: var(--bk-radius-card);
+  box-shadow: var(--bk-shadow-card);
+  padding: 22px;
+}
+.bk-card-hover { transition: transform 0.25s cubic-bezier(0.2,0.8,0.2,1), box-shadow 0.25s ease; }
+.bk-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px -16px rgba(15, 23, 42, 0.32);
+}
+/* tiny faux-canvas inside a feature card for the looping mini-illustration */
+.bk-card-canvas {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(15, 23, 42, 0.18);
+  background-color: #fbfdfc;
+  background-image:
+    linear-gradient(to right,  var(--bk-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bk-grid-line) 1px, transparent 1px);
+  background-size: 16px 16px;
+  aspect-ratio: 16 / 10;
+}
+/* a mini sticky note for use inside bk-card-canvas */
+.bk-mini-note {
+  position: absolute;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 11px;
+  color: var(--bk-ink);
+  background: var(--bk-yellow);
+  box-shadow: 2px 3px 8px -4px rgba(15,23,42,0.5);
+  animation: bk-mini-bob 4.5s ease-in-out infinite;
+}
+@keyframes bk-mini-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-5px) rotate(-1deg); }
+}
+/* a mini traveling cursor for use inside bk-card-canvas */
+.bk-mini-cursor {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  color: var(--bk-ink);
+  animation: bk-mini-cursor-loop 6s ease-in-out infinite;
+}
+@keyframes bk-mini-cursor-loop {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(40px, 8px); }
+  50%  { transform: translate(58px, 30px); }
+  75%  { transform: translate(18px, 26px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* =========================================================================
+   8. CHUNKY 3D BUTTONS
+   Primary = solid teal with 3D bottom shadow; Secondary = white + ink border.
+   Markup: <button class="bk-btn bk-btn-primary">...</button>
+   ========================================================================= */
+.bk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: var(--bk-radius-btn);
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 1.05rem;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.2s ease;
+  text-decoration: none;
+}
+.bk-btn-primary {
+  background: var(--bk-teal);
+  color: #ffffff;
+  border: var(--bk-border-w) solid var(--bk-teal-700);
+  box-shadow: 0 4px 0 var(--bk-teal-700), var(--bk-shadow-3d);
+}
+.bk-btn-primary:hover { background: var(--bk-teal-600); }
+.bk-btn-primary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--bk-teal-700);
+}
+.bk-btn-secondary {
+  background: var(--bk-paper);
+  color: var(--bk-ink);
+  border: var(--bk-border-w) solid var(--bk-ink);
+  box-shadow: var(--bk-shadow-3d);
+}
+.bk-btn-secondary:hover { background: #f8fafc; }
+.bk-btn-secondary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.12);
+}
+/* on dark sections, secondary flips to a light-ink outline */
+.bk-dark .bk-btn-secondary {
+  background: transparent;
+  color: #f1f5f9;
+  border-color: rgba(241, 245, 249, 0.7);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+.bk-dark .bk-btn-secondary:hover { background: rgba(255, 255, 255, 0.06); }
+/* shared visible focus ring (accessibility) */
+.bk-btn:focus-visible {
+  outline: 3px solid var(--bk-teal-600);
+  outline-offset: 3px;
+}
+
+/* =========================================================================
+   9. ANIMATED HERO SELECTION BOX  (the canvas "select an object" gesture)
+   Frames the hero title: a thin teal border that draws itself edge-by-edge,
+   8 square handles that pop in, a pointer cursor traveling the perimeter,
+   and a gentle box-resize breathing.
+   Markup:
+   <div class="bk-select-box">
+     <h1 class="bk-display ...">Bokari</h1>
+     <span class="bk-sb-edge bk-sb-top"></span>
+     <span class="bk-sb-edge bk-sb-right"></span>
+     <span class="bk-sb-edge bk-sb-bottom"></span>
+     <span class="bk-sb-edge bk-sb-left"></span>
+     <i class="bk-sb-handle bk-sb-h-tl"></i> ... (8 handles: tl tc tr ml mr bl bc br)
+     <svg class="bk-sb-cursor" ...>pointer</svg>
+   </div>
+   ========================================================================= */
+.bk-select-box {
+  position: relative;
+  display: inline-block;
+  padding: 10px 18px;
+  animation: bk-box-resize 5.5s ease-in-out infinite;
+}
+/* the four drawing edges (each a 0->full scale line) */
+.bk-sb-edge {
+  position: absolute;
+  background: var(--bk-teal);
+  border-radius: 2px;
+  opacity: 0;
+}
+.bk-sb-top, .bk-sb-bottom { height: 2px; left: 0; right: 0; transform-origin: left center; }
+.bk-sb-left, .bk-sb-right { width: 2px; top: 0; bottom: 0; transform-origin: center top; }
+.bk-sb-top    { top: 0;    animation: bk-draw-x 0.45s ease-out 0.05s forwards; }
+.bk-sb-right  { right: 0;  animation: bk-draw-y 0.45s ease-out 0.5s  forwards; }
+.bk-sb-bottom { bottom: 0; animation: bk-draw-x 0.45s ease-out 0.95s forwards; }
+.bk-sb-left   { left: 0;   animation: bk-draw-y 0.45s ease-out 1.4s  forwards; }
+@keyframes bk-draw-x {
+  from { opacity: 1; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+@keyframes bk-draw-y {
+  from { opacity: 1; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+/* the 8 square handles */
+.bk-sb-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #ffffff;
+  border: 2px solid var(--bk-teal);
+  border-radius: 2px;
+  transform: scale(0);
+  opacity: 0;
+  z-index: 2;
+  animation: bk-handle-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+/* positions (centered on each corner/edge) */
+.bk-sb-h-tl { top: -5px;            left: -5px; }
+.bk-sb-h-tc { top: -5px;            left: 50%; margin-left: -4.5px; }
+.bk-sb-h-tr { top: -5px;            right: -5px; }
+.bk-sb-h-ml { top: 50%;  margin-top: -4.5px; left: -5px; }
+.bk-sb-h-mr { top: 50%;  margin-top: -4.5px; right: -5px; }
+.bk-sb-h-bl { bottom: -5px;         left: -5px; }
+.bk-sb-h-bc { bottom: -5px;         left: 50%; margin-left: -4.5px; }
+.bk-sb-h-br { bottom: -5px;         right: -5px; }
+/* staggered pop after edges finish drawing (~1.85s) */
+.bk-sb-h-tl { animation-delay: 1.9s; }
+.bk-sb-h-tc { animation-delay: 1.97s; }
+.bk-sb-h-tr { animation-delay: 2.04s; }
+.bk-sb-h-mr { animation-delay: 2.11s; }
+.bk-sb-h-br { animation-delay: 2.18s; }
+.bk-sb-h-bc { animation-delay: 2.25s; }
+.bk-sb-h-bl { animation-delay: 2.32s; }
+.bk-sb-h-ml { animation-delay: 2.39s; }
+@keyframes bk-handle-pop {
+  0%   { transform: scale(0);   opacity: 0; }
+  70%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+/* the little pointer cursor traveling around the box */
+.bk-sb-cursor {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 22px;
+  height: 22px;
+  color: var(--bk-ink);
+  z-index: 3;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.3));
+  opacity: 0;
+  animation: bk-cursor-appear 0.3s ease 2.4s forwards,
+             bk-cursor-follow 9s linear 2.7s infinite;
+}
+@keyframes bk-cursor-appear { to { opacity: 1; } }
+/* travels the perimeter using a label chip offset; tune translate to box size
+   via the --bk-w / --bk-h custom props set inline on .bk-select-box if desired
+   (defaults below assume a wide hero word). */
+@keyframes bk-cursor-follow {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(var(--bk-cursor-x, 240px), 0); }
+  50%  { transform: translate(var(--bk-cursor-x, 240px), var(--bk-cursor-y, 96px)); }
+  75%  { transform: translate(0, var(--bk-cursor-y, 96px)); }
+  100% { transform: translate(0, 0); }
+}
+/* optional "object name" tag that rides with the cursor (like Figma multiplayer) */
+.bk-sb-tag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 1px 7px;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #fff;
+  background: var(--bk-teal);
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 3;
+}
+@keyframes bk-box-resize {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.012); }
+}
+
+/* =========================================================================
+   10. TOOLBAR  (side strip of canvas tool icons reinterpreted as search tools)
+   Markup: <div class="bk-toolbar"><button class="bk-tool" aria-label="...">
+            <Icon/></button> ... </div>
+   ========================================================================= */
+.bk-toolbar {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px;
+  background: var(--bk-paper);
+  border: var(--bk-border-w) solid var(--bk-ink);
+  border-radius: 14px;
+  box-shadow: var(--bk-shadow-card);
+}
+.bk-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--bk-ink-soft);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.bk-tool:hover { background: rgba(20, 184, 166, 0.12); color: var(--bk-teal-600); transform: translateY(-1px); }
+.bk-tool[aria-pressed="true"],
+.bk-tool.bk-tool-active { background: var(--bk-teal); color: #fff; }
+.bk-tool:focus-visible { outline: 3px solid var(--bk-teal-600); outline-offset: 2px; }
+
+/* =========================================================================
+   11. MISC HELPERS
+   ========================================================================= */
+.bk-ink        { color: var(--bk-ink); }
+.bk-ink-soft   { color: var(--bk-ink-soft); }
+.bk-teal-text  { color: var(--bk-teal-600); }   /* contrast-safe teal text */
+.bk-border-ink { border: var(--bk-border-w) solid var(--bk-ink); }
+/* a small "live / verified" pill in hand font */
+.bk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 0.9rem;
+  color: var(--bk-teal-700);
+  background: rgba(20, 184, 166, 0.12);
+  border: 1.5px solid rgba(20, 184, 166, 0.35);
+}
+
+/* =========================================================================
+   12. REDUCED MOTION  (disable ambient / looping; keep final visible state)
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .bk-dark::before,
+  .bk-note-float,
+  .bk-note-float-2,
+  .bk-note-float-3,
+  .bk-mini-note,
+  .bk-mini-cursor,
+  .bk-select-box,
+  .bk-sb-cursor {
+    animation: none !important;
+  }
+  /* hand-drawn intros resolve instantly to their finished state */
+  .bk-underline::after { animation: none !important; transform: rotate(-1.6deg) scaleX(1) !important; }
+  .bk-doodle-path      { animation: none !important; stroke-dashoffset: 0 !important; }
+  .bk-sb-edge          { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .bk-sb-handle        { animation: none !important; opacity: 1 !important; transform: scale(1) !important; }
+  .bk-sb-cursor        { opacity: 1 !important; }
+  .bk-note             { transition: none; }
+}
+
+
+/* ===== section extra: nav ===== */
+/* ============================================================
+   BkNav — component-specific keyframes & polish.
+   Relies on the shared bk- design tokens (--bk-ink, --bk-teal,
+   --bk-teal-600/700, --bk-paper, --bk-mint) defined in :root.
+   Fallbacks are inlined on the component so it degrades gracefully
+   if a token is missing.
+   ============================================================ */
+
+/* Logo badge: gentle "settle" pop on first paint + subtle hover wobble. */
+.bk-nav-logo-badge {
+  animation: bkNavLogoPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.bk-nav-logo:hover {
+  transform: translateY(-1px);
+}
+.bk-nav-logo:hover .bk-nav-logo-badge {
+  animation: bkNavLogoWobble 0.6s ease-in-out;
+}
+
+@keyframes bkNavLogoPop {
+  0% {
+    transform: scale(0.5) rotate(-12deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes bkNavLogoWobble {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-7deg); }
+  65% { transform: rotate(5deg); }
+}
+
+/* Desktop cells: tiny lift on hover for the "sticker" feel. */
+.bk-nav-cell:hover {
+  transform: translateY(-1px);
+}
+
+/* Mobile sheet: draw down with a small spring, items stagger in. */
+.bk-nav-sheet--open {
+  animation: bkNavSheetDrop 0.28s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes bkNavSheetDrop {
+  0% {
+    transform: translateY(-8px) scaleY(0.96);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+}
+
+.bk-nav-sheet--open .bk-nav-sheet-item {
+  animation: bkNavItemIn 0.32s ease both;
+  animation-delay: calc(var(--bk-nav-i, 0) * 45ms + 60ms);
+}
+@keyframes bkNavItemIn {
+  0% {
+    transform: translateX(-10px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.bk-nav-overlay {
+  animation: bkNavFade 0.2s ease both;
+}
+@keyframes bkNavFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Respect reduced motion: snap everything to its finished state. */
+@media (prefers-reduced-motion: reduce) {
+  .bk-nav-logo-badge,
+  .bk-nav-sheet--open,
+  .bk-nav-sheet--open .bk-nav-sheet-item,
+  .bk-nav-overlay {
+    animation: none !important;
+  }
+  .bk-nav-logo:hover,
+  .bk-nav-cell:hover {
+    transform: none;
+  }
+}
+
+/* ===== section extra: hero ===== */
+/* ============================================================================
+   BkHero — section-specific helpers.
+   These complement the shared Bokari Canvas bk- design-system stylesheet
+   (which already defines: .bk-grid, .bk-note(+colors/float/rot), .bk-doodle,
+   .bk-underline, .bk-select-box(+edges/handles/cursor/tag), .bk-card,
+   .bk-btn-*, .bk-toolbar/.bk-tool, .bk-chip, .bk-eyebrow, .bk-display,
+   .bk-hand, the palette :root vars, and all prefers-reduced-motion resets).
+
+   Only add the rules below if the shared stylesheet is not yet present, or to
+   tune the hero specifically. They are namespaced to avoid clashes. */
+
+/* The search-box slot is the focal point: a gentle teal halo + entrance lift.
+   The injected composer keeps its own border/shadow; this only frames it. */
+.bk-hero-slot {
+  animation: bkHeroSlotIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+.bk-hero-slot::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  z-index: -1;
+  border-radius: 28px;
+  background:
+    radial-gradient(60% 70% at 50% 50%, rgba(20, 184, 166, 0.16), transparent 70%);
+  filter: blur(8px);
+  opacity: 0;
+  animation: bkHeroHalo 6s ease-in-out 0.9s infinite;
+}
+
+@keyframes bkHeroSlotIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bkHeroHalo {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.03); }
+}
+
+/* Staggered, calm entrance for the center column pieces. */
+.bk-eyebrow { animation: bkHeroRise 0.5s ease-out both; }
+#bk-hero-title { animation: bkHeroRise 0.6s ease-out 0.05s both; }
+
+@keyframes bkHeroRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Reduced motion: freeze every ambient/entrance loop for this section and
+   snap intros to their finished state (mirrors the design-system policy). */
+@media (prefers-reduced-motion: reduce) {
+  .bk-hero-slot,
+  .bk-hero-slot::before,
+  .bk-eyebrow,
+  #bk-hero-title {
+    animation: none !important;
+  }
+  .bk-hero-slot { opacity: 1; transform: none; }
+  .bk-hero-slot::before { opacity: 0; }
+}
+
+
+/* ===== section extra: why ===== */
+/* ============================================================
+   BkWhy — section-scoped mini-illustration keyframes & classes.
+   Namespaced `bk-why-*` so they never clash with shared bk- globals.
+   These complement (don't redefine) .bk-dark/.bk-card/.bk-card-canvas/
+   .bk-underline/.bk-eyebrow/.bk-border-ink/.bk-ink/.bk-ink-soft, which
+   are provided by the shared design-system globals.
+   ============================================================ */
+
+/* Card entrance — gentle stagger (intro only; not a loop) */
+@keyframes bkWhyCardIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bk-why-card {
+  animation: bkWhyCardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--bk-why-i, 0) * 80ms);
+}
+
+/* Icon square: a tiny idle wiggle so the canvas feels alive */
+@keyframes bkWhyIconWiggle {
+  0%, 88%, 100% { transform: rotate(0deg); }
+  92% { transform: rotate(-7deg); }
+  96% { transform: rotate(6deg); }
+}
+.bk-why-icon { animation: bkWhyIconWiggle 6s ease-in-out infinite; color: var(--bk-ink, #0f172a); }
+
+/* ---- shared mini bits ---- */
+.bk-why-line {
+  display: inline-block;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.16);
+}
+.bk-why-headline {
+  display: inline-block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bk-ink, #0f172a);
+}
+
+/* ---- Multi-sources ---- */
+.bk-why-chip {
+  font-family: "Patrick Hand", cursive;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+  background: var(--bk-paper, #fff);
+  color: var(--bk-ink, #0f172a);
+}
+@keyframes bkWhyChipBob { 0%,100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+.bk-why-chip-a { animation: bkWhyChipBob 2.6s ease-in-out infinite; }
+.bk-why-chip-b { animation: bkWhyChipBob 2.6s ease-in-out infinite; animation-delay: -0.6s; }
+.bk-why-chip-c { animation: bkWhyChipBob 2.6s ease-in-out infinite; animation-delay: -1.3s; }
+.bk-why-wires path { opacity: 0.55; }
+.bk-why-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  background: var(--bk-teal, #14b8a6);
+  color: #fff;
+  font-family: "Chewy", cursive;
+  font-size: 13px;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+}
+
+/* ---- Vérifié & cité ---- */
+.bk-why-cite {
+  font-family: "Patrick Hand", cursive;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--bk-teal, #14b8a6);
+  color: #fff;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+  transform-origin: center;
+  animation: bkWhyCitePop 3s ease-in-out infinite;
+}
+@keyframes bkWhyCitePop {
+  0%, 60%, 100% { transform: scale(1); }
+  70% { transform: scale(1.28); }
+  80% { transform: scale(0.96); }
+}
+
+/* ---- Multilingue (cycling chips) ---- */
+.bk-why-lang {
+  font-family: "Patrick Hand", cursive;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+  background: var(--bk-paper, #fff);
+  color: var(--bk-ink, #0f172a);
+  opacity: 0;
+  animation: bkWhyLangCycle 6.6s linear infinite;
+}
+@keyframes bkWhyLangCycle {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.92); }
+  6%   { opacity: 1; transform: translateY(0) scale(1); }
+  14%  { opacity: 1; transform: translateY(0) scale(1); }
+  20%  { opacity: 0; transform: translateY(-8px) scale(0.92); }
+  100% { opacity: 0; }
+}
+
+/* ---- 3 modes (gauge) ---- */
+.bk-why-gauge-arc {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 60;
+  animation: bkWhyGaugeFill 3.4s ease-in-out infinite;
+}
+@keyframes bkWhyGaugeFill {
+  0%,100% { stroke-dashoffset: 78; }
+  50%     { stroke-dashoffset: 10; }
+}
+.bk-why-needle { animation: bkWhyNeedle 3.4s ease-in-out infinite; }
+@keyframes bkWhyNeedle {
+  0%,100% { transform: rotate(-70deg); }
+  50%     { transform: rotate(70deg); }
+}
+
+/* ---- Mode Apprentissage (flip card) ---- */
+.bk-why-flip { perspective: 600px; }
+.bk-why-flip-inner {
+  transform-style: preserve-3d;
+  animation: bkWhyFlip 4s ease-in-out infinite;
+}
+@keyframes bkWhyFlip {
+  0%, 40% { transform: rotateY(0deg); }
+  60%, 100% { transform: rotateY(180deg); }
+}
+.bk-why-flip-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+  backface-visibility: hidden;
+  font-family: "Chewy", cursive;
+  font-size: 16px;
+  color: var(--bk-ink, #0f172a);
+}
+.bk-why-flip-front { background: var(--bk-pink, #ffd4e1); }
+.bk-why-flip-back  { background: var(--bk-mint, #c8f4e0); transform: rotateY(180deg); }
+
+/* ---- Découverte (live ticker) ---- */
+.bk-why-chip-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: "Patrick Hand", cursive;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bk-ink, #0f172a);
+  background: var(--bk-paper, #fff);
+  color: var(--bk-ink, #0f172a);
+}
+.bk-why-live-dot {
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--bk-teal, #14b8a6);
+  animation: bkWhyLivePulse 1.6s ease-in-out infinite;
+}
+@keyframes bkWhyLivePulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+/* ============================================================
+   Reduced motion: kill all ambient loops, snap to finished state.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .bk-why-card,
+  .bk-why-icon,
+  .bk-why-chip-a, .bk-why-chip-b, .bk-why-chip-c,
+  .bk-why-pulse-dot,
+  .bk-why-cite,
+  .bk-why-lang,
+  .bk-why-gauge-arc,
+  .bk-why-needle,
+  .bk-why-flip-inner,
+  .bk-why-live-dot {
+    animation: none !important;
+  }
+  .bk-why-card { opacity: 1; transform: none; }
+  .bk-why-gauge-arc { stroke-dashoffset: 30; }
+  .bk-why-needle { transform: rotate(0deg); }
+  /* Show a stable subset of language chips instead of cycling */
+  .bk-why-lang { opacity: 0; }
+  .bk-why-lang:nth-child(3) { opacity: 1; transform: none; } /* Français */
+  /* SVG <animateMotion> for the connector dot */
+  .bk-why-pulse-dot { display: none; }
+}
+
+/* ===== section extra: how ===== */
+/* ============================================================
+   BkHow — "Comment ça marche" section-specific keyframes.
+   All ambient/looping motion is gated behind prefers-reduced-motion.
+   Relies on shared bk- primitives (.bk-dark, .bk-card, .bk-card-canvas,
+   .bk-note, .bk-doodle, .bk-mini-cursor, .bk-tape) for the rest.
+   ============================================================ */
+
+/* --- Mini faux-canvas wrapper inside each step card --- */
+.bkhow-mini {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+/* --- Connecting doodle arrows between cards (desktop) --- */
+.bkhow-connect {
+  width: 80px;
+  height: 32px;
+  z-index: 20;
+}
+/* Position arrows in the gaps between the 3 columns of the grid.
+   Columns sit at ~ 0–32%, 34–66%, 68–100%; gaps centered ~33% and ~67%. */
+.bkhow-connect-1 { left: 33%; transform: translateX(-50%); }
+.bkhow-connect-2 { left: 67%; transform: translateX(-50%); }
+
+/* --- Step 1: typing sticky note --- */
+.bkhow-typenote {
+  animation: bkhow-note-bob 4.5s ease-in-out infinite;
+}
+@keyframes bkhow-note-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-4px) rotate(-1.5deg); }
+}
+.bkhow-caret {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--bk-teal-700, #0f766e);
+  font-weight: 700;
+  animation: bkhow-blink 1.05s step-end infinite;
+}
+@keyframes bkhow-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.bkhow-typecursor {
+  right: 14%;
+  bottom: 16%;
+  color: var(--bk-ink, #0f172a);
+  animation: bkhow-tap 2.4s ease-in-out infinite;
+}
+@keyframes bkhow-tap {
+  0%, 100% { transform: translate(0, 0); }
+  45%      { transform: translate(-4px, -3px); }
+  55%      { transform: translate(-3px, -2px) scale(0.92); }
+}
+
+/* --- Step 2: source cards stacking in + traveling cursor + arrow --- */
+.bkhow-srccard {
+  width: 52%;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--bk-paper, #fff);
+  border: 2px solid var(--bk-ink, #0f172a);
+  box-shadow: 2px 2px 0 rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: bkhow-src-in 3.6s ease-in-out infinite;
+}
+.bkhow-srccard-1 { animation-delay: 0s; }
+.bkhow-srccard-2 { animation-delay: 0.5s; }
+.bkhow-srccard-3 { animation-delay: 1s; }
+@keyframes bkhow-src-in {
+  0%        { opacity: 0; transform: translateX(-8px); }
+  16%, 78%  { opacity: 1; transform: translateX(0); }
+  100%      { opacity: 0; transform: translateX(-8px); }
+}
+.bkhow-arrow { z-index: 2; }
+.bkhow-arrow .bk-doodle-path {
+  animation: bkhow-draw-loop 3.6s ease-in-out infinite;
+}
+.bkhow-searchcursor {
+  right: 22%;
+  top: 16%;
+  color: var(--bk-ink, #0f172a);
+  animation: bkhow-cursor-roam 3.6s ease-in-out infinite;
+}
+@keyframes bkhow-cursor-roam {
+  0%   { transform: translate(0, 0); }
+  35%  { transform: translate(-2px, 18px); }
+  65%  { transform: translate(2px, 34px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes bkhow-draw-loop {
+  0%        { stroke-dasharray: 100; stroke-dashoffset: 100; }
+  35%, 80%  { stroke-dashoffset: 0; }
+  100%      { stroke-dashoffset: 100; }
+}
+
+/* --- Step 3: answer lines + citation pills + check --- */
+.bkhow-line {
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.16);
+}
+.bkhow-cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  width: 18px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.18);
+  border: 1.5px solid var(--bk-teal-700, #0f766e);
+  color: var(--bk-teal-700, #0f766e);
+  font-family: '"Patrick Hand"', cursive;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.4);
+  animation: bkhow-cite-pop 3.4s ease-in-out infinite;
+}
+.bkhow-cite-1 { animation-delay: 0.2s; }
+.bkhow-cite-2 { animation-delay: 0.5s; }
+.bkhow-cite-3 { animation-delay: 0.8s; }
+@keyframes bkhow-cite-pop {
+  0%, 5%    { opacity: 0; transform: scale(0.4); }
+  14%       { opacity: 1; transform: scale(1.12); }
+  20%, 82%  { opacity: 1; transform: scale(1); }
+  100%      { opacity: 0; transform: scale(0.4); }
+}
+.bkhow-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: var(--bk-teal, #14b8a6);
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.3) rotate(-12deg);
+  animation: bkhow-check-stamp 3.4s ease-in-out infinite;
+}
+@keyframes bkhow-check-stamp {
+  0%, 30%   { opacity: 0; transform: scale(0.3) rotate(-12deg); }
+  42%       { opacity: 1; transform: scale(1.18) rotate(0deg); }
+  50%, 82%  { opacity: 1; transform: scale(1) rotate(0deg); }
+  100%      { opacity: 0; transform: scale(0.3) rotate(-12deg); }
+}
+
+/* --- Entrance for connecting arrows (one-shot draw on view-ish) --- */
+.bkhow-connect .bk-doodle-path {
+  /* shared .bk-doodle-path already handles the draw-in; nothing extra needed */
+}
+
+/* ============================================================
+   prefers-reduced-motion: disable ALL ambient loops; snap any
+   hand-drawn intros / pop-ins to their finished, visible state.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .bkhow-typenote,
+  .bkhow-caret,
+  .bkhow-typecursor,
+  .bkhow-srccard,
+  .bkhow-arrow .bk-doodle-path,
+  .bkhow-searchcursor,
+  .bkhow-cite,
+  .bkhow-check {
+    animation: none !important;
+  }
+  .bkhow-srccard,
+  .bkhow-cite,
+  .bkhow-check {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .bkhow-arrow .bk-doodle-path {
+    stroke-dashoffset: 0 !important;
+  }
+  .bkhow-caret { opacity: 1 !important; }
+}
+
+/* ===== section extra: testimonials ===== */
+/* ============================================================
+   BkTestimonials — section-specific keyframes & helpers
+   (the .bk-dark, .bk-card, .bk-note-*, .bk-underline, .bk-eyebrow
+    primitives come from the shared Bokari Canvas design system)
+   ============================================================ */
+
+/* Card tweak: keep the playful ink border + soft pop on the dark stage.
+   .bk-card already ships white bg + 2px ink border + radius + shadow;
+   here we just give the rotating card a gentle tilt + entrance. */
+.bk-tm-card {
+  transform: rotate(-0.6deg);
+}
+
+/* Slide entrance for the rotating testimonial */
+@keyframes bkTmSlideIn {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.bk-tm-slide-in {
+  animation: bkTmSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Star tones */
+.bk-tm-star-on  { color: var(--bk-sand, #d4b483); }
+.bk-tm-star-off { color: rgba(255, 255, 255, 0.28); }
+
+/* Pagination focus ring (teal, offset against navy) */
+.bk-tm-pgn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bk-navy, #07111f),
+    0 0 0 4px var(--bk-teal, #14b8a6);
+}
+
+/* Floating decorative avatar bubbles */
+@keyframes bkTmFloat {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%      { transform: translateY(-14px) rotate(3deg); }
+}
+.bk-tm-float   { animation: bkTmFloat 7s ease-in-out infinite; }
+.bk-tm-float-2 { animation: bkTmFloat 9s ease-in-out infinite; animation-delay: -2s; }
+.bk-tm-float-3 { animation: bkTmFloat 8s ease-in-out infinite; animation-delay: -4s; }
+.bk-tm-bubble { filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35)); }
+
+/* Pulsing decorative dots */
+@keyframes bkTmDotPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 0.9;  transform: scale(1.15); }
+}
+.bk-tm-dot { animation: bkTmDotPulse 4.5s ease-in-out infinite; }
+
+/* Whimsical traveling cursor on the card corner */
+@keyframes bkTmCursorBob {
+  0%, 100% { transform: translate(0, 0) rotate(-6deg); }
+  50%      { transform: translate(-4px, -5px) rotate(2deg); }
+}
+.bk-tm-cursor { animation: bkTmCursorBob 3.4s ease-in-out infinite; }
+
+/* Respect reduced motion: disable all ambient loops + entrance,
+   snap content to its finished state. */
+@media (prefers-reduced-motion: reduce) {
+  .bk-tm-slide-in { animation: none; }
+  .bk-tm-float,
+  .bk-tm-float-2,
+  .bk-tm-float-3,
+  .bk-tm-dot,
+  .bk-tm-cursor { animation: none; }
+  .bk-tm-card   { transform: none; }
+}
+
+/* ===== section extra: cta-footer ===== */
+/* === BkCtaFooter — section-specific accents ===
+   Relies on the shared Bokari Canvas primitives already in globals.css:
+   .bk-grid / .bk-grid-fade, .bk-eyebrow, .bk-display, .bk-hand, .bk-ink,
+   .bk-ink-soft, .bk-teal-text, .bk-underline, .bk-border-ink,
+   .bk-btn / .bk-btn-primary / .bk-btn-secondary, .bk-doodle / .bk-doodle-path
+   (+ --teal/--sand variants & .bk-doodle-delay-*).
+   Only the extras below are unique to this section. */
+
+/* Playful floating dots around the CTA */
+.bk-cta-dot {
+  opacity: 0.9;
+  animation: bkCtaDotFloat 5.5s ease-in-out infinite;
+}
+.bk-cta-dot--mint  { background: #93e6c4; }
+.bk-cta-dot--peach { background: #ffc18e; animation-duration: 6.5s; animation-delay: -1.5s; }
+.bk-cta-dot--cyan  { background: #a6dcf3; animation-duration: 7s;   animation-delay: -3s; }
+
+@keyframes bkCtaDotFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-10px) scale(1.12); }
+}
+
+/* Subtle entrance drift for the framing doodles (in case the shared
+   .bk-doodle wrapper does not already animate position) */
+.bk-cta-doodle-left  { animation: bkCtaDoodleDrift 7s ease-in-out infinite; }
+.bk-cta-doodle-right { animation: bkCtaDoodleDrift 7s ease-in-out infinite reverse; }
+
+@keyframes bkCtaDoodleDrift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-6px) rotate(-2deg); }
+}
+
+/* Reduced-motion: kill all ambient loops in this section.
+   (Hand-drawn doodle intros are handled by the shared .bk-doodle-path rule.) */
+@media (prefers-reduced-motion: reduce) {
+  .bk-cta-dot,
+  .bk-cta-doodle-left,
+  .bk-cta-doodle-right {
+    animation: none !important;
+  }
+}
+/* @@BOKARI-CANVAS-END@@ */
+
+/* ── Voice-recording waveform (ChatGPT-style): bars flow right → left ── */
+@keyframes bk-rec-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes bk-rec-pulse {
+  0%, 100% { transform: scaleY(0.28); }
+  50%      { transform: scaleY(1); }
+}
+.bk-rec-track {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: max-content;
+  height: 100%;
+  animation: bk-rec-scroll 7s linear infinite;
+  will-change: transform;
+}
+.bk-rec-bar {
+  flex: none;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--bk-teal, #14b8a6);
+  transform-origin: center;
+  animation: bk-rec-pulse 1.1s ease-in-out infinite;
+}
+.bk-rec-fade {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+          mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bk-rec-track { animation: none !important; }
+  .bk-rec-bar { animation: none !important; transform: scaleY(0.6); }
+}

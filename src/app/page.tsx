@@ -1,13 +1,12 @@
-import ChatWindow from '@/components/ChatWindow';
 import { Metadata } from 'next';
+import Landing from '@/components/home/Landing';
 
 export const metadata: Metadata = {
-  title: 'Bokari - Votre Journaliste IA',
-  description: 'Posez vos questions, Bokari recherche, verifie et vous informe.',
+  title: 'Bokari — Le journaliste IA africain',
+  description:
+    "Posez votre question : Bokari recherche, vérifie et synthétise l'information avec des sources citées. Conçu pour l'Afrique.",
 };
 
-const Home = () => {
-  return <ChatWindow />;
-};
-
-export default Home;
+export default function Page() {
+  return <Landing />;
+}

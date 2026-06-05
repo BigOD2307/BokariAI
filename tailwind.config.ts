@@ -14,6 +14,9 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         serif: ['Instrument Serif', 'Georgia', 'serif'],
+        // Bokari Canvas playful display + handwritten accents
+        display: ['Chewy', 'system-ui', 'cursive'],
+        hand: ['"Patrick Hand"', 'Comic Sans MS', 'cursive'],
       },
       colors: {
         // shadcn CSS variable colors

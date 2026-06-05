@@ -24,16 +24,21 @@
  * @version 1.0.0
  */
 
+/** Monotonic high-resolution clock that works in both the browser and
+ *  Node (no `process.hrtime`, which is undefined in client bundles). */
+const nowMs = (): number =>
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+
 /** Start a high-resolution timer.  Returns a function that, when
  *  called, returns the elapsed milliseconds and freezes the value. */
 export function startTimer(): () => number {
-  const t0 = process.hrtime.bigint();
+  const t0 = nowMs();
   let frozen: number | null = null;
   return () => {
     if (frozen !== null) return frozen;
-    const t1 = process.hrtime.bigint();
-    // bigint → ms with 3-decimal precision
-    frozen = Number(t1 - t0) / 1_000_000;
+    frozen = nowMs() - t0;
     return frozen;
   };
 }
