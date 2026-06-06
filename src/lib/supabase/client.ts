@@ -4,10 +4,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (
+  process.env.NEXT_PHASE !== 'phase-production-build' &&
+  (!supabaseUrl || !supabaseAnonKey)
+) {
   throw new Error(
     '[Bokari Supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.',
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-anon-key',
+);
