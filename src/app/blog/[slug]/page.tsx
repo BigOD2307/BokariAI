@@ -6,8 +6,12 @@ import { getCategory } from '@/lib/blog/categories';
 
 const SITE = 'https://bokari.dev';
 
-export function generateStaticParams() {
-  return getArticleSlugs().map((slug) => ({ slug }));
+export const dynamic = 'force-dynamic';
+
+// Articles are generated at runtime; don't pre-render at build (the DB is empty
+// then). dynamicParams renders each slug on first request.
+export async function generateStaticParams() {
+  return [] as { slug: string }[];
 }
 
 export async function generateMetadata({
@@ -16,7 +20,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const article = getArticle(slug);
+  const article = await getArticle(slug);
   if (!article) return { title: 'Article introuvable — Bokari' };
 
   const url = `${SITE}/blog/${article.slug}`;
@@ -44,10 +48,10 @@ export default async function ArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = getArticle(slug);
+  const article = await getArticle(slug);
   if (!article) notFound();
 
-  const related = getRelatedArticles(article.slug, article.category);
+  const related = await getRelatedArticles(article.slug, article.category);
   const category = getCategory(article.category);
 
   const url = `${SITE}/blog/${article.slug}`;

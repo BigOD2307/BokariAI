@@ -6,6 +6,8 @@ import BkNav from '@/components/home/canvas/BkNav';
 import CategoryNav from '@/components/blog/CategoryNav';
 import ArticleCard from '@/components/blog/ArticleCard';
 
+export const dynamic = 'force-dynamic';
+
 export function generateStaticParams() {
   return getCategorySlugs().map((slug) => ({ slug }));
 }
@@ -35,7 +37,7 @@ export default async function CategoryPage({
   const cat = getCategory(slug);
   if (!cat) notFound();
 
-  const articles = getArticlesByCategory(slug);
+  const articles = await getArticlesByCategory(slug);
 
   return (
     <div className="bk-grid bk-grid-fade min-h-screen bg-white text-[color:var(--bk-ink,#0f172a)]">

@@ -13,9 +13,12 @@ export const metadata: Metadata = {
   robots: 'index,follow',
 };
 
-export default function BlogIndex() {
-  const featured = getFeaturedArticle();
-  const rest = getAllArticles().filter((a) => a.slug !== featured?.slug);
+export const dynamic = 'force-dynamic';
+
+export default async function BlogIndex() {
+  const featured = await getFeaturedArticle();
+  const all = await getAllArticles();
+  const rest = all.filter((a) => a.slug !== featured?.slug);
 
   return (
     <div className="bk-grid bk-grid-fade min-h-screen bg-white text-[color:var(--bk-ink,#0f172a)]">

@@ -2,50 +2,20 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, ExternalLink } from 'lucide-react';
 import BkNav from '@/components/home/canvas/BkNav';
+import { getAfricaStats } from '@/lib/stats/store';
+import { SOURCES } from '@/lib/stats/schema';
 
 export const metadata: Metadata = {
   title: "L'Afrique en chiffres — les données du continent | Bokari",
   description:
-    "Population, démographie, économie et numérique : les chiffres clés de l'Afrique, sourcés (ONU, Banque mondiale, GSMA, FMI). Un panorama vérifié par Bokari.",
+    "Population, démographie, économie et numérique : les chiffres clés de l'Afrique, sourcés (ONU, Banque mondiale, GSMA, FMI). Un panorama vérifié et mis à jour chaque semaine par Bokari.",
   alternates: { canonical: 'https://bokari.dev/data' },
   robots: 'index,follow',
 };
 
-/* ── Data (representative latest figures, sources cited below) ─────────────── */
-
-const HERO = [
-  { value: '1,4 Md', label: 'habitants', src: 1 },
-  { value: '54', label: 'pays', src: 5 },
-  { value: '~19 ans', label: 'âge médian', src: 1 },
-  { value: '~2 100', label: 'langues', src: 6 },
-];
-
-const POP_TOP = [
-  { name: 'Nigeria', value: 223 },
-  { name: 'Éthiopie', value: 123 },
-  { name: 'Égypte', value: 107 },
-  { name: 'RD Congo', value: 99 },
-  { name: 'Tanzanie', value: 65 },
-];
-
-const ECO_TOP = [
-  { name: 'Nigeria', value: 477 },
-  { name: 'Égypte', value: 406 },
-  { name: 'Afrique du Sud', value: 405 },
-  { name: 'Algérie', value: 267 },
-  { name: 'Maroc', value: 162 },
-];
-
-const SOURCES = [
-  { id: 1, label: 'ONU DESA — World Population Prospects 2024', url: 'https://population.un.org/wpp/' },
-  { id: 2, label: 'Banque mondiale — Indicateurs du développement', url: 'https://data.worldbank.org/' },
-  { id: 3, label: 'GSMA Intelligence — The Mobile Economy 2024', url: 'https://www.gsma.com/mobileeconomy/' },
-  { id: 4, label: 'FMI — World Economic Outlook 2023', url: 'https://www.imf.org/en/Publications/WEO' },
-  { id: 5, label: 'Union africaine — États membres', url: 'https://au.int/' },
-  { id: 6, label: 'Ethnologue — Languages of the World', url: 'https://www.ethnologue.com/' },
-  { id: 7, label: 'UIT — Mesure du numérique', url: 'https://www.itu.int/' },
-  { id: 8, label: 'UNESCO UIS — Alphabétisation', url: 'https://uis.unesco.org/' },
-];
+// Figures are refreshed weekly by the autonomous stats cron and stored in
+// SQLite — render at request time so the page always shows the latest values.
+export const dynamic = 'force-dynamic';
 
 /* ── Presentational helpers ────────────────────────────────────────────────── */
 
@@ -132,7 +102,31 @@ function Section({
 
 /* ── Page ──────────────────────────────────────────────────────────────────── */
 
-export default function DataPage() {
+export default async function DataPage() {
+  const stats = await getAfricaStats();
+  const v = (key: string) => stats[key]?.value ?? '—';
+  const num = (key: string) => stats[key]?.numeric ?? 0;
+  const HERO = [
+    { value: v('hero.population'), label: 'habitants', src: 1 },
+    { value: v('hero.countries'), label: 'pays', src: 5 },
+    { value: v('hero.medianAge'), label: 'âge médian', src: 1 },
+    { value: v('hero.languages'), label: 'langues', src: 6 },
+  ];
+  const POP_TOP = [
+    { name: 'Nigeria', value: num('pop.rank.nigeria') },
+    { name: 'Éthiopie', value: num('pop.rank.ethiopia') },
+    { name: 'Égypte', value: num('pop.rank.egypt') },
+    { name: 'RD Congo', value: num('pop.rank.drc') },
+    { name: 'Tanzanie', value: num('pop.rank.tanzania') },
+  ];
+  const ECO_TOP = [
+    { name: 'Nigeria', value: num('eco.rank.nigeria') },
+    { name: 'Égypte', value: num('eco.rank.egypt') },
+    { name: 'Afrique du Sud', value: num('eco.rank.southafrica') },
+    { name: 'Algérie', value: num('eco.rank.algeria') },
+    { name: 'Maroc', value: num('eco.rank.morocco') },
+  ];
+
   return (
     <div className="bk-grid bk-grid-fade min-h-screen bg-white text-[color:var(--bk-ink,#0f172a)]">
       <BkNav />
@@ -166,10 +160,10 @@ export default function DataPage() {
         {/* Population */}
         <Section eyebrow="Population & démographie" title="Un continent jeune et nombreux">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard value="1,4 Md" label="Habitants" sub="2e continent le plus peuplé" src={1} />
-            <StatCard value="~19 ans" label="Âge médian" sub="le plus jeune au monde" src={1} />
-            <StatCard value="~43 %" label="Urbanisation" sub="~56 % projeté en 2050" src={2} />
-            <StatCard value="~19 %" label="Jeunes (15-24 ans)" sub="dividende démographique" src={2} />
+            <StatCard value={v('hero.population')} label="Habitants" sub="2e continent le plus peuplé" src={1} />
+            <StatCard value={v('hero.medianAge')} label="Âge médian" sub="le plus jeune au monde" src={1} />
+            <StatCard value={v('pop.urbanization')} label="Urbanisation" sub="~56 % projeté en 2050" src={2} />
+            <StatCard value={v('pop.youth')} label="Jeunes (15-24 ans)" sub="dividende démographique" src={2} />
           </div>
           <div className="mt-6 rounded-[18px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-5 shadow-[0_4px_0_rgba(15,23,42,0.06)] sm:p-7">
             <p className="mb-4 text-[14px] font-semibold text-[color:var(--bk-ink,#0f172a)]">
@@ -190,27 +184,27 @@ export default function DataPage() {
             <BarList items={ECO_TOP} unit="Md $" accent="#d4b483" />
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <StatCard value="+4,8 %" label="Sénégal" sub="parmi les croissances les plus rapides" src={4} />
-            <StatCard value="~67 %" label="Alphabétisation" sub="de 40 % (Niger) à 95 % (Afrique du Sud)" src={8} />
-            <StatCard value="~48 %" label="Électricité renouvelable" sub="hydro, solaire, éolien" src={2} />
+            <StatCard value={v('eco.senegalGrowth')} label="Sénégal" sub="parmi les croissances les plus rapides" src={4} />
+            <StatCard value={v('eco.literacy')} label="Alphabétisation" sub="de 40 % (Niger) à 95 % (Afrique du Sud)" src={8} />
+            <StatCard value={v('eco.renewable')} label="Électricité renouvelable" sub="hydro, solaire, éolien" src={2} />
           </div>
         </Section>
 
         {/* Digital */}
         <Section eyebrow="Numérique & mobile" title="Le saut technologique du mobile">
           <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard value="~575 M" label="Abonnements mobiles" sub="+75 % de pénétration dans la plupart des pays" src={3} />
-            <StatCard value="~320 M" label="Internautes" sub="~26 % de pénétration, en forte hausse" src={7} />
-            <StatCard value="~250 M" label="Comptes mobile money" sub="l'Afrique, leader mondial du paiement mobile" src={3} />
+            <StatCard value={v('dig.mobileSubs')} label="Abonnements mobiles" sub="+75 % de pénétration dans la plupart des pays" src={3} />
+            <StatCard value={v('dig.internet')} label="Internautes" sub="~26 % de pénétration, en forte hausse" src={7} />
+            <StatCard value={v('dig.mobileMoney')} label="Comptes mobile money" sub="l'Afrique, leader mondial du paiement mobile" src={3} />
           </div>
         </Section>
 
         {/* Diversity */}
         <Section eyebrow="Diversité" title="La plus grande richesse linguistique du monde">
           <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard value="~2 100" label="Langues parlées" sub="500+ rien qu'au Nigeria" src={6} />
-            <StatCard value="54" label="Pays" sub="membres de l'Union africaine" src={5} />
-            <StatCard value="~1,5–3 %" label="Coût des données" sub="du revenu mensuel (vs 2-5 % mondial)" src={3} />
+            <StatCard value={v('div.languages')} label="Langues parlées" sub="500+ rien qu'au Nigeria" src={6} />
+            <StatCard value={v('div.countries')} label="Pays" sub="membres de l'Union africaine" src={5} />
+            <StatCard value={v('div.dataCost')} label="Coût des données" sub="du revenu mensuel (vs 2-5 % mondial)" src={3} />
           </div>
         </Section>
 
