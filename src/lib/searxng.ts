@@ -83,10 +83,17 @@ export const searchSearxng = async (
   query: string,
   opts?: SearxngSearchOptions,
 ) => {
-  // 1. Try configured local SearxNG first
-  const configuredURL = getSearxngURL();
-  if (configuredURL) {
-    const result = await tryFetchSearxng(configuredURL, query, opts, 5000);
+  // 1. Try local SearxNG: the configured URL AND the bundled SEARXNG_API_URL
+  //    env (the Docker image runs SearXNG on :8080). We try both because the
+  //    persisted config can hold a stale dev URL (e.g. :4000) — the env is the
+  //    deployment's source of truth. A dead candidate fails fast (ECONNREFUSED).
+  const localCandidates = Array.from(
+    new Set([getSearxngURL(), process.env.SEARXNG_API_URL].filter(Boolean) as string[]),
+  );
+  for (const url of localCandidates) {
+    // Generous timeout: a bundled SearXNG can take several seconds when slow
+    // engines time out before the fast ones (Google/Bing) answer.
+    const result = await tryFetchSearxng(url, query, opts, 12000);
     if (result && result.results.length > 0) {
       return result;
     }

@@ -92,7 +92,9 @@ RUN echo "searxng ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 EXPOSE 3000 8080
 
-ENV SEARXNG_API_URL=http://localhost:8080
+# Use 127.0.0.1 (not localhost): Node's fetch resolves "localhost" to IPv6 ::1
+# first, but SearXNG binds IPv4 — so localhost connections are refused.
+ENV SEARXNG_API_URL=http://127.0.0.1:8080
 # Bind the standalone Next server to all interfaces. Docker sets HOSTNAME to the
 # container id by default, which makes the app unreachable via the published
 # port — force 0.0.0.0 so `docker run -p` works without an explicit -e override.

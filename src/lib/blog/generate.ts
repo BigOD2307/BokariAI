@@ -300,6 +300,10 @@ export async function generateArticleForCategory(
 
   const parsed = parseArticle(content);
   if (!parsed || !parsed.title || !parsed.body) {
+    console.warn(
+      `[blog/generate] ${categorySlug}: parse failed — sources=${sources.length} ` +
+        `content_len=${content.length} head=${JSON.stringify(content.slice(0, 600))}`,
+    );
     return { ok: false, reason: 'model abandoned or unparseable output' };
   }
 
@@ -336,5 +340,9 @@ export async function generateArticleForCategory(
     author: 'Bokari',
   });
 
+  console.log(
+    `[blog/generate] ${categorySlug}: drafted "${article.title}" ` +
+      `(${finalSources.length} sources, ${article.readingMinutes}min, slug=${article.slug})`,
+  );
   return { ok: true, article };
 }
