@@ -9,6 +9,7 @@
  * Output is saved as a `draft` (origin `auto`). A human approves it in the
  * review queue before it goes public (human-in-the-loop). See ./store.
  */
+import { parse as parsePartial, Allow } from 'partial-json';
 import type { Message } from '@/lib/types';
 import { chatWithFallback } from '@/lib/ai/gateway';
 import { searchNews } from '@/lib/search';
@@ -63,7 +64,7 @@ function buildPrompt(
 Règles ABSOLUES :
 - Écris uniquement à partir des extraits web fournis ci-dessous. N'invente AUCUN fait, chiffre, citation, ni source.
 - Cite tes affirmations avec des appels de note numériques [n] qui correspondent EXACTEMENT aux numéros des sources fournies. N'utilise jamais un numéro qui n'existe pas dans la liste.
-- Si les extraits sont insuffisants ou hors sujet, renvoie un titre vide pour signaler l'abandon.
+- Écris l'article même si les sources sont limitées : reste factuel et n'extrapole pas au-delà des extraits.
 - Ton sobre et factuel, pas de sensationnalisme. Recoupe quand plusieurs sources se contredisent.
 - Le corps est en Markdown : 600 à 1100 mots, avec 2 à 4 sous-titres "## ...". Mets en gras les faits clés.
 
@@ -84,18 +85,59 @@ Rédige l'article maintenant. JSON uniquement.`;
   ];
 }
 
-function parseJsonObject(raw: string): { title?: string; excerpt?: string; body?: string } | null {
+type ParsedArticle = { title?: string; excerpt?: string; body?: string };
+
+/**
+ * Best-effort extraction of the article from the model output. Tries, in order:
+ * strict JSON, partial-JSON recovery (handles truncation at the token cap), and
+ * a Markdown fallback (when the model ignores the JSON instruction and just
+ * writes the article). Robust to the smaller/verbose models in the fallback
+ * chain.
+ */
+function parseArticle(raw: string): ParsedArticle | null {
   let txt = raw.trim();
   const fenced = txt.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) txt = fenced[1];
   const start = txt.indexOf('{');
   const end = txt.lastIndexOf('}');
-  if (start >= 0 && end > start) txt = txt.slice(start, end + 1);
+  const jsonish = start >= 0 ? txt.slice(start, end > start ? end + 1 : undefined) : txt;
+
+  // 1. strict JSON
   try {
-    return JSON.parse(txt);
+    const o = JSON.parse(jsonish);
+    if (o && (o.title || o.body)) return o;
   } catch {
-    return null;
+    /* fall through */
   }
+  // 2. partial / repaired JSON (recovers a body truncated at the token cap)
+  try {
+    const o = parsePartial(jsonish, Allow.ALL) as ParsedArticle;
+    if (o && (o.title || o.body)) return o;
+  } catch {
+    /* fall through */
+  }
+  // 3. Markdown fallback — the model wrote prose instead of JSON
+  const md = (fenced ? fenced[1] : raw).trim();
+  if (md.length > 300) {
+    const lines = md.split('\n');
+    let title = '';
+    const bodyLines: string[] = [];
+    for (const line of lines) {
+      const h = line.match(/^#{1,2}\s+(.*)/);
+      if (!title && h) {
+        title = h[1].trim();
+        continue;
+      }
+      bodyLines.push(line);
+    }
+    if (!title) {
+      const firstText = lines.find((l) => l.trim().length > 12);
+      if (firstText) title = firstText.replace(/^#+\s*/, '').trim();
+    }
+    const body = bodyLines.join('\n').trim() || md;
+    if (title && body.length > 300) return { title, body };
+  }
+  return null;
 }
 
 /**
@@ -153,7 +195,7 @@ export async function generateArticleForCategory(
       (model) =>
         model.generateText({
           messages,
-          options: { temperature: 0.5, maxTokens: 2600 },
+          options: { temperature: 0.5, maxTokens: 3800 },
         }),
       `article:${categorySlug}`,
     );
@@ -162,7 +204,7 @@ export async function generateArticleForCategory(
     return { ok: false, reason: `llm error: ${(err as Error)?.message ?? err}` };
   }
 
-  const parsed = parseJsonObject(content);
+  const parsed = parseArticle(content);
   if (!parsed || !parsed.title || !parsed.body) {
     return { ok: false, reason: 'model abandoned or unparseable output' };
   }

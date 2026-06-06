@@ -50,6 +50,11 @@ COPY --from=builder /home/bokari/.next/standalone ./
 COPY --from=builder /home/bokari/data ./data
 COPY drizzle ./drizzle
 
+# sql.js ships its WebAssembly separately and Next's standalone tracing skips
+# .wasm files, so copy it explicitly — otherwise every SQLite read (discover
+# cache, semantic cache, blog articles, the scheduler state) throws ENOENT.
+COPY --from=builder /home/bokari/node_modules/sql.js/dist/sql-wasm.wasm ./node_modules/sql.js/dist/sql-wasm.wasm
+
 RUN mkdir /home/bokari/uploads
 
 RUN useradd --shell /bin/bash --system \

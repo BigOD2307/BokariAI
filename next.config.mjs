@@ -17,6 +17,9 @@ const nextConfig = {
       './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
       './node_modules/@napi-rs/canvas-linux-x64-musl/**',
     ],
+    // sql.js loads its .wasm at runtime; tracing misses .wasm, so force-include
+    // it for every route that touches SQLite (blog, data, discover, api).
+    '/**': ['./node_modules/sql.js/dist/sql-wasm.wasm'],
   },
   env: {
     NEXT_PUBLIC_VERSION: pkg.version,
