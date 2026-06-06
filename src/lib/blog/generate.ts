@@ -341,10 +341,11 @@ export async function generateArticleForCategory(
 
   const title = parsed.title.trim();
   // The prompt forbids "Introduction"/"Conclusion" headings; some models still
-  // emit a leading one — drop it so the article opens on the lede.
+  // emit them. Drop the heading LINE anywhere (keep the prose under it) so the
+  // article opens on the lede and doesn't end on a labelled "Conclusion".
   const bodyRaw = parsed.body
     .trim()
-    .replace(/^\s*#{1,4}\s*(introduction|conclusion)\b[^\n]*\r?\n+/i, '')
+    .replace(/^[ \t]*#{1,4}[ \t]*(introduction|conclusion)\b[^\n]*\r?\n+/gim, '')
     .trim();
   if (title.length < 8 || bodyRaw.length < 300) {
     return { ok: false, reason: 'output too short' };
