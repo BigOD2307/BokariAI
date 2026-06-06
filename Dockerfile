@@ -25,6 +25,11 @@ ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV NEXT_PUBLIC_VERSION=${NEXT_PUBLIC_VERSION}
+# Throwaway value so env-validating route modules (discover/refresh, setup, …)
+# don't throw during `next build`'s page-data collection. The REAL key is
+# supplied at runtime via --env-file; this builder stage is discarded, so
+# nothing leaks into the final image.
+ENV SUPABASE_SERVICE_ROLE_KEY=build-time-placeholder
 
 RUN yarn build
 
