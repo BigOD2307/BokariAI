@@ -173,14 +173,43 @@ Rédige l'article maintenant. JSON strict {title, excerpt, body} uniquement.`;
 
 type ParsedArticle = { title?: string; excerpt?: string; body?: string };
 
+function unescapeJsonish(s: string): string {
+  return s
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+}
+
+/**
+ * Tolerant field extractor for the model's near-JSON. In practice the models
+ * reliably emit a quoted "title" and "excerpt" but write the "body" as raw
+ * Markdown (unquoted, with literal newlines) — which is invalid JSON. We pull
+ * title/excerpt from their quoted regex and take everything after "body": as
+ * the Markdown body, stripping an optional wrapping quote / closing brace.
+ */
+function extractFieldsLoose(raw: string): ParsedArticle | null {
+  const titleM = raw.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const excerptM = raw.match(/"excerpt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const bodyM = raw.match(/"body"\s*:\s*([\s\S]*)$/);
+  if (!titleM || !bodyM) return null;
+  const title = unescapeJsonish(titleM[1]).trim();
+  const excerpt = excerptM ? unescapeJsonish(excerptM[1]).trim() : undefined;
+  let body = bodyM[1].trim().replace(/^"/, '').replace(/"\s*\}?\s*$/, '').trim();
+  body = unescapeJsonish(body);
+  if (title.length < 8 || body.length < 200) return null;
+  return { title, excerpt, body };
+}
+
 /**
  * Best-effort extraction of the article from the model output. Tries, in order:
- * strict JSON, partial-JSON recovery (handles truncation at the token cap), and
- * a Markdown fallback (when the model ignores the JSON instruction and just
- * writes the article). Robust to the smaller/verbose models in the fallback
- * chain.
+ * strict JSON (must have title AND body), the tolerant field extractor (handles
+ * the common unquoted-Markdown-body malformation), partial-JSON recovery, and a
+ * plain-Markdown fallback. Each stage requires a real body so a half-parsed
+ * {title, excerpt} never slips through as "done".
  */
-function parseArticle(raw: string): ParsedArticle | null {
+export function parseArticle(raw: string): ParsedArticle | null {
   let txt = raw.trim();
   const fenced = txt.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) txt = fenced[1];
@@ -188,23 +217,26 @@ function parseArticle(raw: string): ParsedArticle | null {
   const end = txt.lastIndexOf('}');
   const jsonish = start >= 0 ? txt.slice(start, end > start ? end + 1 : undefined) : txt;
 
-  // 1. strict JSON
+  // 1. strict JSON — only accept if it actually has a body.
   try {
     const o = JSON.parse(jsonish);
-    if (o && (o.title || o.body)) return o;
+    if (o && o.title && o.body) return o;
   } catch {
     /* fall through */
   }
-  // 2. partial / repaired JSON (recovers a body truncated at the token cap)
+  // 2. tolerant field extractor (title/excerpt quoted, body = raw Markdown).
+  const loose = extractFieldsLoose(jsonish);
+  if (loose) return loose;
+  // 3. partial JSON (truncated but otherwise valid) — body required.
   try {
     const o = parsePartial(jsonish, Allow.ALL) as ParsedArticle;
-    if (o && (o.title || o.body)) return o;
+    if (o && o.title && o.body && o.body.length > 200) return o;
   } catch {
     /* fall through */
   }
-  // 3. Markdown fallback — the model wrote prose instead of JSON
+  // 4. plain-Markdown fallback — the model wrote prose, no JSON at all.
   const md = (fenced ? fenced[1] : raw).trim();
-  if (md.length > 300) {
+  if (md.length > 300 && !md.trimStart().startsWith('{')) {
     const lines = md.split('\n');
     let title = '';
     const bodyLines: string[] = [];
@@ -308,7 +340,12 @@ export async function generateArticleForCategory(
   }
 
   const title = parsed.title.trim();
-  const bodyRaw = parsed.body.trim();
+  // The prompt forbids "Introduction"/"Conclusion" headings; some models still
+  // emit a leading one — drop it so the article opens on the lede.
+  const bodyRaw = parsed.body
+    .trim()
+    .replace(/^\s*#{1,4}\s*(introduction|conclusion)\b[^\n]*\r?\n+/i, '')
+    .trim();
   if (title.length < 8 || bodyRaw.length < 300) {
     return { ok: false, reason: 'output too short' };
   }
