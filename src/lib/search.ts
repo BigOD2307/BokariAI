@@ -409,14 +409,32 @@ export const searchSearxng = async (
 };
 
 /**
- * News search for Discover page
+ * News search for the Discover feed AND the autonomous article generator.
+ *
+ * Routing matters on the production server: scraping DuckDuckGo/Brave directly
+ * gets the datacenter IP rate-limited/blocked (returns 0). The bundled SearXNG
+ * (localhost:8080) proxies Google/news and is NOT IP-blocked, so we prefer it
+ * and only fall back to the direct scraper if SearXNG yields nothing.
  */
 export const searchNews = async (
   query: string,
-  _language: string = 'fr',
+  language: string = 'fr',
 ): Promise<SearchResult[]> => {
-  const { results } = await searchParallel(
-    `${query} actualite ${new Date().getFullYear()}`,
-  );
+  const q = `${query} actualite ${new Date().getFullYear()}`;
+
+  // 1. Local/bundled SearXNG first (reliable from a datacenter IP).
+  try {
+    const { searchSearxng: searchViaSearxng } = await import('./searxng');
+    const sx = await searchViaSearxng(q, { language });
+    if (sx.results.length > 0) {
+      // SearxngSearchResult is a structural superset of SearchResult.
+      return sx.results as SearchResult[];
+    }
+  } catch (err) {
+    console.warn('[Bokari Search] SearXNG news path failed, falling back:', err);
+  }
+
+  // 2. Fall back to the multi-engine scraper (DDG + Brave).
+  const { results } = await searchParallel(q);
   return results;
 };

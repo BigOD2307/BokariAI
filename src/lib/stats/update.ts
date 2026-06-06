@@ -11,7 +11,9 @@
  */
 import type { Message } from '@/lib/types';
 import { chatWithFallback } from '@/lib/ai/gateway';
-import { searchSearxng } from '@/lib/search';
+// Use the bundled SearXNG adapter (localhost:8080 → public fallback), not the
+// direct DDG/Brave scraper which the datacenter IP gets blocked from.
+import { searchSearxng } from '@/lib/searxng';
 import { getAutoStatDefs, type StatDef } from './schema';
 import { setStat, touchChecked } from './store';
 
