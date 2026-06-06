@@ -4,17 +4,33 @@ import { ArrowRight, ExternalLink } from 'lucide-react';
 import BkNav from '@/components/home/canvas/BkNav';
 import { getAfricaStats } from '@/lib/stats/store';
 import { SOURCES } from '@/lib/stats/schema';
+import {
+  RankingBarChart,
+  ComparisonBarChart,
+  TrendAreaChart,
+  TrendLineChart,
+  ShareDonut,
+} from '@/components/data/DataCharts';
+import {
+  POPULATION_TOP,
+  POPULATION_TREND,
+  ECONOMY_TOP,
+  GROWTH_TREND,
+  SECTOR_SHARES,
+  DIGITAL_COMPARE,
+  DIGITAL_TREND,
+} from '@/lib/stats/charts';
 
 export const metadata: Metadata = {
   title: "L'Afrique en chiffres — les données du continent | Bokari",
   description:
-    "Population, démographie, économie et numérique : les chiffres clés de l'Afrique, sourcés (ONU, Banque mondiale, GSMA, FMI). Un panorama vérifié et mis à jour chaque semaine par Bokari.",
+    "Population, démographie, économie et numérique : les chiffres clés de l'Afrique en graphiques, sourcés (ONU, Banque mondiale, GSMA, FMI, BAD) et mis à jour chaque semaine par Bokari.",
   alternates: { canonical: 'https://bokari.dev/data' },
   robots: 'index,follow',
 };
 
-// Figures are refreshed weekly by the autonomous stats cron and stored in
-// SQLite — render at request time so the page always shows the latest values.
+// Figures are refreshed weekly by the autonomous stats cron — render at request
+// time so the page always shows the latest values.
 export const dynamic = 'force-dynamic';
 
 /* ── Presentational helpers ────────────────────────────────────────────────── */
@@ -46,38 +62,6 @@ function StatCard({
   );
 }
 
-function BarList({
-  items,
-  unit,
-  accent,
-}: {
-  items: { name: string; value: number }[];
-  unit: string;
-  accent: string;
-}) {
-  const max = Math.max(...items.map((i) => i.value));
-  return (
-    <div className="flex flex-col gap-3">
-      {items.map((it) => (
-        <div key={it.name} className="flex items-center gap-3">
-          <span className="w-24 shrink-0 truncate text-[13px] font-medium text-[color:var(--bk-ink,#0f172a)] sm:w-32">
-            {it.name}
-          </span>
-          <div className="relative h-7 flex-1 overflow-hidden rounded-lg border-2 border-[color:var(--bk-ink,#0f172a)]/10 bg-[color:var(--bk-ink,#0f172a)]/[0.03]">
-            <div
-              className="h-full rounded-md transition-[width]"
-              style={{ width: `${(it.value / max) * 100}%`, backgroundColor: accent }}
-            />
-          </div>
-          <span className="w-16 shrink-0 text-right text-[13px] tabular-nums text-[color:var(--bk-ink-soft,#334155)] sm:w-20">
-            {it.value} {unit}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function Section({
   eyebrow,
   title,
@@ -100,32 +84,56 @@ function Section({
   );
 }
 
+function ChartCard({
+  title,
+  src,
+  children,
+}: {
+  title: string;
+  src?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <figure className="rounded-[18px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-5 shadow-[0_5px_0_rgba(15,23,42,0.07)] sm:p-6">
+      <figcaption className="mb-4 text-[14px] font-semibold text-[color:var(--bk-ink,#0f172a)]">
+        {title}
+        {src && <Sup n={src} />}
+      </figcaption>
+      {children}
+    </figure>
+  );
+}
+
 /* ── Page ──────────────────────────────────────────────────────────────────── */
 
 export default async function DataPage() {
   const stats = await getAfricaStats();
   const v = (key: string) => stats[key]?.value ?? '—';
-  const num = (key: string) => stats[key]?.numeric ?? 0;
+
+  // Freshest update timestamp across all stored figures (credibility line).
+  const updatedAt = Object.values(stats)
+    .map((s) => s.updatedAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  const updatedLabel = updatedAt
+    ? new Date(updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
   const HERO = [
     { value: v('hero.population'), label: 'habitants', src: 1 },
     { value: v('hero.countries'), label: 'pays', src: 5 },
     { value: v('hero.medianAge'), label: 'âge médian', src: 1 },
     { value: v('hero.languages'), label: 'langues', src: 6 },
   ];
-  const POP_TOP = [
-    { name: 'Nigeria', value: num('pop.rank.nigeria') },
-    { name: 'Éthiopie', value: num('pop.rank.ethiopia') },
-    { name: 'Égypte', value: num('pop.rank.egypt') },
-    { name: 'RD Congo', value: num('pop.rank.drc') },
-    { name: 'Tanzanie', value: num('pop.rank.tanzania') },
-  ];
-  const ECO_TOP = [
-    { name: 'Nigeria', value: num('eco.rank.nigeria') },
-    { name: 'Égypte', value: num('eco.rank.egypt') },
-    { name: 'Afrique du Sud', value: num('eco.rank.southafrica') },
-    { name: 'Algérie', value: num('eco.rank.algeria') },
-    { name: 'Maroc', value: num('eco.rank.morocco') },
-  ];
+
+  const popBars = POPULATION_TOP.map((d) => ({ name: d.country, value: d.millions }));
+  const popTrend = POPULATION_TREND.map((d) => ({ year: d.year, value: d.millions }));
+  const ecoBars = ECONOMY_TOP.map((d) => ({ name: d.country, value: d.billions }));
+  const growthTrend = GROWTH_TREND.map((d) => ({ year: d.year, value: d.growth }));
+  const sectorDonut = SECTOR_SHARES.map((d) => ({ name: d.sector, value: d.pct }));
+  const digitalBars = DIGITAL_COMPARE.map((d) => ({ name: d.name, value: d.millions }));
+  const digitalTrend = DIGITAL_TREND.map((d) => ({ year: d.year, value: d.millions }));
 
   return (
     <div className="bk-grid bk-grid-fade min-h-screen bg-white text-[color:var(--bk-ink,#0f172a)]">
@@ -137,8 +145,8 @@ export default async function DataPage() {
           L&apos;Afrique en <span className="bk-underline">chiffres</span>.
         </h1>
         <p className="mt-5 max-w-2xl text-[17px] leading-relaxed text-[color:var(--bk-ink-soft,#334155)]">
-          Un panorama clair et sourcé du continent — population, économie, numérique. Chaque chiffre
-          renvoie à sa source. Valeurs récentes et représentatives.
+          Un panorama clair et sourcé du continent — population, économie, numérique — en graphiques.
+          Chaque chiffre renvoie à sa source, et les valeurs clés sont vérifiées chaque semaine.
         </p>
 
         {/* Hero stat band */}
@@ -156,45 +164,65 @@ export default async function DataPage() {
             </div>
           ))}
         </div>
+        {updatedLabel && (
+          <p className="mt-3 font-hand text-[13px] text-[color:var(--bk-ink-soft,#334155)]">
+            Mis à jour le {updatedLabel} — vérifié par Bokari.
+          </p>
+        )}
 
         {/* Population */}
         <Section eyebrow="Population & démographie" title="Un continent jeune et nombreux">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard value={v('hero.population')} label="Habitants" sub="2e continent le plus peuplé" src={1} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Pays les plus peuplés (millions d'habitants)" src={1}>
+              <RankingBarChart data={popBars} unit="M" accent="#14b8a6" height={340} />
+            </ChartCard>
+            <ChartCard title="Une population qui double d'ici 2050 (millions)" src={1}>
+              <TrendAreaChart data={popTrend} unit="M" accent="#14b8a6" height={340} />
+            </ChartCard>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <StatCard value={v('hero.medianAge')} label="Âge médian" sub="le plus jeune au monde" src={1} />
             <StatCard value={v('pop.urbanization')} label="Urbanisation" sub="~56 % projeté en 2050" src={2} />
-            <StatCard value={v('pop.youth')} label="Jeunes (15-24 ans)" sub="dividende démographique" src={2} />
-          </div>
-          <div className="mt-6 rounded-[18px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-5 shadow-[0_4px_0_rgba(15,23,42,0.06)] sm:p-7">
-            <p className="mb-4 text-[14px] font-semibold text-[color:var(--bk-ink,#0f172a)]">
-              Pays les plus peuplés <span className="text-[color:var(--bk-ink-soft,#334155)]">(millions d&apos;habitants)</span>
-              <Sup n={1} />
-            </p>
-            <BarList items={POP_TOP} unit="M" accent="#14b8a6" />
+            <StatCard value={v('pop.youth')} label="Moins de 25 ans" sub="dividende démographique" src={1} />
           </div>
         </Section>
 
         {/* Economy */}
         <Section eyebrow="Économie" title="Des géants et des champions de croissance">
-          <div className="rounded-[18px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-5 shadow-[0_4px_0_rgba(15,23,42,0.06)] sm:p-7">
-            <p className="mb-4 text-[14px] font-semibold text-[color:var(--bk-ink,#0f172a)]">
-              Plus grandes économies <span className="text-[color:var(--bk-ink-soft,#334155)]">(PIB nominal, milliards $)</span>
-              <Sup n={4} />
-            </p>
-            <BarList items={ECO_TOP} unit="Md $" accent="#d4b483" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Plus grandes économies — PIB nominal (Md $)" src={4}>
+              <RankingBarChart data={ecoBars} unit="Md $" accent="#d4b483" height={340} />
+            </ChartCard>
+            <ChartCard title="Croissance du PIB réel (%)" src={4}>
+              <TrendLineChart data={growthTrend} unit="%" accent="#0f766e" height={300} />
+            </ChartCard>
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <StatCard value={v('eco.senegalGrowth')} label="Sénégal" sub="parmi les croissances les plus rapides" src={4} />
-            <StatCard value={v('eco.literacy')} label="Alphabétisation" sub="de 40 % (Niger) à 95 % (Afrique du Sud)" src={8} />
-            <StatCard value={v('eco.renewable')} label="Électricité renouvelable" sub="hydro, solaire, éolien" src={2} />
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Le PIB par secteur (Afrique subsaharienne)" src={2}>
+              <ShareDonut data={sectorDonut} height={300} />
+            </ChartCard>
+            <div className="grid content-start gap-3 sm:grid-cols-2">
+              <StatCard value={v('eco.senegalGrowth')} label="Sénégal" sub="parmi les croissances les plus rapides" src={4} />
+              <StatCard value={v('eco.literacy')} label="Alphabétisation" sub="de 40 % (Niger) à 95 % (Afrique du Sud)" src={8} />
+              <StatCard value={v('eco.renewable')} label="Électricité renouvelable" sub="hydro, solaire, éolien" src={2} />
+              <StatCard value="+4,2 %" label="Croissance Afrique 2025" sub="puis +4,3 % projeté en 2026" src={4} />
+            </div>
           </div>
         </Section>
 
         {/* Digital */}
         <Section eyebrow="Numérique & mobile" title="Le saut technologique du mobile">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard value={v('dig.mobileSubs')} label="Abonnements mobiles" sub="+75 % de pénétration dans la plupart des pays" src={3} />
-            <StatCard value={v('dig.internet')} label="Internautes" sub="~26 % de pénétration, en forte hausse" src={7} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Mobile, internet, mobile money (millions, Afrique subsaharienne)" src={3}>
+              <ComparisonBarChart data={digitalBars} unit="M" accent="#14b8a6" height={300} />
+            </ChartCard>
+            <ChartCard title="Les internautes africains, en forte hausse (millions)" src={7}>
+              <TrendAreaChart data={digitalTrend} unit="M" accent="#0f766e" height={300} />
+            </ChartCard>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <StatCard value={v('dig.mobileSubs')} label="Abonnements mobiles" sub="~47 % de la population" src={3} />
+            <StatCard value={v('dig.internet')} label="Internautes" sub="~28 % de pénétration, en hausse" src={7} />
             <StatCard value={v('dig.mobileMoney')} label="Comptes mobile money" sub="l'Afrique, leader mondial du paiement mobile" src={3} />
           </div>
         </Section>
@@ -232,8 +260,9 @@ export default async function DataPage() {
             ))}
           </ol>
           <p className="mt-4 text-[12px] text-[color:var(--bk-ink-soft,#334155)]">
-            Chiffres récents et représentatifs, arrondis pour la lisibilité. Pour une donnée précise et
-            à jour, demande à Bokari — il cherche et cite ses sources.
+            Chiffres récents et représentatifs, arrondis pour la lisibilité ; certaines projections (population 2030-2050,
+            croissance 2026-2027) sont des scénarios médians. Numérique & mobile money : périmètre Afrique subsaharienne.
+            Pour une donnée précise et à jour, demande à Bokari — il cherche et cite ses sources.
           </p>
         </section>
 

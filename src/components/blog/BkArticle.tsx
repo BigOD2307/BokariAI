@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import Markdown from 'markdown-to-jsx';
-import { BadgeCheck, Clock, ArrowRight, ArrowLeft, ExternalLink } from 'lucide-react';
+import { BadgeCheck, Clock, ArrowLeft, ExternalLink } from 'lucide-react';
 import type { Article } from '@/lib/blog/articles';
 import { getCategory } from '@/lib/blog/categories';
 import BokariAvatar from '@/components/BokariAvatar';
 import BkNav from '@/components/home/canvas/BkNav';
 import CategoryBadge from './CategoryBadge';
 import ArticleCard from './ArticleCard';
+import BokariCTA from './BokariCTA';
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -121,22 +122,8 @@ const BkArticle = ({
           </section>
         )}
 
-        {/* CTA */}
-        <section className="mt-12 rounded-3xl border-2 border-[color:var(--bk-ink,#0f172a)] bg-white p-7 text-center shadow-[0_6px_0_rgba(15,23,42,0.06)] sm:p-9">
-          <h2 className="font-display text-2xl leading-tight sm:text-3xl">
-            Une question ? Posez-la à Bokari.
-          </h2>
-          <p className="font-hand mx-auto mt-3 max-w-md text-lg text-[color:var(--bk-ink-soft,#334155)]">
-            Cherchez, vérifiez et obtenez une réponse sourcée — en quelques secondes.
-          </p>
-          <Link
-            href="/"
-            className="font-hand mt-6 inline-flex items-center gap-1.5 rounded-xl border-2 border-[color:var(--bk-teal-700,#0f766e)] bg-[color:var(--bk-teal,#14b8a6)] px-5 py-2.5 text-[15px] uppercase tracking-wide text-white shadow-[0_4px_0_var(--bk-teal-700,#0f766e)] transition-transform hover:-translate-y-px active:translate-y-[2px] active:shadow-[0_2px_0_var(--bk-teal-700,#0f766e)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--bk-teal,#14b8a6)] focus-visible:ring-offset-2"
-          >
-            Poser une question
-            <ArrowRight size={16} strokeWidth={2.4} aria-hidden="true" />
-          </Link>
-        </section>
+        {/* CTA — Bokari chat-turn card (every article ends on it) */}
+        <BokariCTA question={`Explique-moi simplement : ${article.title}`} />
       </article>
 
       <footer className="border-t border-[color:var(--bk-ink,#0f172a)]/10 px-4 py-8 text-center text-[13px] text-[color:var(--bk-ink-soft,#334155)]">
