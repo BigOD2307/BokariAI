@@ -196,7 +196,9 @@ function extractFieldsLoose(raw: string): ParsedArticle | null {
   if (!titleM || !bodyM) return null;
   const title = unescapeJsonish(titleM[1]).trim();
   const excerpt = excerptM ? unescapeJsonish(excerptM[1]).trim() : undefined;
-  let body = bodyM[1].trim().replace(/^"/, '').replace(/"\s*\}?\s*$/, '').trim();
+  // Strip the opening quote and any trailing wrapping (closing quote and/or the
+  // JSON object's closing brace) the model left dangling after the Markdown.
+  let body = bodyM[1].trim().replace(/^"/, '').replace(/\s*"?\s*\}?\s*$/, '').trim();
   body = unescapeJsonish(body);
   if (title.length < 8 || body.length < 200) return null;
   return { title, excerpt, body };
