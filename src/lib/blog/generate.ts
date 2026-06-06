@@ -53,6 +53,14 @@ async function gatherSources(seeds: string[], limit = 8): Promise<FetchedSource[
     if (r.status !== 'fulfilled') continue;
     for (const res of r.value) {
       if (!res.url || seen.has(res.url)) continue;
+      // Skip aggregator landing pages (homepages) — they're generic noise, not
+      // a story. Real articles live at a path, not "/".
+      try {
+        const p = new URL(res.url).pathname;
+        if (p === '/' || p === '') continue;
+      } catch {
+        continue;
+      }
       const snippet = sanitizeSnippet(res.content ?? '');
       if (!res.title || snippet.length < 40) continue; // skip thin results
       seen.add(res.url);

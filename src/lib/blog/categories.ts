@@ -33,9 +33,9 @@ export const CATEGORIES: Category[] = [
     description:
       'Décisions, élections et institutions du continent — les faits, recoupés et cités.',
     searchSeeds: [
-      'actualité politique Afrique cette semaine',
-      'élections gouvernement Afrique',
-      'Union africaine CEDEAO décision récente',
+      'politique Sénégal Mali Côte d\'Ivoire gouvernement',
+      'élection présidentielle Afrique de l\'Ouest',
+      'CEDEAO Union africaine sommet décision',
     ],
     tint: '#ffd9b8',
     edge: '#ffc18e',
@@ -48,9 +48,9 @@ export const CATEGORIES: Category[] = [
     description:
       "Innovation, IA, startups, recherche et santé en Afrique — vérifié, sans la hype.",
     searchSeeds: [
-      'startup tech Afrique actualité',
-      'intelligence artificielle innovation Afrique',
-      'science recherche santé Afrique nouvelle',
+      'startup africaine levée de fonds',
+      'intelligence artificielle Afrique innovation',
+      'fintech mobile Nigeria Kenya Sénégal',
     ],
     tint: '#cdeefb',
     edge: '#a6dcf3',
@@ -62,9 +62,9 @@ export const CATEGORIES: Category[] = [
     description:
       'Football, CAN, athlétisme et exploits africains — résultats et coulisses, vérifiés.',
     searchSeeds: [
-      'actualité football africain cette semaine',
-      'sport Afrique résultats CAN',
-      'athlète africain compétition récente',
+      'football africain CAN qualification',
+      'Ligue des champions CAF résultats',
+      'athlétisme Afrique champion record',
     ],
     tint: '#ffd4d4',
     edge: '#ffb3b3',
@@ -77,9 +77,9 @@ export const CATEGORIES: Category[] = [
     description:
       "Musique, cinéma, mode, littérature et patrimoine — la création africaine qui rayonne.",
     searchSeeds: [
-      'culture africaine actualité musique cinéma',
-      'artiste africain festival sortie récente',
-      'patrimoine mode littérature Afrique',
+      'musique afrobeats artiste africain album',
+      'cinéma africain film festival FESPACO',
+      'mode littérature création africaine',
     ],
     tint: '#e9d5ff',
     edge: '#d8b4fe',
@@ -91,9 +91,9 @@ export const CATEGORIES: Category[] = [
     description:
       'Économie, marchés, mobile money, investissement et emploi — chaque chiffre sourcé.',
     searchSeeds: [
-      'économie Afrique actualité business',
-      'investissement startup levée de fonds Afrique',
-      'marché mobile money commerce Afrique',
+      'économie africaine croissance PIB',
+      'entreprise africaine investissement marché',
+      'mobile money commerce Afrique de l\'Ouest',
     ],
     tint: '#fdf0b0',
     edge: '#f3df7a',
@@ -106,9 +106,9 @@ export const CATEGORIES: Category[] = [
     description:
       "Cultures, élevage, agritech, sécurité alimentaire et climat — le terrain qui nourrit le continent.",
     searchSeeds: [
-      'agriculture Afrique actualité récolte',
-      'sécurité alimentaire agritech Afrique',
-      'élevage culture climat agriculture Afrique',
+      'agriculture africaine récolte production',
+      'sécurité alimentaire Sahel agritech',
+      'cacao café coton élevage Afrique',
     ],
     tint: '#c8f4e0',
     edge: '#93e6c4',
