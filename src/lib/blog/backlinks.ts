@@ -280,7 +280,11 @@ export async function injectBacklinks(
  */
 export function stripModelLinks(body: string): string {
   return body
-    .replace(/\[([^\]]+)\]\((?:https?:\/\/|\/)[^)]*\)/g, '$1')
+    // Turn `[text](url)` into `text`, but NOT `![alt](url)` — the negative
+    // lookbehind preserves Markdown images so illustrations survive the pipeline.
+    .replace(/(?<!!)\[([^\]]+)\]\((?:https?:\/\/|\/)[^)]*\)/g, '$1')
+    // Remove bare URLs. URLs inside (…) — e.g. an image src — are preceded by
+    // `(` and excluded by the lookbehind, so images keep their source.
     .replace(/(?<![("])\bhttps?:\/\/[^\s)]+/g, '')
     .trim();
 }

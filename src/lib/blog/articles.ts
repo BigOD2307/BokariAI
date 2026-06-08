@@ -111,10 +111,15 @@ export async function getArticlesByCategory(categorySlug: string): Promise<Artic
   return rows.map(toArticle);
 }
 
-/** The "À la une" pick: the flagged article, else the most recent. */
+/**
+ * The "À la une" pick: the most recent published article, so the hero refreshes
+ * as new articles publish. (The old `featured` flag only ever tagged one seed
+ * article and was never updated, which froze the hero forever. getAllArticles is
+ * ordered newest-first, so all[0] is the freshest published piece.)
+ */
 export async function getFeaturedArticle(): Promise<Article | undefined> {
   const all = await getAllArticles();
-  return all.find((a) => a.featured) ?? all[0];
+  return all[0];
 }
 
 /** Up to `limit` other published articles in the same category (excluding `slug`). */

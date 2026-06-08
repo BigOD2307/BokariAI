@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Markdown from 'markdown-to-jsx';
 import { BadgeCheck, Clock, ArrowLeft, ExternalLink } from 'lucide-react';
@@ -11,6 +12,51 @@ import BokariCTA from './BokariCTA';
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/**
+ * markdown-to-jsx overrides so generated tables/images render richly on the
+ * Canvas brand — and stay readable on a 360px phone (tables scroll instead of
+ * overflowing). Plain objects/components only (server-safe, no hooks).
+ */
+const ARTICLE_OVERRIDES = {
+  table: {
+    component: ({ children }: { children?: ReactNode }) => (
+      <div className="my-6 overflow-x-auto rounded-xl border-2 border-[color:var(--bk-ink,#0f172a)]/12">
+        <table className="w-full border-collapse text-[14px]">{children}</table>
+      </div>
+    ),
+  },
+  th: {
+    props: {
+      className:
+        'border-b-2 border-[color:var(--bk-ink,#0f172a)]/15 bg-[color:var(--bk-mint,#c8f4e0)]/40 px-3 py-2 text-left font-semibold text-[color:var(--bk-ink,#0f172a)]',
+    },
+  },
+  td: {
+    props: {
+      className:
+        'border-b border-[color:var(--bk-ink,#0f172a)]/10 px-3 py-2 align-top text-[color:var(--bk-ink-soft,#334155)]',
+    },
+  },
+  img: {
+    component: ({ alt, src }: { alt?: string; src?: string }) => (
+      <figure className="my-6">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt || ''}
+          loading="lazy"
+          className="w-full rounded-xl border-2 border-[color:var(--bk-ink,#0f172a)]/12"
+        />
+        {alt ? (
+          <figcaption className="mt-2 text-center text-[13px] text-[color:var(--bk-ink-soft,#334155)]">
+            {alt}
+          </figcaption>
+        ) : null}
+      </figure>
+    ),
+  },
+};
 
 /**
  * BkArticle — the Bokari blog article (single post) layout.
@@ -73,8 +119,10 @@ const BkArticle = ({
         </div>
 
         {/* Body */}
-        <div className="prose prose-slate mt-8 max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-[color:var(--bk-ink,#0f172a)] prose-h2:mt-10 prose-h2:text-2xl prose-p:leading-[1.75] prose-p:text-[color:var(--bk-ink-soft,#334155)] prose-strong:text-[color:var(--bk-ink,#0f172a)] prose-a:text-[color:var(--bk-teal-700,#0f766e)]">
-          <Markdown options={{ forceBlock: true }}>{article.body}</Markdown>
+        <div className="prose prose-slate mt-8 max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-[color:var(--bk-ink,#0f172a)] prose-h2:mt-10 prose-h2:text-2xl prose-p:leading-[1.8] prose-p:text-[color:var(--bk-ink-soft,#334155)] prose-li:text-[color:var(--bk-ink-soft,#334155)] prose-li:leading-[1.7] prose-strong:text-[color:var(--bk-ink,#0f172a)] prose-a:text-[color:var(--bk-teal-700,#0f766e)] prose-blockquote:border-l-[color:var(--bk-teal,#14b8a6)] prose-blockquote:text-[color:var(--bk-ink-soft,#334155)]">
+          <Markdown options={{ forceBlock: true, overrides: ARTICLE_OVERRIDES }}>
+            {article.body}
+          </Markdown>
         </div>
 
         {/* Sources */}

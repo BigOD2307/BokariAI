@@ -134,15 +134,23 @@ LIENS / BACKLINKS (la mécanique te protège — ne fabrique JAMAIS d'URL)
 - Ces mentions s'ajoutent aux appels [n] ; elles ne remplacent jamais une source. Si rien n'est pertinent, n'ajoute aucune mention.
 
 FORMAT DE SORTIE
-- Le corps est en Markdown : 650 à 1100 mots, 3 à 5 sous-titres « ## … » informatifs (pas de « Introduction »/« Conclusion »). Mets en GRAS les faits clés (chiffres, noms, dates décisives).
+- Le corps est en Markdown : 900 à 1500 mots, 4 à 6 sous-titres « ## … » informatifs (pas de « Introduction »/« Conclusion »). Mets en GRAS les faits clés (chiffres, noms, dates décisives).
+- VISUEL & STRUCTURE — rends l'article riche, détaillé et aéré :
+  • Dès que tu disposes de chiffres comparables (≥ 3 entités, années ou montants), présente-les dans un TABLEAU Markdown GFM. Les appels [n] vont dans les cellules. Exemple exact à suivre :
+    | Pays | Croissance 2025 |
+    | --- | --- |
+    | Sénégal | +8,2 % [1] |
+    | Côte d'Ivoire | +6,5 % [2] |
+  • Utilise des listes à puces (« - ») ou numérotées pour les énumérations (étapes, acteurs, critères, chiffres clés).
+  • Tu peux ouvrir une section sur une citation en « > » (blockquote) SEULEMENT si elle figure mot pour mot dans un extrait.
 - N'écris AUCUNE URL ni aucun lien markdown [texte](adresse) toi-même.
 - Réponds STRICTEMENT en JSON valide, sans texte autour ni bloc de code, selon ce schéma :
 {"title": string, "excerpt": string, "body": string}
   • title : factuel, précis, accrocheur sans mentir (≤ ~70 caractères), porte l'angle réel et le mot-clé principal. Préfère noms propres et chiffres concrets. Interdits : points d'interrogation racoleurs, MAJUSCULES, superlatifs, affirmation non sourcée.
   • excerpt : le chapô, une à deux phrases (~160 caractères) qui prolongent le titre sans le répéter.
-  • body : l'article en Markdown, avec les [n], sans aucune URL ni lien markdown.
+  • body : l'article en Markdown (tableaux GFM, listes et blockquotes « > » bienvenus), avec les [n], sans aucune URL ni lien markdown.
 
-Avant de rendre, relis : zéro invention, chaque [n] pointe une source listée, fait et analyse distingués, lede qui agrippe, nut graf présent, un point complexe rendu simple, point de vue africain concret, aucun anglais résiduel, AUCUNE URL écrite par toi, 650-1100 mots, sortie JSON strict.`;
+Avant de rendre, relis : zéro invention, chaque [n] pointe une source listée, fait et analyse distingués, lede qui agrippe, nut graf présent, un point complexe rendu simple, point de vue africain concret, au moins un tableau Markdown si des chiffres comparables existent, aucun anglais résiduel, AUCUNE URL écrite par toi, 900-1500 mots, sortie JSON strict.`;
 
 function buildPrompt(
   categoryLabel: string,
@@ -331,7 +339,7 @@ export async function generateArticleForCategory(
           messages,
           // Low temperature for a news-factual task: fewer fabricated quotes /
           // numbers and tighter [n] attribution.
-          options: { temperature: 0.3, maxTokens: 3800 },
+          options: { temperature: 0.3, maxTokens: 5000 },
         }),
       `article:${categorySlug}`,
     );
