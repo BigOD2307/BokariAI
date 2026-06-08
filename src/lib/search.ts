@@ -153,8 +153,8 @@ const searchDuckDuckGo = async (
     let match;
     while ((match = resultPattern.exec(html)) !== null) {
       const rawUrl = match[1];
-      const title = match[2].replace(/<[^>]*>/g, '').trim();
-      const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+      const title = decodeEntities(match[2].replace(/<[^>]*>/g, '').trim());
+      const snippet = decodeEntities(match[3].replace(/<[^>]*>/g, '').trim());
 
       let actualUrl = rawUrl;
       const uddgMatch = rawUrl.match(/uddg=([^&]+)/);
@@ -172,6 +172,46 @@ const searchDuckDuckGo = async (
     console.warn('[Bokari Search] DDG failed:', err);
     return [];
   }
+};
+
+/**
+ * Decode HTML entities left in scraped text. DDG/Brave strip tags but keep
+ * entities (&#39; &eacute; &amp; &laquo; …); React renders runtime strings
+ * literally, so undecoded entities show up verbatim — very visible in French.
+ * Decoding is idempotent and safe on already-clean text.
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  eacute: 'é', egrave: 'è', ecirc: 'ê', euml: 'ë',
+  agrave: 'à', acirc: 'â', auml: 'ä', aelig: 'æ',
+  igrave: 'ì', icirc: 'î', iuml: 'ï',
+  ograve: 'ò', ocirc: 'ô', ouml: 'ö', oelig: 'œ',
+  ugrave: 'ù', ucirc: 'û', uuml: 'ü',
+  ccedil: 'ç', ntilde: 'ñ', szlig: 'ß',
+  laquo: '«', raquo: '»', hellip: '…', middot: '·', bull: '•',
+  rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  ndash: '–', mdash: '—', deg: '°', euro: '€',
+  copy: '©', reg: '®', trade: '™',
+};
+
+const safeCodePoint = (n: number): string => {
+  try {
+    return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+  } catch {
+    return '';
+  }
+};
+
+/** Decode numeric (&#39; / &#x27;) and common named HTML entities. */
+export const decodeEntities = (s: string): string => {
+  if (!s || s.indexOf('&') === -1) return s;
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => safeCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => safeCodePoint(parseInt(d, 10)))
+    .replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (m, name) => {
+      const dec = NAMED_ENTITIES[name.toLowerCase()];
+      return dec !== undefined ? dec : m;
+    });
 };
 
 /**
@@ -200,8 +240,8 @@ const searchDDGNews = async (
     let match;
     while ((match = resultPattern.exec(html)) !== null) {
       const rawUrl = match[1];
-      const title = match[2].replace(/<[^>]*>/g, '').trim();
-      const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+      const title = decodeEntities(match[2].replace(/<[^>]*>/g, '').trim());
+      const snippet = decodeEntities(match[3].replace(/<[^>]*>/g, '').trim());
 
       let actualUrl = rawUrl;
       const uddgMatch = rawUrl.match(/uddg=([^&]+)/);
@@ -250,8 +290,8 @@ const searchBrave = async (
     let match;
     while ((match = snippetPattern.exec(html)) !== null) {
       const resultUrl = match[1];
-      const title = match[2].replace(/<[^>]*>/g, '').trim();
-      const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+      const title = decodeEntities(match[2].replace(/<[^>]*>/g, '').trim());
+      const snippet = decodeEntities(match[3].replace(/<[^>]*>/g, '').trim());
 
       if (resultUrl && title && !resultUrl.includes('brave.com')) {
         results.push({ title, url: resultUrl, content: snippet });
