@@ -97,16 +97,48 @@ class Researcher {
 
       let reasoningEmitted = false;
       let reasoningId = crypto.randomUUID();
+      let nativeReasoning = '';
 
       let finalToolCalls: ToolCall[] = [];
 
       for await (const partialRes of actionStream) {
+        // Native reasoning stream (DeepSeek V4 etc.) -> one streaming
+        // "Reflexion" sub-step. This is the model's actual thinking, shown
+        // independently of whether it also calls the plan tool.
+        if (partialRes.reasoningChunk && block && block.type === 'research') {
+          nativeReasoning += partialRes.reasoningChunk;
+          if (!reasoningEmitted) {
+            reasoningEmitted = true;
+            block.data.subSteps.push({
+              id: reasoningId,
+              type: 'reasoning',
+              reasoning: nativeReasoning,
+            });
+          } else {
+            const idx = block.data.subSteps.findIndex(
+              (step: any) => step.id === reasoningId,
+            );
+            if (idx !== -1) {
+              (block.data.subSteps[idx] as ReasoningResearchBlock).reasoning =
+                nativeReasoning;
+            }
+          }
+          session.updateBlock(researchBlockId, [
+            {
+              op: 'replace',
+              path: '/data/subSteps',
+              value: block.data.subSteps,
+            },
+          ]);
+        }
+
         if (partialRes.toolCallChunk.length > 0) {
           partialRes.toolCallChunk.forEach((tc) => {
             if (
               tc.name === '__reasoning_preamble' &&
               tc.arguments['plan'] &&
               !reasoningEmitted &&
+              !nativeReasoning &&
               block &&
               block.type === 'research'
             ) {
@@ -129,6 +161,7 @@ class Researcher {
               tc.name === '__reasoning_preamble' &&
               tc.arguments['plan'] &&
               reasoningEmitted &&
+              !nativeReasoning &&
               block &&
               block.type === 'research'
             ) {

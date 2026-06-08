@@ -45,6 +45,17 @@ const providerConfigFields: UIConfigField[] = [
  * and battle-tested choices.  Users can add more via the Settings UI.
  */
 const DEFAULT_CHAT_MODELS: Model[] = [
+  // DeepSeek V4 — Bokari's base model (native reasoning, 1M context, very cheap).
+  // Flash is the default everywhere; Pro is the higher-quality fallback. Both are
+  // paid (no free tier) so the OpenRouter account needs credits.
+  { key: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash (reasoning, base)' },
+  { key: 'deepseek/deepseek-v4-pro', name: 'DeepSeek V4 Pro (reasoning)' },
+  // NVIDIA Nemotron 3 — alternate base family (general-purpose reasoning,
+  // 1M context, strong multilingual). `:free` is rate-limited.
+  { key: 'nvidia/nemotron-3-ultra-550b-a55b:free', name: 'Nemotron 3 Ultra (NVIDIA, free)' },
+  { key: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra (NVIDIA, 550B)' },
+  { key: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super (NVIDIA, free)' },
+  { key: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super (NVIDIA, 120B)' },
   { key: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B Instruct (OSS)' },
   { key: 'meta-llama/llama-3.1-8b-instruct', name: 'Llama 3.1 8B Instruct (OSS, fast)' },
   { key: 'qwen/qwen3-32b', name: 'Qwen3 32B (OSS)' },

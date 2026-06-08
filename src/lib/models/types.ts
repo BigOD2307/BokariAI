@@ -64,6 +64,10 @@ type GenerateTextOutput = {
 type StreamTextOutput = {
   contentChunk: string;
   toolCallChunk: ToolCall[];
+  /** Native model reasoning ("thinking") delta, when the model emits it
+   *  (e.g. DeepSeek V4 / reasoning models via OpenRouter). Surfaced in the
+   *  research steps as the "Reflexion" sub-step. Empty for non-reasoning models. */
+  reasoningChunk?: string;
   additionalInfo?: Record<string, any>;
   done?: boolean;
 };

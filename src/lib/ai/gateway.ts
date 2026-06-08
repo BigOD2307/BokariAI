@@ -233,3 +233,37 @@ export async function chatWithFallback<T>(
     return await call(fallback);
   }
 }
+
+/**
+ * Load the configured base chat model (getAiConfig().chat) as a ready-to-use
+ * LLM, falling back to the configured fallback model if the primary can't be
+ * loaded. This is the single source of truth used by BOTH the gateway helpers
+ * and the interactive chat writer (see runBackground.ts), so "the base model"
+ * is one env-driven decision rather than per-browser localStorage state.
+ *
+ * Note: this resolves at LOAD time. A rate-limit (429) on a `:free` model
+ * surfaces at CALL time and is not caught here — for a rock-solid interactive
+ * path, point BOKARI_CHAT_MODEL at the paid model id.
+ */
+export async function loadConfiguredChatModel(): Promise<BaseLLM<any>> {
+  const cfg = getAiConfig().chat;
+  try {
+    return (await loadChatByType(cfg.provider, cfg.model)) as BaseLLM<any>;
+  } catch (err) {
+    console.warn(
+      `[ai/gateway] configured chat ${cfg.provider}/${cfg.model} not loadable: ${
+        (err as any)?.message ?? err
+      } — using fallback ${cfg.fallback.provider}/${cfg.fallback.model}`,
+    );
+    return (await loadChatByType(
+      cfg.fallback.provider,
+      cfg.fallback.model,
+    )) as BaseLLM<any>;
+  }
+}
+
+/** Load the configured embedding model (getAiConfig().embedding). */
+export async function loadConfiguredEmbeddingModel(): Promise<BaseEmbedding<any>> {
+  const cfg = getAiConfig().embedding;
+  return (await loadEmbeddingByType(cfg.provider, cfg.model)) as BaseEmbedding<any>;
+}

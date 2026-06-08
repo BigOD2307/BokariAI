@@ -222,8 +222,18 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     for await (const chunk of stream) {
       if (chunk.choices && chunk.choices.length > 0) {
         const toolCalls = chunk.choices[0].delta.tool_calls;
+        // Reasoning models (e.g. DeepSeek V4 via OpenRouter) stream their
+        // chain-of-thought in `delta.reasoning` (some return `reasoning_content`).
+        // The OpenAI SDK doesn't type these, so we read them defensively. They
+        // are absent for non-reasoning models, making this a no-op there.
+        const delta = chunk.choices[0].delta as unknown as {
+          reasoning?: string;
+          reasoning_content?: string;
+        };
+        const reasoningChunk = delta.reasoning ?? delta.reasoning_content ?? '';
         yield {
           contentChunk: chunk.choices[0].delta.content || '',
+          reasoningChunk,
           toolCallChunk:
             toolCalls?.map((tc) => {
               if (!recievedToolCalls[tc.index]) {

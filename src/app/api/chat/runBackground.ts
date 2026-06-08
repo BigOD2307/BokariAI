@@ -16,6 +16,10 @@ import SessionManager from '@/lib/session';
 import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
 import { createServerClient } from '@/lib/supabase/server';
+import {
+  loadConfiguredChatModel,
+  loadConfiguredEmbeddingModel,
+} from '@/lib/ai/gateway';
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { recordTiming } from '@/lib/observability/ttfb';
 import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
@@ -94,16 +98,43 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
 
     const tLoad = startTimer();
     const registry = new ModelRegistry();
+    // The base model is one env-driven decision (getAiConfig → Nemotron), not
+    // per-browser localStorage. When BOKARI_CHAT_MODEL is set we resolve the
+    // model server-side via the gateway; otherwise we honour the client's
+    // selection. Either path degrades gracefully if its model can't load.
+    const useConfigured = !!process.env.BOKARI_CHAT_MODEL;
     const [llm, embedding] = await Promise.all([
-      registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
-      registry.loadEmbeddingModel(
-        body.embeddingModel.providerId,
-        body.embeddingModel.key,
-      ),
+      useConfigured
+        ? loadConfiguredChatModel().catch((err) => {
+            console.warn(
+              '[Bokari] configured chat model failed; using client-selected:',
+              err,
+            );
+            return registry.loadChatModel(
+              body.chatModel.providerId,
+              body.chatModel.key,
+            );
+          })
+        : registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
+      useConfigured
+        ? loadConfiguredEmbeddingModel().catch((err) => {
+            console.warn(
+              '[Bokari] configured embedding model failed; using client-selected:',
+              err,
+            );
+            return registry.loadEmbeddingModel(
+              body.embeddingModel.providerId,
+              body.embeddingModel.key,
+            );
+          })
+        : registry.loadEmbeddingModel(
+            body.embeddingModel.providerId,
+            body.embeddingModel.key,
+          ),
     ]);
     logStage('chat.load_models', tLoad(), {
-      chat: body.chatModel.key,
-      embed: body.embeddingModel.key,
+      chat: useConfigured ? 'configured' : body.chatModel.key,
+      embed: useConfigured ? 'configured' : body.embeddingModel.key,
     });
     recordTiming('chat.load_models', tLoad());
 
