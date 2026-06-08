@@ -131,12 +131,12 @@ const MessageBox = ({
   const answerMarkdown = (
     <Markdown
       className={cn(
-        'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-semibold prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-medium dark:prose-invert prose-p:leading-[1.75] prose-pre:p-0',
-        'max-w-none break-words text-black/80 dark:text-white/80 text-[15px]',
+        'prose prose-h1:mb-3 prose-h2:mb-2.5 prose-h2:mt-7 prose-h2:font-semibold prose-h3:mt-5 prose-h3:mb-2 prose-h3:font-medium prose-headings:tracking-tight dark:prose-invert prose-p:leading-[1.85] prose-p:my-3.5 prose-pre:p-0',
+        'max-w-none break-words text-black/80 dark:text-white/80 text-[14px]',
         'prose-a:text-bokari-600 dark:prose-a:text-bokari-400 prose-a:no-underline hover:prose-a:underline',
         'prose-strong:text-black/90 dark:prose-strong:text-white/90 prose-strong:font-semibold',
-        'prose-li:text-black/75 dark:prose-li:text-white/75',
-        'prose-blockquote:border-bokari-500/30 prose-blockquote:text-black/60 dark:prose-blockquote:text-white/50',
+        'prose-li:text-black/75 dark:prose-li:text-white/75 prose-li:my-1 prose-li:leading-[1.7] prose-ul:my-3 prose-ol:my-3',
+        'prose-blockquote:border-bokari-500/30 prose-blockquote:text-black/60 dark:prose-blockquote:text-white/50 prose-table:text-[13px]',
       )}
       options={markdownOverrides}
     >

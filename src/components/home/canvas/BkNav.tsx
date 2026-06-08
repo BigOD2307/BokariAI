@@ -108,16 +108,6 @@ const BkNav = () => {
               Connexion
             </button>
           )}
-          {!authLoading && user && (
-            <Link
-              href="/"
-              aria-label="Mon historique"
-              className="flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--bk-teal,#14b8a6)] focus-visible:ring-offset-2"
-            >
-              <BokariAvatar size={36} />
-            </Link>
-          )}
-
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -182,8 +172,8 @@ const BkNav = () => {
             );
           })}
 
-          <li className="mt-2 border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/15 pt-3">
-            {!user ? (
+          {!user && (
+            <li className="mt-2 border-t-2 border-dashed border-[color:var(--bk-ink,#0f172a)]/15 pt-3">
               <button
                 type="button"
                 onClick={() => {
@@ -194,16 +184,8 @@ const BkNav = () => {
               >
                 Connexion
               </button>
-            ) : (
-              <Link
-                href="/"
-                onClick={() => setOpen(false)}
-                className="font-hand flex items-center justify-center gap-2 rounded-[8px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white px-4 py-2.5 text-[16px] uppercase tracking-wide text-[color:var(--bk-ink,#0f172a)] shadow-[0_3px_0_rgba(15,23,42,0.06)]"
-              >
-                Mon historique
-              </Link>
-            )}
-          </li>
+            </li>
+          )}
         </ul>
       </div>
     </header>

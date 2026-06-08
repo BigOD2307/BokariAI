@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useChat } from '@/lib/hooks/useChat';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { exportChatAsPDF, exportChatAsMarkdown } from '@/lib/export/chatExport';
+import { freshChatId } from '@/lib/uploads/landingHandoff';
 
 /**
  * Mobile chat-actions menu — the "+" in the mobile top bar. Opens
@@ -94,7 +95,7 @@ const MobileActionsMenu = () => {
                 className={ITEM}
                 onClick={() => {
                   close();
-                  router.push('/');
+                  router.push(`/c/${freshChatId()}`);
                 }}
               >
                 <MessageSquarePlus
