@@ -4,7 +4,7 @@ import BkArticle from '@/components/blog/BkArticle';
 import { getArticle, getArticleSlugs, getRelatedArticles } from '@/lib/blog/articles';
 import { getCategory } from '@/lib/blog/categories';
 
-const SITE = 'https://bokari.dev';
+const SITE = 'https://bokari.space';
 
 export const dynamic = 'force-dynamic';
 

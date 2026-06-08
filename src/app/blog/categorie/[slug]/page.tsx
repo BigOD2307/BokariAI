@@ -23,7 +23,7 @@ export async function generateMetadata({
   return {
     title: `${cat.label} — Le blog de Bokari`,
     description: cat.description,
-    alternates: { canonical: `https://bokari.dev/blog/categorie/${cat.slug}` },
+    alternates: { canonical: `https://bokari.space/blog/categorie/${cat.slug}` },
     robots: 'index,follow',
   };
 }

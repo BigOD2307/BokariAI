@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: 'Le blog de Bokari — actus vérifiées & fact-checks',
   description:
     "Articles vérifiés et sourcés par Bokari : fact-checks, économie, politique, tech et société africaines — chaque fait cité.",
-  alternates: { canonical: 'https://bokari.dev/blog' },
+  alternates: { canonical: 'https://bokari.space/blog' },
   robots: 'index,follow',
 };
 

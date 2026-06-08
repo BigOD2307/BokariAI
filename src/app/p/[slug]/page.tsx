@@ -3,7 +3,7 @@ import PublicChatView from '@/components/Public/PublicChatView';
 import type { PublicChatView as PublicChatViewData } from '@/lib/types/shares';
 import type { Metadata } from 'next';
 
-const STRAPI = 'https://bokari.dev';
+const STRAPI = 'https://bokari.space';
 const SITE_NAME = 'Bokari';
 const SITE_TAGLINE = 'AI for Africa, with citations you can trust';
 

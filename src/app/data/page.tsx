@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "L'Afrique en chiffres — les données du continent | Bokari",
   description:
     "Population, démographie, économie et numérique : les chiffres clés de l'Afrique en graphiques, sourcés (ONU, Banque mondiale, GSMA, FMI, BAD) et mis à jour chaque semaine par Bokari.",
-  alternates: { canonical: 'https://bokari.dev/data' },
+  alternates: { canonical: 'https://bokari.space/data' },
   robots: 'index,follow',
 };
 
