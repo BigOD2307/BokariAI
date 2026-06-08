@@ -41,6 +41,9 @@ export async function runArticlesRotation(forceCategory?: string): Promise<JobSu
   await markRunning(job);
   try {
     const res = await generateArticleForCategory(slug);
+    // Record the REAL outcome so a skip/failure is visible in scheduler_state
+    // (it used to always record 'ok', hiding dry beats and LLM errors).
+    await markDone(job, res.ok ? 'ok' : 'error', res.ok ? undefined : res.reason);
     return {
       job,
       category: slug,
@@ -49,12 +52,14 @@ export async function runArticlesRotation(forceCategory?: string): Promise<JobSu
         ? { slug: res.article.slug, title: res.article.title, status: res.article.status }
         : { reason: res.reason }),
     };
+  } catch (err) {
+    await markDone(job, 'error', (err as Error)?.message ?? String(err));
+    throw err;
   } finally {
-    // Always advance, even on a skip/failure, so we don't get stuck on one beat.
+    // Advance regardless so the rotation never stalls globally on one beat.
     if (!forceCategory) {
       await setCursor(job, (cursor + 1) % CATEGORY_ORDER.length);
     }
-    await markDone(job, 'ok');
   }
 }
 
