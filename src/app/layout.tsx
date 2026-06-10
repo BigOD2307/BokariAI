@@ -39,7 +39,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){function show(m){try{var d=document.getElementById('__bkerr');if(!d){d=document.createElement('div');d.id='__bkerr';d.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;font:11px monospace;padding:4px 6px;white-space:pre-wrap;max-height:35vh;overflow:auto';document.body.appendChild(d);}d.textContent=(d.textContent?d.textContent+' | ':'JS ERROR: ')+m;}catch(_){}}window.addEventListener('error',function(e){show((e.message||'err')+' @'+((e.filename||'').split('/').pop())+':'+(e.lineno||0));});window.addEventListener('unhandledrejection',function(e){var r=e.reason;show('promise: '+((r&&(r.message||r.toString&&r.toString()))||'rejection'));});})();",
+              "(function(){window.__bkErrors=[];function show(m){try{window.__bkErrors.push(m);var d=document.getElementById('__bkerr');if(!d){d=document.createElement('div');d.id='__bkerr';d.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;font:11px monospace;padding:4px 6px;white-space:pre-wrap;max-height:35vh;overflow:auto';document.body.appendChild(d);}d.textContent=(d.textContent?d.textContent+' | ':'JS ERROR: ')+m;}catch(_){}}window.addEventListener('error',function(e){show((e.message||'err')+' @'+((e.filename||'').split('/').pop())+':'+(e.lineno||0));});window.addEventListener('unhandledrejection',function(e){var r=e.reason;show('promise: '+((r&&(r.message||r.toString&&r.toString()))||'rejection'));});})();",
           }}
         />
         <ThemeProvider>

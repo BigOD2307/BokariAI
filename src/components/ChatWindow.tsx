@@ -70,6 +70,55 @@ const ChatWindow = () => {
     return () => clearInterval(t);
   }, [isReady]);
 
+  // TEMP beacon: if the app is still not ready after 8s/25s, ship the device's
+  // state + on-device API self-tests to /api/diag so we can see (in server
+  // logs) exactly what stalls on the devices we can't reproduce on.
+  useEffect(() => {
+    if (isReady) return;
+    const probe = async (path: string) => {
+      try {
+        const t0 = Date.now();
+        const r = await Promise.race([
+          fetch(path),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        return r ? `${(r as Response).status} in ${Date.now() - t0}ms` : 'TIMEOUT>8s';
+      } catch (e) {
+        return 'ERR ' + ((e as Error)?.message || 'x');
+      }
+    };
+    const send = async (tag: string) => {
+      const [prov, chats] = await Promise.all([
+        probe('/api/providers'),
+        probe(`/api/chats/${chatId || 'none'}`),
+      ]);
+      try {
+        await fetch('/api/diag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tag,
+            url: window.location.href,
+            ua: navigator.userAgent,
+            flags: { isConfigReady, isMessagesLoaded, newChatCreated, hasError, notFound },
+            errors: (window as unknown as { __bkErrors?: string[] }).__bkErrors || [],
+            prov,
+            chats,
+          }),
+        });
+      } catch {
+        /* nothing else we can do */
+      }
+    };
+    const t1 = setTimeout(() => void send('stall-8s'), 8_000);
+    const t2 = setTimeout(() => void send('stall-25s'), 25_000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady]);
+
   const diag = (
     <span className="mt-1 text-[11px] text-black/30 dark:text-white/25 text-center font-mono">
       JS&nbsp;ok · config&nbsp;{isConfigReady ? '✓' : '…'} · chat&nbsp;
