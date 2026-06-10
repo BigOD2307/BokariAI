@@ -11,10 +11,11 @@ type Props = {
 /**
  * Bokari's avatar — the single, consistent "face" of the chatbot, shown on every
  * surface (nav, sidebar, auth, blog) so it matches the avatar next to chat
- * answers (BokariBot). The source illustration (/public/bokari-chatbot.png) is a
- * head-and-shoulders portrait, so we render it as a zoomed background focused on
- * the FACE — fitting the whole square into the circle left the face tiny. Swap
- * that single file to re-skin Bokari across the whole product.
+ * answers (BokariBot). The source (/public/bokari-face.png) is a 512px square
+ * pre-cropped to the FACE, so we render it 1:1 with object-cover — no CSS zoom,
+ * which kept the avatar soft on high-DPR phones. The browser downscales the
+ * high-res source, so it stays crisp at every size. Swap that single file to
+ * re-skin Bokari across the whole product.
  */
 const BokariAvatar = ({ size = 40, className, ring = true }: Props) => (
   <span
@@ -27,15 +28,12 @@ const BokariAvatar = ({ size = 40, className, ring = true }: Props) => (
     role="img"
     aria-label="Bokari"
   >
-    <span
-      className="block h-full w-full"
-      style={{
-        backgroundImage: "url('/bokari-chatbot.png')",
-        backgroundRepeat: 'no-repeat',
-        // Zoom in and bias upward so the face fills the circle.
-        backgroundSize: '148%',
-        backgroundPosition: '50% 18%',
-      }}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      src="/bokari-face.png"
+      alt=""
+      draggable={false}
+      className="block h-full w-full object-cover"
     />
   </span>
 );

@@ -9,9 +9,9 @@ type Props = {
 /**
  * BokariBot — the chatbot's avatar (the illustrated, tech-suit Bokari). Shown
  * next to assistant answers + the "thinking" indicator in the chat. Served from
- * /public/bokari-chatbot.png (head-and-shoulders), rendered as a zoomed
- * background focused on the FACE so it reads clearly at small sizes — same
- * framing as BokariAvatar. Dark-aware ring for light + dark chat surfaces.
+ * /public/bokari-face.png (512px square, pre-cropped to the FACE), rendered 1:1
+ * with object-cover — same framing as BokariAvatar, no CSS zoom (which left it
+ * soft on high-DPR phones). Dark-aware ring for light + dark chat surfaces.
  */
 const BokariBot = ({ size = 28, className }: Props) => (
   <span
@@ -23,14 +23,12 @@ const BokariBot = ({ size = 28, className }: Props) => (
     role="img"
     aria-label="Bokari"
   >
-    <span
-      className="block h-full w-full"
-      style={{
-        backgroundImage: "url('/bokari-chatbot.png')",
-        backgroundRepeat: 'no-repeat',
-        backgroundSize: '148%',
-        backgroundPosition: '50% 18%',
-      }}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      src="/bokari-face.png"
+      alt=""
+      draggable={false}
+      className="block h-full w-full object-cover"
     />
   </span>
 );
