@@ -4,7 +4,7 @@ import Navbar from './Navbar';
 import Chat from './Chat';
 import EmptyChatMessageInput from './EmptyChatMessageInput';
 import NextError from 'next/error';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useChat } from '@/lib/hooks/useChat';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -37,21 +37,42 @@ const ChatWindow = () => {
     }
   }, [user, chatId, messages.length]);
 
-  if (hasError) {
+  // Watchdog: the app must NEVER spin on "Chargement…" forever, on any platform
+  // or for any reason (slow network, a stalled API, a wedged auth call). If we
+  // aren't ready within a sane window, fall through to an actionable retry
+  // screen instead of an endless spinner.
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (isReady || hasError) {
+      setStalled(false);
+      return;
+    }
+    const t = setTimeout(() => setStalled(true), 12_000);
+    return () => clearTimeout(t);
+  }, [isReady, hasError]);
+
+  if (hasError || stalled) {
     return (
       <div className="relative">
         <div className="absolute w-full flex flex-row items-center justify-end mr-5 mt-5">
           <SettingsButtonMobile />
         </div>
-        <div className="flex flex-col items-center justify-center min-h-screen gap-3">
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4">
           <div className="w-12 h-12 rounded-2xl bg-red-500/[0.06] flex items-center justify-center">
             <span className="text-red-500 text-lg">!</span>
           </div>
           <p className="text-black/50 dark:text-white/40 text-sm text-center">
-            Impossible de se connecter au serveur.
+            Connexion un peu lente…
             <br />
-            <span className="text-[13px] text-black/35 dark:text-white/25">Veuillez reessayer plus tard.</span>
+            <span className="text-[13px] text-black/35 dark:text-white/25">Réessaie, ça repart.</span>
           </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-xl border-2 border-bokari-500/30 bg-bokari-500/[0.06] px-4 py-2 text-[13px] font-medium text-bokari-600 transition-colors hover:bg-bokari-500/10 dark:text-bokari-300"
+          >
+            Réessayer
+          </button>
         </div>
       </div>
     );

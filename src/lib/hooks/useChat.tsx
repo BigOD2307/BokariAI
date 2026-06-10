@@ -112,11 +112,21 @@ const checkConfig = async (
       'embeddingModelProviderId',
     );
 
-    const res = await fetch(`/api/providers`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    // Hard timeout: a stalled /api/providers must surface a clean error (with a
+    // "Réessayer" path) rather than pin the app on "Chargement…" forever.
+    const cfgAbort = new AbortController();
+    const cfgTimer = setTimeout(() => cfgAbort.abort(), 15_000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/providers`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: cfgAbort.signal,
+      });
+    } finally {
+      clearTimeout(cfgTimer);
+    }
 
     if (!res.ok) {
       throw new Error(
@@ -210,9 +220,19 @@ const loadMessages = async (
   treatMissingAsNew = false,
   setNewChatCreated?: (created: boolean) => void,
 ) => {
-  const res = await authFetch(`/api/chats/${chatId}`, {
-    method: 'GET',
-  });
+  // Hard timeout so a stalled GET can't pin the app on "Chargement…" — the
+  // caller's .catch then lets the UI fall through to a usable empty chat.
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 15_000);
+  let res: Response;
+  try {
+    res = await authFetch(`/api/chats/${chatId}`, {
+      method: 'GET',
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(t);
+  }
 
   if (res.status === 404) {
     // A missing chat is treated as a fresh / empty chat — the user can type, or
@@ -598,7 +618,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           setFileIds,
           !!initialMessage,
           setNewChatCreated,
-        );
+        ).catch((err) => {
+          // Network/timeout while loading history: never hang. Treat as a fresh,
+          // usable empty chat so the composer (and any pending ?q=) can proceed.
+          console.warn('[Bokari] loadMessages failed, falling back to new chat:', err);
+          setNewChatCreated(true);
+          setIsMessagesLoaded(true);
+        });
       }
     } else if (!chatId) {
       setNewChatCreated(true);
