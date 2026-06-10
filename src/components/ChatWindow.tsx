@@ -15,7 +15,16 @@ import { Loader2 } from 'lucide-react';
 export type { BaseMessage, Message, File, Widget } from '@/lib/types/window';
 
 const ChatWindow = () => {
-  const { hasError, notFound, messages, isReady, chatId } = useChat();
+  const {
+    hasError,
+    notFound,
+    messages,
+    isReady,
+    chatId,
+    isConfigReady,
+    isMessagesLoaded,
+    newChatCreated,
+  } = useChat();
   const { user } = useAuth();
   const pendingQuery = useSearchParams().get('q');
 
@@ -51,6 +60,24 @@ const ChatWindow = () => {
     return () => clearTimeout(t);
   }, [isReady, hasError]);
 
+  // Client-only elapsed counter while we wait. Because this only advances after
+  // hydration, its mere presence on screen proves the client JS ran — and the
+  // per-flag breakdown tells us exactly what's stalling on a given device.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (isReady) return;
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isReady]);
+
+  const diag = (
+    <span className="mt-1 text-[11px] text-black/30 dark:text-white/25 text-center font-mono">
+      JS&nbsp;ok · config&nbsp;{isConfigReady ? '✓' : '…'} · chat&nbsp;
+      {isMessagesLoaded ? '✓' : '…'} · new&nbsp;{newChatCreated ? '✓' : '…'} ·{' '}
+      {elapsed}s
+    </span>
+  );
+
   if (hasError || stalled) {
     return (
       <div className="relative">
@@ -73,6 +100,7 @@ const ChatWindow = () => {
           >
             Réessayer
           </button>
+          {diag}
         </div>
       </div>
     );
@@ -80,9 +108,10 @@ const ChatWindow = () => {
 
   if (!isReady) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen w-full gap-3">
+      <div className="flex flex-col items-center justify-center min-h-screen w-full gap-2">
         <Loader2 className="w-6 h-6 text-bokari-500 animate-spin" />
         <span className="text-[13px] text-black/25 dark:text-white/20">Chargement...</span>
+        {elapsed >= 3 && diag}
       </div>
     );
   }

@@ -55,6 +55,8 @@ type ChatContext = {
   chatId: string | undefined;
   optimizationMode: string;
   isMessagesLoaded: boolean;
+  isConfigReady: boolean;
+  newChatCreated: boolean;
   loading: boolean;
   notFound: boolean;
   messageAppeared: boolean;
@@ -300,6 +302,8 @@ export const chatContext = createContext<ChatContext>({
   sources: [],
   hasError: false,
   isMessagesLoaded: false,
+  isConfigReady: false,
+  newChatCreated: false,
   isReady: false,
   loading: false,
   messageAppeared: false,
@@ -1115,6 +1119,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         chatId,
         hasError,
         isMessagesLoaded,
+        isConfigReady,
+        newChatCreated,
         isReady,
         loading,
         messageAppeared,
