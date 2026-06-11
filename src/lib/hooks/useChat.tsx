@@ -671,20 +671,31 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     sendMessage(messageToRewrite.query, messageToRewrite.messageId, true);
   };
 
+  // During a landing→chat client transition, this effect runs in the SAME
+  // commit as the route-change reset above — i.e. against the PREVIOUS page's
+  // state, where isReady is still true for the OLD (landing-minted random)
+  // chatId. Firing then sent the query to that stale chatId, replaceState'd
+  // the URL (silently dropping ?q=) and injected a phantom message that kept
+  // `messages.length === 0` false — so the new chat's init effect never ran,
+  // isReady never turned true again, and every landing search hung on
+  // "Chargement…" (the mobile bug; it affected ALL platforms). Gate the send
+  // on the chat state being synced to the route.
   useEffect(() => {
     const query = autoSendQuery ?? initialMessage;
+    const routeSynced = !params.chatId || params.chatId === chatId;
     console.debug('[Bokari] autosend eval', {
       isReady,
       isConfigReady,
       hasQuery: !!query,
+      routeSynced,
     });
-    if (isReady && isConfigReady && query) {
+    if (isReady && isConfigReady && query && routeSynced) {
       console.debug('[Bokari] autosend FIRING:', query);
       setAutoSendQuery(null);
       sendMessage(query);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigReady, isReady, initialMessage, autoSendQuery]);
+  }, [isConfigReady, isReady, initialMessage, autoSendQuery, chatId, params.chatId]);
 
   const getMessageHandler = (message: Message) => {
     const messageId = message.messageId;
@@ -897,6 +908,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     rewrite = false,
   ) => {
     if (loading || !message) return;
+    // Never send against a chatId that doesn't match the route — a stale-state
+    // send mid-navigation corrupts the URL and wedges the new chat's init.
+    if (params.chatId && chatId !== params.chatId) {
+      console.debug('[Bokari] sendMessage skipped: stale chatId', {
+        state: chatId,
+        route: params.chatId,
+      });
+      return;
+    }
     console.debug('[Bokari] sendMessage enter:', String(message).slice(0, 40));
     // Don't send before the models are configured — posting empty model ids
     // makes the backend reject with a 400 (plain JSON, not an SSE stream),
