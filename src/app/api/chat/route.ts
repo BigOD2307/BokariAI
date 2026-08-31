@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ModelWithProvider } from '@/lib/models/types';
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { buildChatStream, ChatStreamBody } from './stream';
+import { chargeOrReject } from '@/lib/quota/guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -75,6 +76,13 @@ export const POST = async (req: Request) => {
         { status: 400 },
       );
     }
+
+    // Charge BEFORE any work happens: an unmetered LLM/search call is a bill,
+    // a refused-but-uncharged one is just a 429. Guests are allowed here (no
+    // requireAccount) — they're metered against a fingerprinted daily quota
+    // instead of a user id.
+    const charged = await chargeOrReject(req, { mode: body.optimizationMode });
+    if (charged instanceof Response) return charged;
 
     const stream = buildChatStream(req, body, tTotal);
     return new Response(stream, {
