@@ -10,9 +10,28 @@ import { File, ExternalLink, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { Chunk } from '@/lib/types';
 
+const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** C7: every source reaching the panel now has `metadata.publishedAt`
+ *  (`agents/search/evidence.ts`'s `toChunk`) — a source with no known date
+ *  is data too, so it says "date inconnue" instead of showing nothing. */
+const formatSourceDate = (publishedAt: unknown): string => {
+  if (typeof publishedAt !== 'string' || !publishedAt) return 'date inconnue';
+  const parsed = new Date(publishedAt);
+  return Number.isNaN(parsed.getTime()) ? 'date inconnue' : DATE_FMT.format(parsed);
+};
+
 const SourceCard = ({ source, index }: { source: Chunk; index: number }) => {
   const isFile = source.metadata.url.includes('file_id://');
   const domain = isFile ? '' : (() => {
+    if (typeof source.metadata.domain === 'string' && source.metadata.domain) {
+      return source.metadata.domain;
+    }
     try { return new URL(source.metadata.url).hostname.replace('www.', ''); } catch { return ''; }
   })();
 
@@ -48,6 +67,11 @@ const SourceCard = ({ source, index }: { source: Chunk; index: number }) => {
           {index + 1}
         </span>
       </div>
+      {!isFile && (
+        <span className="text-[10px] text-black/30 dark:text-white/25">
+          {formatSourceDate(source.metadata.publishedAt)}
+        </span>
+      )}
     </a>
   );
 };

@@ -4,6 +4,7 @@ import { classify } from './classifier';
 import Researcher from './researcher';
 import { getWriterPrompt } from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
+import { buildEvidence } from './evidence';
 
 class APISearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
@@ -49,13 +50,13 @@ class APISearchAgent {
       type: 'researchComplete',
     });
 
-    const finalContext =
-      searchResults?.searchFindings
-        .map(
-          (f, index) =>
-            `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
-        )
-        .join('\n') || '';
+    // C7: same stable [S1]/[S2] evidence contract as the interactive chat
+    // path (agents/search/index.ts) — getWriterPrompt now expects an
+    // Evidence bundle, not a raw context string. This endpoint doesn't run
+    // the post-stream citation audit (it's a raw pass-through stream to a
+    // third-party caller, not block-based), but the prompt/citation format
+    // must still match what the writer is actually instructed to produce.
+    const evidenceBundle = buildEvidence(searchResults?.searchFindings ?? []);
 
     const widgetContext = widgetOutputs
       .map((o) => {
@@ -63,12 +64,12 @@ class APISearchAgent {
       })
       .join('\n-------------\n');
 
-    const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
-
     const writerPrompt = getWriterPrompt(
-      finalContextWithWidgets,
+      evidenceBundle,
       input.config.systemInstructions,
       input.config.mode,
+      undefined,
+      widgetContext || undefined,
     );
 
     const answerStream = input.config.llm.streamText({

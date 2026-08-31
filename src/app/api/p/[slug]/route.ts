@@ -15,7 +15,8 @@ const stripAssistantText = (raw: string): string => {
     .replace(/<ChartSpec>[\s\S]*?<\/ChartSpec>/g, '')
     .replace(/```[\s\S]*?```/g, '')
     .replace(/<source>[\s\S]*?<\/source>/g, '')
-    .replace(/\[\d+\]/g, '')
+    // C7: citations are now stable ids ([S1], [S3]…), not positions.
+    .replace(/\[S\d{1,3}\]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 };
