@@ -19,7 +19,7 @@ import { embedOne } from '@/lib/ai/gateway';
 import { runChatBackground } from './runBackground';
 import { tryServeCacheHit, persistCacheHit } from './cacheHit';
 import { wireSessionToWriter } from './sessionBridge';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 
 /** Body shape required by `buildChatStream`.  Matches the POST
  *  route's validated body. */
@@ -79,16 +79,14 @@ export const buildChatStream = (
         // in the user's history (the live agent path does this; the cache
         // fast-path used to skip it, so repeat queries vanished from history).
         try {
-          const {
-            data: { user },
-          } = await createServerClient(req).auth.getUser();
+          const caller = await getCaller(req);
           await persistCacheHit({
             chatId: message.chatId,
             messageId: message.messageId,
             query: message.content,
             sources: body.sources,
             fileIds: body.files,
-            userId: user?.id,
+            userId: caller?.userId ?? null,
             responseText: cachedText,
           });
         } catch (e) {

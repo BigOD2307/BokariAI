@@ -6,6 +6,7 @@ import BaseEmbedding from '../../base/embedding';
 import BaseModelProvider from '../../base/provider';
 import BaseLLM from '../../base/llm';
 import OpenAILLM from './openaiLLM';
+import { assertAllowedProviderBaseURL } from '@/lib/net/url-guard';
 
 interface OpenAIConfig {
   apiKey: string;
@@ -134,6 +135,8 @@ class OpenAIProvider extends BaseModelProvider<OpenAIConfig> {
       throw new Error(
         'Invalid config provided. API key and base URL must be provided',
       );
+
+    assertAllowedProviderBaseURL('openai', String(raw.baseURL));
 
     return {
       apiKey: String(raw.apiKey),

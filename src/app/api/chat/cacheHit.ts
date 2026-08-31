@@ -17,6 +17,7 @@ import { recordTiming } from '@/lib/observability/ttfb';
 import { tryGetCachedResponse } from '@/lib/cache/semantic';
 import { embedOne } from '@/lib/ai/gateway';
 import supabase from '@/lib/db';
+import { assertChatAccess } from '@/lib/auth/ownership';
 
 type Writer = (line: string) => Promise<void>;
 
@@ -70,24 +71,13 @@ export const persistCacheHit = async (input: {
   query: string;
   sources: string[];
   fileIds: string[];
-  userId?: string;
+  userId?: string | null;
   responseText: string;
 }): Promise<void> => {
   try {
-    const { data: exists } = await supabase
-      .from('chats')
-      .select('id')
-      .eq('id', input.chatId)
-      .maybeSingle();
-    if (!exists) {
-      await supabase.from('chats').insert({
-        id: input.chatId,
-        user_id: input.userId || null,
-        title: input.query,
-        sources: input.sources || [],
-        files: input.fileIds.map((id) => ({ fileId: id, name: 'Uploaded File' })),
-      });
-    }
+    // Never write into a chat the caller does not own (BUG-15 class) — a
+    // cache hit for someone else's chatId is silently skipped, not persisted.
+    await assertChatAccess(input.chatId, input.userId ?? null, input.query);
 
     const responseBlocks = [
       { id: crypto.randomUUID(), type: 'text', data: input.responseText },

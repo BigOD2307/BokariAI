@@ -24,8 +24,6 @@ import type { PublicChatView as Data } from '@/lib/types/shares';
 const mockData: Data = {
   share: {
     id: 'shr_abc123',
-    chatId: 'c1',
-    userId: 'u1',
     slug: 'test123abc',
     isIndexed: true,
     anonymousAuthor: false,
@@ -35,7 +33,6 @@ const mockData: Data = {
     revokedAt: null,
   },
   chat: {
-    id: 'c1',
     title: 'Comment fonctionne Bokari ?',
     createdAt: '2026-06-01T10:00:00Z',
   },

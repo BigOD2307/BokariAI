@@ -15,7 +15,7 @@ import SearchAgent from '@/lib/agents/search';
 import SessionManager from '@/lib/session';
 import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller, HttpError } from '@/lib/auth/require';
 import {
   loadConfiguredChatModel,
   loadConfiguredEmbeddingModel,
@@ -46,34 +46,47 @@ type RunArgs = {
   writeCacheAfterEnd: (session: SessionManager) => Promise<void>;
 };
 
+/**
+ * Ensure `input.id` exists as a chat, creating it on first use, and assert the
+ * caller may write to it. Runs with the service-role client, so authorisation
+ * is entirely ours: a chat owned by someone else is reported as 404, never
+ * written to (BUG-15 / BUG-28 — this used to be fire-and-forget and ownerless).
+ */
 const ensureChatExists = async (input: {
   id: string;
   sources: SearchSources[];
   query: string;
   fileIds: string[];
-  userId?: string;
-}) => {
-  try {
-    const { data: exists } = await supabase
-      .from('chats')
-      .select('id')
-      .eq('id', input.id)
-      .maybeSingle();
+  userId: string | null;
+}): Promise<void> => {
+  const { data: exists, error: lookupError } = await supabase
+    .from('chats')
+    .select('id, user_id')
+    .eq('id', input.id)
+    .maybeSingle();
 
-    if (!exists) {
-      await supabase.from('chats').insert({
-        id: input.id,
-        user_id: input.userId || null,
-        title: input.query,
-        sources: input.sources || [],
-        files: input.fileIds.map((id) => ({
-          fileId: id,
-          name: UploadManager.getFile(id)?.name || 'Uploaded File',
-        })),
-      });
+  if (lookupError) throw new HttpError(500, 'CHAT_LOOKUP_FAILED');
+
+  if (!exists) {
+    const { error: insertError } = await supabase.from('chats').insert({
+      id: input.id,
+      user_id: input.userId,
+      title: input.query,
+      sources: input.sources || [],
+      files: input.fileIds.map((id) => ({
+        fileId: id,
+        name: UploadManager.getFile(id)?.name || 'Uploaded File',
+      })),
+    });
+    // A concurrent insert of the same id is fine; anything else is not.
+    if (insertError && insertError.code !== '23505') {
+      throw new HttpError(500, 'CHAT_CREATE_FAILED');
     }
-  } catch (err) {
-    console.error('Failed to check/save chat:', err);
+    return;
+  }
+
+  if (exists.user_id !== input.userId) {
+    throw new HttpError(404, 'NOT_FOUND');
   }
 };
 
@@ -89,12 +102,20 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
   let session: SessionManager | null = null;
   try {
     const tAuth = startTimer();
-    const authClient = createServerClient(req);
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
-    logStage('chat.auth', tAuth(), { hasUser: !!user });
+    const caller = await getCaller(req);
+    const userId = caller?.userId ?? null;
+    logStage('chat.auth', tAuth(), { hasUser: !!caller });
     recordTiming('chat.auth', tAuth());
+
+    // Fail fast, before any model/search work is paid for: a chatId that
+    // belongs to someone else (or a lookup failure) stops the request here.
+    await ensureChatExists({
+      id: body.message.chatId,
+      sources: body.sources as SearchSources[],
+      fileIds: body.files,
+      query: message.content,
+      userId,
+    });
 
     const tLoad = startTimer();
     const registry = new ModelRegistry();
@@ -182,14 +203,6 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
       },
     );
 
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: message.content,
-      userId: user?.id,
-    });
-
     const tAgent = startTimer();
     agent
       .searchAsync(session, {
@@ -197,6 +210,7 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
         followUp: message.content,
         chatId: body.message.chatId,
         messageId: body.message.messageId,
+        userId,
         config: {
           llm,
           fastLlm,

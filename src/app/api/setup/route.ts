@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import { requireAdmin, HttpError } from '@/lib/auth/require';
 
 /**
  * GET /api/setup
@@ -20,6 +21,14 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
 };
 
 export async function GET(_req: NextRequest) {
+  try {
+    await requireAdmin(_req);
+  } catch (err) {
+    return err instanceof HttpError
+      ? err.toResponse()
+      : NextResponse.json({}, { status: 404 });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {

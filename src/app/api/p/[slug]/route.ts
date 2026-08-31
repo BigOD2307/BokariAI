@@ -97,8 +97,9 @@ export async function GET(
   const response: PublicChatView = {
     share: {
       id: share.id,
-      chatId: share.chatId,
-      userId: share.userId,
+      // chatId/userId deliberately omitted: they are internal ids the client
+      // needs nowhere, and publishing them lets a visitor probe /api/chats/[id]
+      // and re-derive another user's memory context (BUG-15).
       slug: share.slug,
       isIndexed: share.isIndexed,
       anonymousAuthor: share.anonymousAuthor,
@@ -108,7 +109,8 @@ export async function GET(
       revokedAt: share.revokedAt,
     },
     chat: {
-      id: mappedChat.id,
+      // No `id` here: it IS the private chatId (same row), which must not
+      // reach an unauthenticated visitor — see the note on `share` above.
       title: mappedChat.title,
       createdAt: mappedChat.createdAt,
     },

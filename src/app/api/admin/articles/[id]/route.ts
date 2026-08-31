@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth/admin';
+import { requireAdmin, HttpError } from '@/lib/auth/require';
 import {
   getArticleById,
   setArticleStatus,
@@ -18,8 +18,11 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const admin = await requireAdmin(req);
-  if (!admin) return Response.json({ error: 'forbidden' }, { status: 403 });
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+  }
 
   const { id } = await ctx.params;
   const existing = await getArticleById(id);
@@ -58,8 +61,11 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const admin = await requireAdmin(req);
-  if (!admin) return Response.json({ error: 'forbidden' }, { status: 403 });
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+  }
   const { id } = await ctx.params;
   const article = await getArticleById(id);
   if (!article) return Response.json({ error: 'not found' }, { status: 404 });

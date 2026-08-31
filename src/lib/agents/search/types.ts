@@ -30,6 +30,8 @@ export type SearchAgentInput = {
   config: SearchAgentConfig;
   chatId: string;
   messageId: string;
+  /** Verified caller id (from the auth middleware), or null for a guest. */
+  userId?: string | null;
 };
 
 export type WidgetInput = {
