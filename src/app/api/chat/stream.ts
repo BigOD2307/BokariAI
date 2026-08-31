@@ -14,7 +14,7 @@
  */
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { recordTiming } from '@/lib/observability/ttfb';
-import { tryGetCachedResponse, cacheResponse } from '@/lib/cache/semantic';
+import { cacheResponse, hashHistory, type CacheScope } from '@/lib/cache/semantic';
 import { embedOne } from '@/lib/ai/gateway';
 import { runChatBackground } from './runBackground';
 import { tryServeCacheHit, persistCacheHit } from './cacheHit';
@@ -63,16 +63,21 @@ export const buildChatStream = (
     }
   };
 
+  // Cache scope: mode + recent history + files + enabled sources. A request
+  // grounded in uploaded files never reads or writes the cache at all
+  // (isCacheable) — see src/lib/cache/semantic.ts for why (BUG-25).
+  const cacheScope: CacheScope = {
+    mode: body.optimizationMode,
+    historyHash: hashHistory(body.history),
+    fileIds: body.files,
+    sources: body.sources,
+  };
+
   // All async work happens here, AFTER the stream is returned.
   void (async () => {
     try {
-      const cachedText = await tryServeCacheHit(
-        message.content,
-        body.optimizationMode,
-        safeWrite,
-        tTotal,
-      );
-      if (cachedText !== null) {
+      const cacheHit = await tryServeCacheHit(message.content, cacheScope, safeWrite, tTotal);
+      if (cacheHit !== null) {
         // Persist the cache-hit conversation so it shows up — and opens fully —
         // in the user's history (the live agent path does this; the cache
         // fast-path used to skip it, so repeat queries vanished from history).
@@ -82,10 +87,10 @@ export const buildChatStream = (
             chatId: message.chatId,
             messageId: message.messageId,
             query: message.content,
-            sources: body.sources,
+            sourceBlocks: cacheHit.sources,
             fileIds: body.files,
             userId: caller?.userId ?? null,
-            responseText: cachedText,
+            responseText: cacheHit.text,
           });
         } catch (e) {
           console.warn('[Bokari] cache-hit persist error:', e);
@@ -115,9 +120,16 @@ export const buildChatStream = (
               .filter((b) => b.type === 'text')
               .map((b) => (b as { type: 'text'; data: string }).data)
               .join('\n');
+            // Cache the sources alongside the text so a future hit can
+            // replay the answer WITH its citations resolvable, not a bare
+            // text blob with dangling [n]s (BUG-25).
+            const sourceBlock = blocks.find((b) => b.type === 'source') as
+              | { type: 'source'; data: unknown[] }
+              | undefined;
             if (text) {
               const vec = await embedOne(message.content);
-              await cacheResponse(message.content, vec, text, {
+              await cacheResponse(message.content, vec, text, cacheScope, {
+                sources: sourceBlock?.data ?? [],
                 metadata: { mode: body.optimizationMode },
               });
             }
