@@ -10,16 +10,12 @@
  * The function does not throw into the stream; errors are
  * caught and emitted as `error` events.
  */
-import ModelRegistry from '@/lib/models/registry';
 import SearchAgent from '@/lib/agents/search';
 import SessionManager from '@/lib/session';
 import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
 import { getCaller, HttpError } from '@/lib/auth/require';
-import {
-  loadConfiguredChatModel,
-  loadConfiguredEmbeddingModel,
-} from '@/lib/ai/gateway';
+import { resolveModels } from '@/lib/ai/resolve';
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { recordTiming } from '@/lib/observability/ttfb';
 import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
@@ -118,64 +114,14 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
     });
 
     const tLoad = startTimer();
-    const registry = new ModelRegistry();
-    // The base model is one env-driven decision (getAiConfig → Nemotron), not
-    // per-browser localStorage. When BOKARI_CHAT_MODEL is set we resolve the
-    // model server-side via the gateway; otherwise we honour the client's
-    // selection. Either path degrades gracefully if its model can't load.
-    const useConfigured = !!process.env.BOKARI_CHAT_MODEL;
-    const [llm, embedding] = await Promise.all([
-      useConfigured
-        ? loadConfiguredChatModel().catch((err) => {
-            console.warn(
-              '[Bokari] configured chat model failed; using client-selected:',
-              err,
-            );
-            return registry.loadChatModel(
-              body.chatModel.providerId,
-              body.chatModel.key,
-            );
-          })
-        : registry.loadChatModel(body.chatModel.providerId, body.chatModel.key),
-      useConfigured
-        ? loadConfiguredEmbeddingModel().catch((err) => {
-            console.warn(
-              '[Bokari] configured embedding model failed; using client-selected:',
-              err,
-            );
-            return registry.loadEmbeddingModel(
-              body.embeddingModel.providerId,
-              body.embeddingModel.key,
-            );
-          })
-        : registry.loadEmbeddingModel(
-            body.embeddingModel.providerId,
-            body.embeddingModel.key,
-          ),
-    ]);
-    logStage('chat.load_models', tLoad(), {
-      chat: useConfigured ? 'configured' : body.chatModel.key,
-      embed: useConfigured ? 'configured' : body.embeddingModel.key,
-    });
+    // The model is a single server-side decision (BOKARI_CHAT_PROVIDER/MODEL,
+    // src/lib/ai/config.ts), never the browser's choice — the client used to
+    // pick `bokari-1` (an alias for gpt-4o) on every request via localStorage,
+    // which is both the most expensive option and the one that took the whole
+    // product down when that account hit its rate limit (BUG-01).
+    const { llm, fastLlm, embedding } = await resolveModels();
+    logStage('chat.load_models', tLoad());
     recordTiming('chat.load_models', tLoad());
-
-    // Optional fast tier (e.g. Groq Llama 3.1 8B) for simple queries —
-    // env-gated, with a safe fallback to the default model when unset or
-    // unavailable. Set BOKARI_FAST_CHAT_PROVIDER_ID + BOKARI_FAST_CHAT_KEY to
-    // enable model-tier routing (see SearchAgent / pickWriterLlm).
-    let fastLlm: typeof llm | undefined;
-    const fastProviderId = process.env.BOKARI_FAST_CHAT_PROVIDER_ID;
-    const fastKey = process.env.BOKARI_FAST_CHAT_KEY;
-    if (fastProviderId && fastKey) {
-      try {
-        fastLlm = await registry.loadChatModel(fastProviderId, fastKey);
-      } catch (err) {
-        console.warn(
-          '[Bokari] fast chat model unavailable; routing disabled:',
-          err,
-        );
-      }
-    }
 
     const history: ChatTurnMessage[] = truncateHistory(
       body.history,
@@ -222,11 +168,24 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
         },
       })
       .then(() => logStage('chat.agent', tAgent()))
-      .catch((err) => {
-        console.error('[Bokari] Search agent error:', err);
+      .catch((err: unknown) => {
+        const e = err as { status?: number; code?: string; message?: string };
+        // The generic French sentence used to be the ONLY thing anyone ever
+        // saw. Log enough to diagnose from `docker logs` alone.
+        console.error('[Bokari] search agent failed', {
+          chatId: body.message.chatId,
+          mode: body.optimizationMode,
+          upstreamStatus: e?.status,
+          upstreamCode: e?.code,
+          message: e?.message,
+        });
         logStage('chat.agent', tAgent(), { error: true });
         session?.emit('error', {
-          data: 'Une erreur est survenue lors de la recherche. Veuillez reessayer.',
+          data:
+            e?.status === 429
+              ? 'Le service est saturé. Réessaie dans un instant.'
+              : 'La recherche a échoué. Réessaie — si le problème persiste, signale-le.',
+          code: e?.status === 429 ? 'RATE_LIMITED' : 'SEARCH_FAILED',
         });
       });
 

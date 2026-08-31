@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ModelWithProvider } from '@/lib/models/types';
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { buildChatStream, ChatStreamBody } from './stream';
 import { chargeOrReject } from '@/lib/quota/guard';
@@ -13,18 +12,12 @@ const messageSchema = z.object({
   content: z.string().min(1, 'Message content is required'),
 });
 
-const chatModelSchema: z.ZodType<ModelWithProvider> = z.object({
-  providerId: z.string({ message: 'Chat model provider id must be provided' }),
-  key: z.string({ message: 'Chat model key must be provided' }),
-});
-
-const embeddingModelSchema: z.ZodType<ModelWithProvider> = z.object({
-  providerId: z.string({
-    message: 'Embedding model provider id must be provided',
-  }),
-  key: z.string({ message: 'Embedding model key must be provided' }),
-});
-
+// NOTE: chatModel/embeddingModel are deliberately NOT accepted here anymore.
+// The model is a server-side decision (BOKARI_CHAT_PROVIDER/MODEL, resolved
+// by src/lib/ai/resolve.ts) — the browser used to pick it from localStorage,
+// which is how a public deployment ended up paying for gpt-4o on every
+// request (BUG-01). Any legacy client still sending those fields is fine:
+// zod silently strips unrecognised keys by default.
 const bodySchema = z.object({
   message: messageSchema,
   optimizationMode: z.enum(['speed', 'balanced', 'quality', 'learn'], {
@@ -36,8 +29,6 @@ const bodySchema = z.object({
     .optional()
     .default([]),
   files: z.array(z.string()).optional().default([]),
-  chatModel: chatModelSchema,
-  embeddingModel: embeddingModelSchema,
   systemInstructions: z.string().nullable().optional().default(''),
 });
 

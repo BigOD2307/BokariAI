@@ -1,6 +1,6 @@
 import { ResearcherOutput, SearchAgentInput } from './types';
 import SessionManager from '@/lib/session';
-import { classify } from './classifier';
+import { classify, defaultClassification } from './classifier';
 import Researcher from './researcher';
 import { getWriterPrompt } from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
@@ -10,9 +10,10 @@ import { withTimeout } from '@/lib/utils/streamTimeout';
 import {
   looksLikeChartRequest,
   extractChartSpec,
-  type LlmCallable,
 } from '@/lib/agents/multimodal/charts';
 import { pickWriterLlm } from './routing';
+import { ROLE_OPTIONS } from '@/lib/ai/roles';
+import { streamTextWithFallback } from '@/lib/ai/gateway';
 import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
 import {
   isRichBlocksEnabled,
@@ -153,12 +154,22 @@ class SearchAgent {
     });
     // Classification is a cheap structured call — run it on the fast tier when
     // configured (the 8B handles label assignment + complexity scoring fine).
-    const classification = await classify({
-      chatHistory: input.chatHistory,
-      enabledSources: input.config.sources,
-      query: input.followUp,
-      llm: input.config.fastLlm ?? input.config.llm,
-    });
+    let classification;
+    try {
+      classification = await classify({
+        chatHistory: input.chatHistory,
+        enabledSources: input.config.sources,
+        query: input.followUp,
+        llm: input.config.fastLlm ?? input.config.llm,
+      });
+    } catch (err) {
+      // A classifier failure must not kill the request: default to "search the
+      // web, treat it as complex" and let the researcher do its job.
+      console.warn('[Bokari] classifier failed, using defaults', {
+        error: (err as Error)?.message,
+      });
+      classification = defaultClassification(input.followUp);
+    }
 
     session.emit('analyzing', {
       step: 'widgets',
@@ -230,7 +241,7 @@ class SearchAgent {
       const bundle = await runLearnBundle(
         input.followUp,
         learnContext,
-        input.config.llm as unknown as LlmCallable,
+        input.config.llm,
       );
       if (bundle) {
         session.emitBlock({
@@ -291,7 +302,7 @@ class SearchAgent {
         const chart = await extractChartSpec(
           input.followUp,
           chartSources,
-          input.config.llm as unknown as LlmCallable,
+          input.config.llm,
         );
         if (chart) {
           session.emit('data', { type: 'chart', chart });
@@ -314,7 +325,7 @@ class SearchAgent {
           content: f.content,
         }));
       if (richSources.length > 0) {
-        const richLlm = input.config.llm as unknown as LlmCallable;
+        const richLlm = input.config.llm;
         const jobs: Promise<RichBlock | null>[] = [];
         // Verdict first — the category-defining trust block.
         if (looksLikeVerdictRequest(input.followUp)) {
@@ -376,14 +387,23 @@ class SearchAgent {
       input.config.llm,
       input.config.fastLlm,
     );
+    const writerInput = {
+      messages: [
+        { role: 'system' as const, content: writerPrompt },
+        ...input.chatHistory,
+        { role: 'user' as const, content: input.followUp },
+      ],
+      options: ROLE_OPTIONS.writer,
+    };
+    // On the default tier, a primary-provider failure (e.g. a 429) switches
+    // to BOKARI_CHAT_FALLBACK_* transparently — this is the fallback that
+    // BUG-01 needed: the old client-chosen model had none. The fast tier is
+    // a single explicit choice (BOKARI_FAST_CHAT_*), not a provider pair, so
+    // it streams directly.
     const answerStream = withTimeout(
-      writerLlm.streamText({
-        messages: [
-          { role: 'system', content: writerPrompt },
-          ...input.chatHistory,
-          { role: 'user', content: input.followUp },
-        ],
-      }),
+      writerLlm === input.config.llm
+        ? streamTextWithFallback(writerInput)
+        : writerLlm.streamText(writerInput),
       {
         firstChunkMs: LLM_FIRST_CHUNK_MS,
         idleMs: LLM_IDLE_MS,

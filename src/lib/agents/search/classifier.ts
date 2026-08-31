@@ -1,7 +1,8 @@
 import z from 'zod';
-import { ClassifierInput } from './types';
+import { ClassifierInput, ClassifierOutput } from './types';
 import { classifierPrompt } from '@/lib/prompts/search/classifier';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
+import { ROLE_OPTIONS } from '@/lib/ai/roles';
 
 const schema = z.object({
   classification: z.object({
@@ -64,7 +65,32 @@ export const classify = async (input: ClassifierInput) => {
       },
     ],
     schema,
+    options: ROLE_OPTIONS.classifier,
   });
 
   return output;
 };
+
+/**
+ * Fallback used when the classifier call itself fails (rate limit, timeout,
+ * malformed provider response). Defaults to "search the web, treat it as
+ * complex" rather than killing the request — a wrong-but-safe plan beats no
+ * plan at all.
+ */
+export const defaultClassification = (query: string): ClassifierOutput => ({
+  classification: {
+    skipSearch: false,
+    personalSearch: false,
+    academicSearch: false,
+    discussionSearch: false,
+    xSearch: false,
+    redditSearch: false,
+    linkedinSearch: false,
+    youtubeSearch: false,
+    showWeatherWidget: false,
+    showStockWidget: false,
+    showCalculationWidget: false,
+  },
+  standaloneFollowUp: query,
+  complexity: 'complex',
+});

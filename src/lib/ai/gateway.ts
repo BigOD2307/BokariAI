@@ -28,6 +28,7 @@
 import type BaseEmbedding from '@/lib/models/base/embedding';
 import type BaseLLM from '@/lib/models/base/llm';
 import type ModelRegistryType from '@/lib/models/registry';
+import type { GenerateTextInput, StreamTextOutput } from '@/lib/models/types';
 import { getAiConfig } from './config';
 import {
   clearEmbedCache,
@@ -69,7 +70,7 @@ async function resolveProviderId(type: string): Promise<string | null> {
   return match?.id ?? null;
 }
 
-async function loadChatByType(type: string, model: string): Promise<BaseLLM<any>> {
+export async function loadChatByType(type: string, model: string): Promise<BaseLLM<any>> {
   const id = await resolveProviderId(type);
   if (!id) throw new Error(`[ai/gateway] no active provider of type "${type}". Add it in Settings → Models.`);
   return getRegistry().loadChatModel(id, model);
@@ -266,4 +267,38 @@ export async function loadConfiguredChatModel(): Promise<BaseLLM<any>> {
 export async function loadConfiguredEmbeddingModel(): Promise<BaseEmbedding<any>> {
   const cfg = getAiConfig().embedding;
   return (await loadEmbeddingByType(cfg.provider, cfg.model)) as BaseEmbedding<any>;
+}
+
+/**
+ * Stream from the primary model, transparently switching to the fallback if the
+ * primary throws BEFORE emitting its first chunk.
+ *
+ * We deliberately do not retry mid-stream: the consumer has already received
+ * partial prose, and replaying it from another model would produce a visibly
+ * duplicated answer. A mid-stream failure surfaces as an error, which the UI
+ * renders with a retry affordance.
+ */
+export async function* streamTextWithFallback(
+  input: GenerateTextInput,
+): AsyncGenerator<StreamTextOutput> {
+  const cfg = getAiConfig().chat;
+  const primary = await loadChatByType(cfg.provider, cfg.model);
+
+  let started = false;
+  try {
+    for await (const chunk of primary.streamText(input)) {
+      started = true;
+      yield chunk;
+    }
+    return;
+  } catch (err) {
+    if (started || !cfg.fallback) throw err;
+    console.warn('[ai/gateway] primary stream failed before first chunk, falling back', {
+      primary: `${cfg.provider}/${cfg.model}`,
+      error: (err as Error)?.message ?? err,
+    });
+  }
+
+  const fallback = await loadChatByType(cfg.fallback.provider, cfg.fallback.model);
+  yield* fallback.streamText(input);
 }

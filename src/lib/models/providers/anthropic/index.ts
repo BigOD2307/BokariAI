@@ -23,12 +23,30 @@ const providerConfigFields: UIConfigField[] = [
   },
 ];
 
+/** How long a fetched model list stays valid before /models is hit again.
+ *  Was refetched on EVERY model load — one extra network round trip per
+ *  chat/classifier/writer call for no benefit, since the catalogue barely
+ *  changes. */
+const MODEL_LIST_TTL_MS = 10 * 60_000;
+
 class AnthropicProvider extends BaseModelProvider<AnthropicConfig> {
+  private defaultModelsCache: { at: number; list: ModelList } | null = null;
+
   constructor(id: string, name: string, config: AnthropicConfig) {
     super(id, name, config);
   }
 
   async getDefaultModels(): Promise<ModelList> {
+    const cached = this.defaultModelsCache;
+    if (cached && Date.now() - cached.at < MODEL_LIST_TTL_MS) {
+      return cached.list;
+    }
+    const list = await this.fetchDefaultModels();
+    this.defaultModelsCache = { at: Date.now(), list };
+    return list;
+  }
+
+  private async fetchDefaultModels(): Promise<ModelList> {
     const res = await fetch('https://api.anthropic.com/v1/models?limit=999', {
       method: 'GET',
       headers: {

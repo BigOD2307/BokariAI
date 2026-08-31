@@ -11,6 +11,7 @@
  */
 
 import type { ChartSpec, ChartKind } from '@/lib/types/multimodal';
+import type { Message } from '@/lib/types';
 
 const CHART_TRIGGER_PATTERNS: RegExp[] = [
   /\b(graph(?:e|ique|iques)?|chart)\b/i,
@@ -44,9 +45,9 @@ const VALID_KINDS: ChartKind[] = [
 ];
 
 export interface LlmCallable {
-  call: (messages: Array<{ role: string; content: string }>) => Promise<{
-    content: string;
-  }>;
+  /** Method shorthand, not a function-typed property: bivariance is what makes
+   *  BaseLLM structurally satisfy this contract under strictFunctionTypes. */
+  call(messages: Message[]): Promise<{ content: string }>;
 }
 
 export async function extractChartSpec(
