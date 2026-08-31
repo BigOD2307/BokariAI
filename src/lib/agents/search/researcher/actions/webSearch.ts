@@ -90,7 +90,15 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
     let results: Chunk[] = [];
 
     const search = async (q: string) => {
-      const res = await searchSearxng(q);
+      // 'news' is a routing signal, not a real engine (see intentFromEngines
+      // in @/lib/search): it sends the query through the Serper-led news
+      // chain instead of the general SearXNG-led one, so a current-events
+      // question gets dated, fresh sources (BUG-02).
+      const res = await searchSearxng(q, {
+        engines: additionalConfig.classification?.classification.newsSearch
+          ? ['news']
+          : undefined,
+      });
 
       const resultChunks: Chunk[] = res.results.map((r) => ({
         content: r.content || r.title,

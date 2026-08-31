@@ -1,8 +1,14 @@
 /**
- * Bokari Search Module - Multi-engine parallel search
- * DDG Standard + DDG News in parallel for maximum coverage and speed
- * Optimized for Africa with source boosting and deduplication
+ * Bokari Search Module
+ *
+ * Plain web/news/academic search is now delegated to src/lib/retrieval/
+ * (SearXNG + TinyFish + Serper, with real dates and no scraper — see BUG-02,
+ * BUG-22, BUG-23, BUG-27). This file still owns the `engines` string-routing
+ * convention for images, YouTube and social (dispatched below), plus the raw
+ * DuckDuckGo scraper those two still use — it will keep shrinking as those
+ * move to real providers too.
  */
+import { searchWeb, type SearchIntent } from './retrieval';
 
 interface SearchResult {
   title: string;
@@ -13,6 +19,8 @@ interface SearchResult {
   thumbnail?: string;
   author?: string;
   iframe_src?: string;
+  /** ISO string, when the provider returned a real per-result date (C4). */
+  publishedAt?: string;
 }
 
 export type { SearchResult };
@@ -30,104 +38,6 @@ const HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
 };
-
-// African news domains to boost in ranking
-const AFRICAN_DOMAINS = new Set([
-  'rfi.fr', 'france24.com', 'jeuneafrique.com', 'africanews.com',
-  'allafrica.com', 'theafricareport.com', 'africanarguments.org',
-  'maliactu.net', 'maliweb.net', 'bamada.net', 'journaldumali.com',
-  'abamako.com', 'malijet.com',
-  'seneweb.com', 'dakaractu.com', 'lequotidien.sn', 'pressafrik.com',
-  'koaci.com', 'fratmat.info', 'abidjan.net', 'connectionivoirienne.net',
-  'guineenews.org', 'guinee360.com', 'mosaiqueguinee.com',
-  'burkina24.com', 'lefaso.net', 'lobs.bf',
-  'nigerdiaspora.net', 'actuniger.com',
-  'lnc-news.com', 'journalducameroun.com', 'camernews.com',
-  'congopage.com', 'actualite.cd', 'radiookapi.net',
-  'punchng.com', 'premiumtimesng.com', 'thenationonlineng.net', 'guardian.ng',
-  'nation.africa', 'standardmedia.co.ke', 'monitor.co.ug',
-  'reuters.com', 'bbc.com', 'lemonde.fr', 'apnews.com',
-]);
-
-/**
- * Score a search result for relevance (higher = better)
- * Boosts African news sources
- */
-function scoreResult(result: SearchResult): number {
-  let score = 0;
-  try {
-    const hostname = new URL(result.url).hostname.replace('www.', '');
-    if (AFRICAN_DOMAINS.has(hostname)) score += 10;
-    if (result.content && result.content.length > 100) score += 3;
-    if (result.content && result.content.length > 200) score += 2;
-    if (hostname.includes('facebook.com') || hostname.includes('twitter.com') || hostname.includes('tiktok.com')) score -= 5;
-  } catch {
-    // Invalid URL
-  }
-  return score;
-}
-
-/** Reciprocal Rank Fusion constant. 60 is the canonical value (Cormack et al.)
- *  — large enough that the curve is gentle, so rank 1 vs rank 5 matters but
- *  rank 20 vs 25 barely does. */
-const RRF_K = 60;
-
-/**
- * How much the African-domain / quality boost counts relative to RRF.
- * `scoreResult` maxes ~15; one engine's rank-1 RRF contribution is ~1/61 ≈
- * 0.0164. Scaling the boost by 1/600 makes a +10 African source worth roughly
- * one extra rank-1 engine appearance — locality stays a first-class signal
- * without overriding strong cross-engine consensus.
- */
-const DOMAIN_BOOST_SCALE = 1 / 600;
-
-/**
- * Reciprocal Rank Fusion across the engine result lists. A document that ranks
- * well in MULTIPLE engines (DDG web + DDG news + Brave agree) beats one that
- * ranks high in only one — the recall win over the old flat additive score.
- * Dedup is by hostname+path (keeping the richest snippet); the African-domain
- * boost is folded in as a tie-breaking nudge.
- */
-export function reciprocalRankFusion(
-  lists: SearchResult[][],
-  k = RRF_K,
-): SearchResult[] {
-  const fused = new Map<string, { result: SearchResult; rrf: number }>();
-
-  for (const list of lists) {
-    list.forEach((result, idx) => {
-      let key: string;
-      try {
-        const u = new URL(result.url);
-        key = u.hostname + u.pathname;
-      } catch {
-        key = result.url;
-      }
-      const contribution = 1 / (k + idx + 1); // rank is 1-based
-      const existing = fused.get(key);
-      if (!existing) {
-        fused.set(key, { result, rrf: contribution });
-      } else {
-        existing.rrf += contribution;
-        // Keep the richer snippet across engine duplicates.
-        if (
-          (result.content?.length || 0) >
-          (existing.result.content?.length || 0)
-        ) {
-          existing.result = result;
-        }
-      }
-    });
-  }
-
-  return Array.from(fused.values())
-    .map(({ result, rrf }) => ({
-      result,
-      score: rrf + scoreResult(result) * DOMAIN_BOOST_SCALE,
-    }))
-    .sort((a, b) => b.score - a.score)
-    .map((s) => s.result);
-}
 
 /**
  * DuckDuckGo HTML search (~1-2s)
@@ -215,127 +125,6 @@ export const decodeEntities = (s: string): string => {
 };
 
 /**
- * DuckDuckGo News search via HTML lite endpoint
- * Adds recent news results to complement standard web search
- */
-const searchDDGNews = async (
-  query: string,
-): Promise<SearchResult[]> => {
-  try {
-    // DDG news via the HTML lite interface with news parameters
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}&iar=news&ia=news`;
-    const response = await fetch(url, {
-      headers: HEADERS,
-      signal: AbortSignal.timeout(6000),
-    });
-
-    if (!response.ok) return [];
-
-    const html = await response.text();
-    const results: SearchResult[] = [];
-
-    // DDG news uses the same HTML structure as regular search
-    const resultPattern =
-      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-    let match;
-    while ((match = resultPattern.exec(html)) !== null) {
-      const rawUrl = match[1];
-      const title = decodeEntities(match[2].replace(/<[^>]*>/g, '').trim());
-      const snippet = decodeEntities(match[3].replace(/<[^>]*>/g, '').trim());
-
-      let actualUrl = rawUrl;
-      const uddgMatch = rawUrl.match(/uddg=([^&]+)/);
-      if (uddgMatch) {
-        actualUrl = decodeURIComponent(uddgMatch[1]);
-      }
-
-      if (actualUrl && title && !actualUrl.includes('duckduckgo.com')) {
-        results.push({ title, url: actualUrl, content: snippet });
-      }
-    }
-
-    return results;
-  } catch (err) {
-    console.warn('[Bokari Search] DDG News failed:', err);
-    return [];
-  }
-};
-
-/**
- * Brave Search as a third engine for extra coverage
- * Brave Search has a clean HTML interface that can be scraped
- */
-const searchBrave = async (
-  query: string,
-  lang = 'fr',
-): Promise<SearchResult[]> => {
-  try {
-    const url = `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web&lang=${lang}`;
-    const response = await fetch(url, {
-      headers: {
-        ...HEADERS,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      signal: AbortSignal.timeout(6000),
-    });
-
-    if (!response.ok) return [];
-
-    const html = await response.text();
-    const results: SearchResult[] = [];
-
-    // Brave uses data attributes and specific class patterns
-    // Match title links and snippets from Brave's HTML
-    const snippetPattern = /<a[^>]+class="[^"]*heading[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<p[^>]+class="[^"]*snippet-description[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
-    let match;
-    while ((match = snippetPattern.exec(html)) !== null) {
-      const resultUrl = match[1];
-      const title = decodeEntities(match[2].replace(/<[^>]*>/g, '').trim());
-      const snippet = decodeEntities(match[3].replace(/<[^>]*>/g, '').trim());
-
-      if (resultUrl && title && !resultUrl.includes('brave.com')) {
-        results.push({ title, url: resultUrl, content: snippet });
-      }
-    }
-
-    return results;
-  } catch (err) {
-    console.warn('[Bokari Search] Brave failed:', err);
-    return [];
-  }
-};
-
-/**
- * Parallel multi-engine web search
- * Runs DDG Standard + DDG News + Brave simultaneously
- * Deduplicates and ranks with African source priority
- */
-const searchParallel = async (
-  query: string,
-  lang = 'fr',
-): Promise<{ results: SearchResult[]; suggestions: string[] }> => {
-  // Run all engines in parallel for maximum speed
-  const [ddgResults, ddgNewsResults, braveResults] = await Promise.all([
-    searchDuckDuckGo(query),
-    searchDDGNews(query),
-    searchBrave(query, lang),
-  ]);
-
-  console.log(`[Bokari Search] DDG: ${ddgResults.length}, DDG News: ${ddgNewsResults.length}, Brave: ${braveResults.length}`);
-
-  // Reciprocal Rank Fusion: reward cross-engine agreement (a result the web,
-  // news, and Brave all surface is stronger than one engine's top hit), fold
-  // in the African-domain boost, and dedup by hostname+path.
-  const results = reciprocalRankFusion([
-    ddgResults,
-    ddgNewsResults,
-    braveResults,
-  ]);
-
-  return { results, suggestions: [] };
-};
-
-/**
  * Image search via DuckDuckGo JSON API
  */
 const searchImages = async (
@@ -398,12 +187,33 @@ const searchYouTube = async (
   };
 };
 
-/**
- * Main search function - backward compatible interface
- * Uses parallel multi-engine search (DDG + DDG News + Brave)
- */
 /** Social network engine names recognised by the `engines` convention. */
 const SOCIAL_ENGINES = new Set(['x', 'reddit', 'linkedin']);
+/** Legacy `engines` values academicSearch.ts already sends — none of these
+ *  are real engines, they're the "this is an academic query" signal
+ *  (BUG-27: the old dispatcher silently ignored them and ran a web search). */
+const ACADEMIC_ENGINES = new Set(['arxiv', 'google scholar', 'pubmed']);
+
+function intentFromEngines(engines: string[] | undefined): SearchIntent {
+  const lower = (engines ?? []).map((e) => e.toLowerCase());
+  if (lower.some((e) => ACADEMIC_ENGINES.has(e))) return 'academic';
+  if (lower.includes('news')) return 'news';
+  return 'general';
+}
+
+function toLegacyResults(
+  documents: import('./retrieval').SearchDocument[],
+): { results: SearchResult[]; suggestions: string[] } {
+  return {
+    results: documents.map((d) => ({
+      title: d.title,
+      url: d.url,
+      content: d.snippet,
+      publishedAt: d.publishedAt?.toISOString(),
+    })),
+    suggestions: [],
+  };
+}
 
 export const searchSearxng = async (
   query: string,
@@ -445,36 +255,30 @@ export const searchSearxng = async (
     });
   }
 
-  return searchParallel(query, opts?.language || 'fr');
+  // Plain web / news / academic: SearXNG + TinyFish + Serper, chained and
+  // fused by intent (src/lib/retrieval/) — no more direct DuckDuckGo/Brave
+  // scraping, which datacenter IPs get rate-limited/blocked on (BUG-02).
+  const intent = intentFromEngines(opts?.engines);
+  const outcome = await searchWeb(query, {
+    intent,
+    language: opts?.language || 'fr',
+    maxAgeDays: intent === 'news' ? 30 : undefined,
+    limit: opts?.maxResults ?? 12,
+  });
+  return toLegacyResults(outcome.documents);
 };
 
 /**
  * News search for the Discover feed AND the autonomous article generator.
- *
- * Routing matters on the production server: scraping DuckDuckGo/Brave directly
- * gets the datacenter IP rate-limited/blocked (returns 0). The bundled SearXNG
- * (localhost:8080) proxies Google/news and is NOT IP-blocked, so we prefer it
- * and only fall back to the direct scraper if SearXNG yields nothing.
+ * Delegates to the same provider chain as the chat's news intent
+ * (Serper → TinyFish → SearXNG, src/lib/retrieval/) instead of its own
+ * hand-rolled SearXNG-then-scraper fallback.
  */
 export const searchNews = async (
   query: string,
   language: string = 'fr',
 ): Promise<SearchResult[]> => {
   const q = `${query} actualite ${new Date().getFullYear()}`;
-
-  // 1. Local/bundled SearXNG first (reliable from a datacenter IP).
-  try {
-    const { searchSearxng: searchViaSearxng } = await import('./searxng');
-    const sx = await searchViaSearxng(q, { language });
-    if (sx.results.length > 0) {
-      // SearxngSearchResult is a structural superset of SearchResult.
-      return sx.results as SearchResult[];
-    }
-  } catch (err) {
-    console.warn('[Bokari Search] SearXNG news path failed, falling back:', err);
-  }
-
-  // 2. Fall back to the multi-engine scraper (DDG + Brave).
-  const { results } = await searchParallel(q);
-  return results;
+  const outcome = await searchWeb(q, { intent: 'news', language, maxAgeDays: 30, limit: 12 });
+  return toLegacyResults(outcome.documents).results;
 };
