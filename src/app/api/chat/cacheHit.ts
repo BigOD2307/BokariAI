@@ -14,29 +14,31 @@
  */
 import { startTimer, logStage } from '@/lib/observability/latence';
 import { recordTiming } from '@/lib/observability/ttfb';
-import { tryGetCachedResponse } from '@/lib/cache/semantic';
+import { tryGetCachedResponse, type CacheScope } from '@/lib/cache/semantic';
 import { embedOne } from '@/lib/ai/gateway';
 import supabase from '@/lib/db';
 import { assertChatAccess } from '@/lib/auth/ownership';
 
 type Writer = (line: string) => Promise<void>;
 
+export type CacheHitResult = { text: string; sources: unknown[] };
+
 /**
- * Look up the query in the cache.  On hit, write the cached response to the
- * stream and return the response TEXT (so the caller can persist it).  On miss,
- * return null.
+ * Look up the query in the cache.  On hit, write the cached response (text +
+ * its sources, so `[n]` citations resolve — BUG-25) to the stream and return
+ * it so the caller can persist it.  On miss, return null.
  */
 export const tryServeCacheHit = async (
   query: string,
-  mode: 'speed' | 'balanced' | 'quality' | 'learn',
+  scope: CacheScope,
   safeWrite: Writer,
   tTotal: () => number,
-): Promise<string | null> => {
+): Promise<CacheHitResult | null> => {
   const tCache = startTimer();
   let cacheHit: Awaited<ReturnType<typeof tryGetCachedResponse>> = null;
   try {
     const embeddingVec = await embedOne(query);
-    cacheHit = await tryGetCachedResponse(query, async () => embeddingVec);
+    cacheHit = await tryGetCachedResponse(query, async () => embeddingVec, scope);
   } catch (err) {
     console.warn('[Bokari] cache lookup failed; falling back to live:', err);
   }
@@ -46,6 +48,14 @@ export const tryServeCacheHit = async (
   if (!cacheHit) return null;
 
   const tCacheRespond = startTimer();
+  if (cacheHit.sources.length > 0) {
+    await safeWrite(
+      JSON.stringify({
+        type: 'block',
+        block: { id: crypto.randomUUID(), type: 'source', data: cacheHit.sources },
+      }),
+    );
+  }
   const block = {
     id: crypto.randomUUID(),
     type: 'text',
@@ -54,10 +64,10 @@ export const tryServeCacheHit = async (
   await safeWrite(JSON.stringify({ type: 'block', block }));
   await safeWrite(JSON.stringify({ type: 'researchComplete' }));
   await safeWrite(JSON.stringify({ type: 'messageEnd' }));
-  logStage('chat.cache_serve', tCacheRespond(), { hit: cacheHit.hitType, mode });
+  logStage('chat.cache_serve', tCacheRespond(), { hit: cacheHit.hitType, mode: scope.mode });
   recordTiming('chat.cache_serve', tCacheRespond());
   logStage('chat.total', tTotal(), { ok: true, cache: cacheHit.hitType });
-  return cacheHit.response;
+  return { text: cacheHit.response, sources: cacheHit.sources };
 };
 
 /**
@@ -69,7 +79,9 @@ export const persistCacheHit = async (input: {
   chatId: string;
   messageId: string;
   query: string;
-  sources: string[];
+  /** The cache hit's 'source' block data (citations), NOT the enabled
+   *  source-type toggles (web/academic/…) — different concept, same word. */
+  sourceBlocks: unknown[];
   fileIds: string[];
   userId?: string | null;
   responseText: string;
@@ -80,6 +92,9 @@ export const persistCacheHit = async (input: {
     await assertChatAccess(input.chatId, input.userId ?? null, input.query);
 
     const responseBlocks = [
+      ...(input.sourceBlocks.length > 0
+        ? [{ id: crypto.randomUUID(), type: 'source', data: input.sourceBlocks }]
+        : []),
       { id: crypto.randomUUID(), type: 'text', data: input.responseText },
     ];
 

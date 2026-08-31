@@ -31,6 +31,8 @@ import {
   cacheResponse,
   tryGetCachedResponse,
   getCacheStats,
+  hashHistory,
+  type CacheScope,
 } from '../src/lib/cache/semantic';
 import path from 'path';
 import os from 'os';
@@ -90,6 +92,13 @@ function percentiles(samples: number[], ps: number[]): Record<string, number> {
   return out;
 }
 
+const BENCH_SCOPE: CacheScope = {
+  mode: 'speed',
+  historyHash: hashHistory([]),
+  fileIds: [],
+  sources: ['web'],
+};
+
 async function main(): Promise<void> {
   const dbPath = tmpDb();
   const cache = new SemanticCache(dbPath);
@@ -106,7 +115,7 @@ async function main(): Promise<void> {
   // Insert phase
   const insertStart = Date.now();
   for (let i = 0; i < N; i++) {
-    await cacheResponse(queries[i]!, vectors[i]!, `response-${i}`, { store: cache });
+    await cacheResponse(queries[i]!, vectors[i]!, `response-${i}`, BENCH_SCOPE, { store: cache });
   }
   const insertMs = Date.now() - insertStart;
 
@@ -114,7 +123,7 @@ async function main(): Promise<void> {
   const exactLatencies: number[] = [];
   for (let i = 0; i < N; i++) {
     const t0 = process.hrtime.bigint();
-    await tryGetCachedResponse(queries[i]!, async () => vectors[i]!, { store: cache });
+    await tryGetCachedResponse(queries[i]!, async () => vectors[i]!, BENCH_SCOPE, { store: cache });
     exactLatencies.push(Number(process.hrtime.bigint() - t0) / 1_000_000);
   }
 
@@ -123,7 +132,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < N; i++) {
     const perturbed = perturb(vectors[i]!, 0.05, rand);
     const t0 = process.hrtime.bigint();
-    await tryGetCachedResponse(`variant-${i}`, async () => perturbed, {
+    await tryGetCachedResponse(`variant-${i}`, async () => perturbed, BENCH_SCOPE, {
       store: cache,
       threshold: 0.9,
     });
@@ -144,7 +153,7 @@ async function main(): Promise<void> {
     } else {
       q = `unique-${i}-${Math.random()}`;
     }
-    const result = await tryGetCachedResponse(q, async () => vectors[i]!, { store: cache });
+    const result = await tryGetCachedResponse(q, async () => vectors[i]!, BENCH_SCOPE, { store: cache });
     if (result?.hitType === 'exact') exactHits++;
     else if (result?.hitType === 'semantic') semanticHits++;
     else misses++;

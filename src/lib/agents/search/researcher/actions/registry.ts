@@ -78,27 +78,34 @@ class ActionRegistry {
     return action.execute(params, additionalConfig);
   }
 
+  /**
+   * Bind each result to its own tool call, by construction rather than by
+   * array position. `Promise.all` preserves INPUT order in its returned
+   * array regardless of which promise settles first — the previous code
+   * pushed into a shared array from inside the async callbacks, so results
+   * landed in completion order, and the caller then matched them back to
+   * `finalToolCalls[i].id` purely by index. Two tools of different duration
+   * in the same turn were enough to hand the model one tool's result under
+   * the other's id (BUG-26).
+   */
   static async executeAll(
     actions: ToolCall[],
     additionalConfig: AdditionalConfig & {
       researchBlockId: string;
       fileIds: string[];
     },
-  ): Promise<ActionOutput[]> {
-    const results: ActionOutput[] = [];
-
-    await Promise.all(
-      actions.map(async (actionConfig) => {
-        const output = await this.execute(
+  ): Promise<Array<{ id: string; name: string; output: ActionOutput }>> {
+    return Promise.all(
+      actions.map(async (actionConfig) => ({
+        id: actionConfig.id,
+        name: actionConfig.name,
+        output: await this.execute(
           actionConfig.name,
           actionConfig.arguments,
           additionalConfig,
-        );
-        results.push(output);
-      }),
+        ),
+      })),
     );
-
-    return results;
   }
 }
 

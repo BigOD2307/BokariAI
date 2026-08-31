@@ -14,6 +14,7 @@ import {
 import { pickWriterLlm } from './routing';
 import { ROLE_OPTIONS } from '@/lib/ai/roles';
 import { streamTextWithFallback } from '@/lib/ai/gateway';
+import { selectEvidence, DEFAULT_BUDGET } from '@/lib/retrieval/select';
 import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
 import {
   isRichBlocksEnabled,
@@ -33,12 +34,6 @@ import { runLearnBundle } from '@/lib/agents/learn/runLearnBundle';
 const LLM_FIRST_CHUNK_MS = 60_000;
 const LLM_IDLE_MS = 30_000;
 const LLM_TOTAL_MS = 5 * 60_000;
-
-/** Cap on the number of search results injected into the writer
- *  prompt.  Without this, a deep-search with 100+ sources produces a
- *  200k+ token prompt that the LLM rejects or truncates, causing
- *  the writer to loop or hang. */
-const MAX_WRITER_RESULTS = 8;
 
 /**
  * Fetch conversation memory for the current user.
@@ -222,6 +217,30 @@ class SearchAgent {
 
     session.emit('data', { type: 'researchComplete' });
 
+    // Best-by-relevance evidence, computed ONCE and reused by every consumer
+    // below (Learn, chart, rich blocks, writer, faithfulness) — replaces the
+    // old `.slice(0, 8)` on searchFindings IN ARRIVAL ORDER (BUG-19): the
+    // first 8 results of the fastest first-turn query, not the 8 best. Deep
+    // research (35 iterations) used to spend 35x the budget producing
+    // context the writer never read, because later turns land past index 8.
+    const evidence = await selectEvidence(
+      searchResults?.searchFindings ?? [],
+      classification.standaloneFollowUp || input.followUp,
+      DEFAULT_BUDGET[input.config.mode],
+    );
+
+    // Emitted (and persisted) HERE, not in researcher/index.ts, and with
+    // `evidence` specifically: the writer's [n] citations are numbered
+    // against this exact list, and the client resolves [n] as
+    // `sources[n-1]` from the 'source' block (useChat.tsx) — they must be
+    // the same list in the same order, or a valid citation resolves to the
+    // wrong source.
+    session.emitBlock({
+      id: crypto.randomUUID(),
+      type: 'source',
+      data: evidence,
+    });
+
     // Learn mode ("Apprendre"): instead of a prose answer, generate a Socratic
     // reply + flashcards + a quiz from the research context and emit them as
     // blocks. Skips the chart / rich-block / writer / faithfulness path.
@@ -231,8 +250,7 @@ class SearchAgent {
         message: 'Préparation de tes fiches…',
       });
       const learnContext =
-        (searchResults?.searchFindings ?? [])
-          .slice(0, MAX_WRITER_RESULTS)
+        evidence
           .map(
             (f, index) =>
               `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
@@ -290,9 +308,7 @@ class SearchAgent {
     });
 
     if (looksLikeChartRequest(input.followUp)) {
-      const findings = searchResults?.searchFindings ?? [];
-      const chartSources = findings
-        .slice(0, MAX_WRITER_RESULTS)
+      const chartSources = evidence
         .map((f, index) => ({
           id: index + 1,
           title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
@@ -317,8 +333,7 @@ class SearchAgent {
     // as chart extraction (parallel, before the writer streams) so it adds no
     // serial latency. Each extractor fails closed to prose.
     if (isRichBlocksEnabled()) {
-      const richSources = (searchResults?.searchFindings ?? [])
-        .slice(0, MAX_WRITER_RESULTS)
+      const richSources = evidence
         .map((f, index) => ({
           id: index + 1,
           title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
@@ -358,8 +373,7 @@ class SearchAgent {
     });
 
     const finalContext =
-      searchResults?.searchFindings
-        .slice(0, MAX_WRITER_RESULTS)
+      evidence
         .map(
           (f, index) =>
             `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
@@ -440,8 +454,7 @@ class SearchAgent {
     if (isFaithfulnessEnabled() && responseBlockId) {
       const answerText =
         (session.getBlock(responseBlockId) as TextBlock | null)?.data ?? '';
-      const sources = (searchResults?.searchFindings ?? [])
-        .slice(0, MAX_WRITER_RESULTS)
+      const sources = evidence
         .map((f) => ({
           content: f.content,
           title: (f.metadata?.title as string) ?? undefined,

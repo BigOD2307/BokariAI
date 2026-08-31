@@ -20,7 +20,50 @@
  * @author Amadou — Dicken AI
  * @version 1.0.0
  */
+import { createHash } from 'crypto';
 import { SemanticCache, cosineSimilarity } from './store';
+
+/**
+ * What makes two identical-looking queries actually different requests.
+ *
+ * The cache used to key on the normalised query alone — mode, conversation
+ * history, uploaded files and enabled sources never entered the key. A
+ * follow-up like "et au Sénégal ?" could return whatever conversation last
+ * cached that exact phrase, from a different user, in a different context
+ * (BUG-25); a hit also returned a single text block with no `source` block,
+ * so any `[n]` citations in the cached prose pointed at nothing.
+ */
+export type CacheScope = {
+  mode: string;
+  /** Hash of the recent conversation turns — a follow-up is not a fresh query. */
+  historyHash: string;
+  /** Uploaded file ids: an answer grounded in a private PDF is never shared. */
+  fileIds: string[];
+  sources: string[];
+};
+
+/** Deterministic fingerprint of a scope. Folded into the cache key AND
+ *  stored in each entry's metadata, so the semantic (cosine) scan can be
+ *  filtered to the same scope, not just the exact-hash fast path. */
+export function scopeKey(scope: CacheScope): string {
+  return createHash('sha256')
+    .update(JSON.stringify([scope.mode, scope.historyHash, [...scope.sources].sort()]))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/** A request grounded in user-uploaded files is never cacheable — reading
+ *  or writing it would leak (or serve stale) private document content. */
+export function isCacheable(scope: CacheScope): boolean {
+  return scope.fileIds.length === 0;
+}
+
+/** Stable fingerprint of the recent conversation, for CacheScope.historyHash.
+ *  Order-sensitive on purpose: the same question after a different prior
+ *  turn is a different request. */
+export function hashHistory(history: ReadonlyArray<readonly [string, string]>): string {
+  return createHash('sha256').update(JSON.stringify(history)).digest('hex').slice(0, 16);
+}
 
 /**
  * Cosine similarity above this number is treated as the same intent.
@@ -48,6 +91,9 @@ export type Embedder = (text: string) => Promise<number[]>;
 export type CachedResponse = {
   query: string;
   response: string;
+  /** The 'source' block's data at cache-write time — a hit replays the
+   *  answer WITH its citations resolvable, not a bare text blob (BUG-25). */
+  sources: unknown[];
   metadata: Record<string, unknown>;
   similarity: number;
   hitType: 'exact' | 'semantic';
@@ -138,24 +184,32 @@ export function setSemanticCacheStore(store: SemanticCache | null): void {
 
 /**
  * Look up a cached response.  Order:
- *   1. exact hash match (cheapest)
+ *   1. exact hash match, scoped to `scope` (cheapest)
  *   2. cosine-similarity scan (BGE-M3, 1024 dims, linear scan OK for
- *      a few thousand rows)
+ *      a few thousand rows), filtered to entries with the same scope
  *
- * Returns null on miss.  Never throws — the caller falls back to the
- * live agent.
+ * `scope` is mandatory: mode, conversation history and enabled sources all
+ * change what a "matching" cache entry means, and a request grounded in
+ * uploaded files is never cacheable at all (isCacheable).
+ *
+ * Returns null on miss (including "not cacheable").  Never throws — the
+ * caller falls back to the live agent.
  */
 export async function tryGetCachedResponse(
   query: string,
   embed: Embedder,
+  scope: CacheScope,
   opts: { threshold?: number; store?: SemanticCache } = {},
 ): Promise<CachedResponse | null> {
+  if (!isCacheable(scope)) return null;
+
   const store = opts.store ?? defaultStore();
   const threshold = opts.threshold ?? COSINE_THRESHOLD;
+  const scoped = scopeKey(scope);
 
   const normalised = normaliseQuery(query);
   if (!normalised) return null;
-  const hash = hashQuery(normalised);
+  const hash = `${hashQuery(normalised)}:${scoped}`;
 
   // 1. Exact-hash fast path
   const exact = store.getByHash(hash);
@@ -164,6 +218,7 @@ export async function tryGetCachedResponse(
     return {
       query: exact.query,
       response: exact.response,
+      sources: Array.isArray(exact.metadata.sources) ? (exact.metadata.sources as unknown[]) : [],
       metadata: exact.metadata,
       similarity: 1,
       hitType: 'exact',
@@ -171,15 +226,20 @@ export async function tryGetCachedResponse(
     };
   }
 
-  // 2. Semantic scan
+  // 2. Semantic scan, then filter to the same scope. Cosine similarity knows
+  //    nothing about mode/history/sources, so an unfiltered top-1 could
+  //    serve a match from a completely different conversation.
   const vec = await embed(normalised);
-  const matches = store.scanSimilar(vec, threshold, 1);
+  const matches = store
+    .scanSimilar(vec, threshold, 20)
+    .filter((m) => m.entry.metadata.scopeKey === scoped);
   if (matches.length === 0) return null;
   const top = matches[0]!;
   store.recordHit(top.entry.id);
   return {
     query: top.entry.query,
     response: top.entry.response,
+    sources: Array.isArray(top.entry.metadata.sources) ? (top.entry.metadata.sources as unknown[]) : [],
     metadata: top.entry.metadata,
     similarity: top.similarity,
     hitType: 'semantic',
@@ -187,27 +247,37 @@ export async function tryGetCachedResponse(
   };
 }
 
-/** Insert (or refresh) a cached response. */
+/** Insert (or refresh) a cached response. Refuses to write anything for a
+ *  non-cacheable scope (file-grounded requests) — see isCacheable. */
 export async function cacheResponse(
   query: string,
   embedding: number[],
   response: string,
+  scope: CacheScope,
   opts: {
+    sources?: unknown[];
     metadata?: Record<string, unknown>;
     ttlMs?: number;
     store?: SemanticCache;
   } = {},
-): Promise<number> {
+): Promise<number | null> {
+  if (!isCacheable(scope)) return null;
+
   const store = opts.store ?? defaultStore();
   const normalised = normaliseQuery(query);
   // Volatile (news/price/election) answers expire fast so they can't go stale.
   const volatile = isVolatileQuery(query);
   return store.upsert({
     query: normalised,
-    queryHash: hashQuery(normalised),
+    queryHash: `${hashQuery(normalised)}:${scopeKey(scope)}`,
     embedding,
     response,
-    metadata: { ...(opts.metadata ?? {}), freshnessClass: volatile ? 'volatile' : 'stable' },
+    metadata: {
+      ...(opts.metadata ?? {}),
+      scopeKey: scopeKey(scope),
+      sources: opts.sources ?? [],
+      freshnessClass: volatile ? 'volatile' : 'stable',
+    },
     ttlMs: opts.ttlMs ?? (volatile ? FRESH_TTL_MS : DEFAULT_TTL_MS),
   });
 }

@@ -106,6 +106,10 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
         metadata: {
           title: r.title,
           url: r.url,
+          // ISO string when the provider returned a real per-result date
+          // (Serper on the news chain — see src/lib/retrieval/). Read by
+          // selectEvidence (C6) for freshness scoring.
+          publishedAt: r.publishedAt,
         },
       }));
 

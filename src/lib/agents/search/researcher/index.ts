@@ -7,6 +7,7 @@ import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { ToolCall } from '@/lib/models/types';
 import { withTimeout } from '@/lib/utils/streamTimeout';
 import { ROLE_OPTIONS } from '@/lib/ai/roles';
+import { summariseActionOutput } from './summarise';
 
 /** Per-call LLM stream budgets for the researcher's reasoning loop.
  *  Mirrors the search-agent writer budgets.  Each iteration gets a
@@ -27,7 +28,12 @@ class Researcher {
         ? 3
         : input.config.mode === 'balanced'
           ? 6
-          : 35; // deep search: up to 35 iterations x 3 queries = ~100 sources
+          : 12; // deep search: up to 12 iterations x 3 queries = ~35 sources.
+    // Was 35: that number existed to compensate for the writer never seeing
+    // past the first 8 arrival-order results (BUG-19) — more turns couldn't
+    // help, since their output landed past the slice. Now that evidence
+    // selection (select.ts) actually ranks the full pool, the marginal value
+    // of a 13th-35th turn is low, and the user gets minutes back.
 
     const availableTools = ActionRegistry.getAvailableActionTools({
       classification: input.classification,
@@ -224,16 +230,23 @@ class Researcher {
         classification: input.classification,
       });
 
-      actionOutput.push(...actionResults);
+      actionOutput.push(...actionResults.map((r) => r.output));
 
-      actionResults.forEach((action, i) => {
+      // Bound by construction (BUG-26): each entry carries its OWN call's id,
+      // not `finalToolCalls[i].id` — index `i` was completion order, not
+      // call order, so a fast tool's result could land under a slow tool's id.
+      for (const result of actionResults) {
         agentMessageHistory.push({
           role: 'tool',
-          id: finalToolCalls[i].id,
-          name: finalToolCalls[i].name,
-          content: JSON.stringify(action),
+          id: result.id,
+          name: result.name,
+          // Bounded summary, not the full result (BUG-07): the researcher
+          // plans what to search next, it does not write the answer. The
+          // full content stays in `actionOutput` / searchFindings, read
+          // later by evidence selection (select.ts).
+          content: summariseActionOutput(result.output),
         });
-      });
+      }
     }
 
     const searchResults = actionOutput
@@ -261,12 +274,12 @@ class Researcher {
       })
       .filter((r) => r !== undefined);
 
-    session.emitBlock({
-      id: crypto.randomUUID(),
-      type: 'source',
-      data: filteredSearchResults,
-    });
-
+    // The 'source' block is emitted by the caller (agents/search/index.ts),
+    // AFTER evidence selection (C6) — not here with the full unranked pool.
+    // The writer's [n] citations are numbered against the selected evidence;
+    // the client resolves [n] as `sources[n-1]` from the 'source' block
+    // (useChat.tsx), so that block must be the SAME list, in the SAME order,
+    // or a valid citation points at the wrong source.
     return {
       findings: actionOutput,
       searchFindings: filteredSearchResults,
