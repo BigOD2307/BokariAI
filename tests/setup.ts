@@ -13,6 +13,12 @@ const dir = mkdtempSync(path.join(tmpdir(), 'bokari-test-'));
 process.env.DATA_DIR = dir;
 process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'test-anon-key';
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'test-service-role-key';
+// HS256 signing secret for local JWT verification (src/lib/auth/jwt.ts). Set
+// here so it's present before any test imports that module — it reads the env
+// var once at module load, not per-call.
+process.env.SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? 'test-jwt-secret-at-least-32-chars-long';
+process.env.BOKARI_FINGERPRINT_SECRET = process.env.BOKARI_FINGERPRINT_SECRET ?? 'test-fingerprint-secret';
 // Opt-in engine features default OFF in tests so the agent path stays prose-only
 // and no extractor LLM calls fire.
 process.env.BOKARI_RICH_BLOCKS_ENABLED = 'false';

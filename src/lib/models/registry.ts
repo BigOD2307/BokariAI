@@ -4,6 +4,7 @@ import { getConfiguredModelProviders } from '../config/serverRegistry';
 import { providers } from './providers';
 import { MinimalProvider, ModelList } from './types';
 import configManager from '../config';
+import { resolveSecrets, redactConfig } from '../config/secrets';
 
 class ModelRegistry {
   activeProviders: (ConfigModelProvider & {
@@ -24,11 +25,16 @@ class ModelRegistry {
 
         this.activeProviders.push({
           ...p,
-          provider: createProviderInstance(provider, p.id, p.name, p.config),
+          provider: createProviderInstance(
+            provider,
+            p.id,
+            p.name,
+            resolveSecrets(p.config),
+          ),
         });
       } catch (err) {
         console.error(
-          `Failed to initialize provider. Type: ${p.type}, ID: ${p.id}, Config: ${JSON.stringify(p.config)}, Error: ${err}`,
+          `Failed to initialize provider. Type: ${p.type}, ID: ${p.id}, Config: ${JSON.stringify(redactConfig(p.config))}, Error: ${err}`,
         );
       }
     });
@@ -52,7 +58,7 @@ class ModelRegistry {
             chat: [
               {
                 key: 'error',
-                name: err.message,
+                name: 'Modèles indisponibles',
               },
             ],
             embedding: [],
@@ -105,7 +111,7 @@ class ModelRegistry {
       provider,
       newProvider.id,
       newProvider.name,
-      newProvider.config,
+      resolveSecrets(newProvider.config),
     );
 
     let m: ModelList = { chat: [], embedding: [] };
@@ -163,7 +169,7 @@ class ModelRegistry {
       providers[updated.type],
       providerId,
       name,
-      config,
+      resolveSecrets(config),
     );
 
     let m: ModelList = { chat: [], embedding: [] };

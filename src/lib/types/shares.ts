@@ -19,9 +19,11 @@ export interface CreateShareInput {
 }
 
 export interface PublicChatView {
-  share: Share;
+  // chatId/userId are internal ids that must never reach a public,
+  // unauthenticated page — they let a visitor probe other private routes
+  // (BUG-15). The owner-facing share management UI uses `Share` directly.
+  share: Omit<Share, 'chatId' | 'userId'>;
   chat: {
-    id: string;
     title: string;
     createdAt: string;
   };

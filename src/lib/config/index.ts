@@ -3,6 +3,21 @@ import fs from 'fs';
 import { Config, ConfigModelProvider, UIConfigSections } from './types';
 import { hashObj } from '../serverUtils';
 import { getModelProvidersUIConfigSection } from '../models/providers';
+import { envRef } from './secrets';
+
+/** Config paths a request is allowed to change. Everything else is 400.
+ *  Provider secrets are NOT in this list: they come from the environment. */
+const MUTABLE_KEYS = new Set([
+  'preferences.theme',
+  'preferences.measureUnit',
+  'preferences.autoMediaSearch',
+  'preferences.showWeatherWidget',
+  'preferences.showNewsWidget',
+  'personalization.systemInstructions',
+  'search.searxngURL',
+]);
+
+const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 
 class ConfigManager {
   configPath: string = path.join(
@@ -193,10 +208,14 @@ class ConfigManager {
       };
 
       provider.fields.forEach((field) => {
+        const fromEnv = field.env ? process.env[field.env] : undefined;
+
         newProvider.config[field.key] =
-          process.env[field.env!] ||
-          field.default ||
-          ''; /* Env var must exist for providers */
+          field.type === 'password' && field.env
+            ? // Store a reference, never the value. `configured` below still
+              // works because we only write the marker when the var is set.
+              (fromEnv ? envRef(field.env) : '')
+            : (fromEnv || field.default || '');
 
         if (field.required) newProvider.required?.push(field.key);
       });
@@ -252,8 +271,21 @@ class ConfigManager {
   }
 
   public updateConfig(key: string, val: any) {
+    if (!MUTABLE_KEYS.has(key)) {
+      throw new Error(`Config key not mutable: ${key}`);
+    }
+
     const parts = key.split('.');
-    if (parts.length === 0) return;
+    if (parts.some((p) => FORBIDDEN_SEGMENTS.has(p))) {
+      throw new Error('Invalid config key');
+    }
+    if (
+      typeof val !== 'string' &&
+      typeof val !== 'number' &&
+      typeof val !== 'boolean'
+    ) {
+      throw new Error('Invalid config value');
+    }
 
     let target: any = this.currentConfig;
     for (let i = 0; i < parts.length - 1; i++) {

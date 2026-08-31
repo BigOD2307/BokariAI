@@ -1,7 +1,16 @@
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest } from 'next/server';
+import { requireAdmin, HttpError } from '@/lib/auth/require';
 
 export const GET = async (req: Request) => {
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
+  }
+
   try {
     const registry = new ModelRegistry();
 
@@ -33,6 +42,14 @@ export const GET = async (req: Request) => {
 };
 
 export const POST = async (req: NextRequest) => {
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
+  }
+
   try {
     const body = await req.json();
     const { type, name, config } = body;

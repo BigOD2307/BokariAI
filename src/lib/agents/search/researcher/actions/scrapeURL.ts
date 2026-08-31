@@ -3,8 +3,11 @@ import { ResearchAction } from '../../types';
 import { Chunk, ReadingResearchBlock } from '@/lib/types';
 import TurnDown from 'turndown';
 import path from 'path';
+import { assertPublicHttpUrl } from '@/lib/net/url-guard';
 
 const turndownService = new TurnDown();
+
+const MAX_SCRAPE_BYTES = 2_000_000;
 
 const schema = z.object({
   urls: z.array(z.string()).describe('A list of URLs to scrape content from.'),
@@ -39,8 +42,21 @@ const scrapeURLAction: ResearchAction<typeof schema> = {
     await Promise.all(
       params.urls.map(async (url) => {
         try {
-          const res = await fetch(url);
-          const text = await res.text();
+          const safeUrl = await assertPublicHttpUrl(url);
+
+          const res = await fetch(safeUrl, {
+            redirect: 'manual', // a redirect can point back at 127.0.0.1
+            signal: AbortSignal.timeout(8_000),
+            headers: { 'User-Agent': 'BokariBot/1.0 (+https://bokari.space/bot)' },
+          });
+          if (res.status >= 300 && res.status < 400) {
+            throw new Error('Redirect refused');
+          }
+          const buf = await res.arrayBuffer();
+          if (buf.byteLength > MAX_SCRAPE_BYTES) {
+            throw new Error('Response too large');
+          }
+          const text = new TextDecoder().decode(buf);
 
           const title =
             text.match(/<title>(.*?)<\/title>/i)?.[1] || `Content from ${url}`;

@@ -2,6 +2,8 @@ import configManager from '@/lib/config';
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest, NextResponse } from 'next/server';
 import { ConfigModelProvider } from '@/lib/config/types';
+import { requireAdmin, HttpError } from '@/lib/auth/require';
+import { redactConfig } from '@/lib/config/secrets';
 
 type SaveConfigBody = {
   key: string;
@@ -9,6 +11,14 @@ type SaveConfigBody = {
 };
 
 export const GET = async (req: NextRequest) => {
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
+  }
+
   try {
     const values = configManager.getCurrentConfig();
     const fields = configManager.getUIConfigSections();
@@ -22,6 +32,7 @@ export const GET = async (req: NextRequest) => {
 
         return {
           ...mp,
+          config: redactConfig(mp.config),
           chatModels: activeProvider?.chatModels ?? mp.chatModels,
           embeddingModels:
             activeProvider?.embeddingModels ?? mp.embeddingModels,
@@ -43,6 +54,14 @@ export const GET = async (req: NextRequest) => {
 };
 
 export const POST = async (req: NextRequest) => {
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
+  }
+
   try {
     const body: SaveConfigBody = await req.json();
 

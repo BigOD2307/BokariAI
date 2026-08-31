@@ -40,24 +40,25 @@ const LLM_TOTAL_MS = 5 * 60_000;
 const MAX_WRITER_RESULTS = 8;
 
 /**
- * Fetch conversation memory for the current user/chat.
+ * Fetch conversation memory for the current user.
  * Returns recent chat topics to give Bokari context about past interactions.
+ *
+ * Takes the CALLER's userId (already verified by the auth middleware), never a
+ * chatId — resolving the owner from a client-supplied chatId let one user's
+ * memory leak into another user's prompt (BUG-15).
  */
-async function fetchMemory(chatId: string): Promise<string> {
+async function fetchMemory(
+  userId: string | null,
+  excludeChatId: string,
+): Promise<string> {
+  if (!userId) return '';
+
   try {
-    const { data: chat } = await supabase
-      .from('chats')
-      .select('user_id')
-      .eq('id', chatId)
-      .maybeSingle();
-
-    if (!chat?.user_id) return '';
-
     const { data: recentChats } = await supabase
       .from('chats')
       .select('id, title, created_at')
-      .eq('user_id', chat.user_id)
-      .neq('id', chatId)
+      .eq('user_id', userId)
+      .neq('id', excludeChatId)
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -195,7 +196,7 @@ class SearchAgent {
       });
     }
 
-    const memoryPromise = fetchMemory(input.chatId);
+    const memoryPromise = fetchMemory(input.userId ?? null, input.chatId);
 
     session.emit('analyzing', {
       step: 'reading',
