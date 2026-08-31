@@ -32,6 +32,7 @@ const baseClassification = (
     skipSearch: false,
     personalSearch: false,
     academicSearch: false,
+    newsSearch: false,
     discussionSearch: false,
     xSearch: false,
     redditSearch: false,

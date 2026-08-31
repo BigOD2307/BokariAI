@@ -15,6 +15,11 @@ const schema = z.object({
     academicSearch: z
       .boolean()
       .describe('Indicates whether to perform an academic search.'),
+    newsSearch: z
+      .boolean()
+      .describe(
+        'True when the query is about current events / recent news and needs a dated, fresh source rather than a timeless reference page.',
+      ),
     discussionSearch: z
       .boolean()
       .describe('Indicates whether to perform a discussion search.'),
@@ -82,6 +87,7 @@ export const defaultClassification = (query: string): ClassifierOutput => ({
     skipSearch: false,
     personalSearch: false,
     academicSearch: false,
+    newsSearch: false,
     discussionSearch: false,
     xSearch: false,
     redditSearch: false,

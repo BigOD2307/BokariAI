@@ -136,6 +136,9 @@ class ConfigManager {
   }
 
   private initialize() {
+    // A fresh DATA_DIR (first boot, or a test tmpdir) has no `data/`
+    // subdirectory yet — writing config.json into it would ENOENT.
+    fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
     this.initializeConfig();
     this.initializeFromEnv();
   }

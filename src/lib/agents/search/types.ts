@@ -65,6 +65,7 @@ export type ClassifierOutput = {
     skipSearch: boolean;
     personalSearch: boolean;
     academicSearch: boolean;
+    newsSearch: boolean;
     discussionSearch: boolean;
     xSearch: boolean;
     redditSearch: boolean;

@@ -5,6 +5,7 @@ interface SearxngSearchOptions {
   engines?: string[];
   language?: string;
   pageno?: number;
+  time_range?: 'day' | 'week' | 'month' | 'year';
 }
 
 interface SearxngSearchResult {
@@ -16,17 +17,9 @@ interface SearxngSearchResult {
   content?: string;
   author?: string;
   iframe_src?: string;
+  /** SearXNG's JSON API returns this for many engines (Google News, Bing News…). */
+  publishedDate?: string;
 }
-
-// Public SearxNG instances as fallback when local instance is unavailable
-const PUBLIC_SEARXNG_INSTANCES = [
-  'https://searx.be',
-  'https://search.sapti.me',
-  'https://searx.tiekoetter.com',
-  'https://search.bus-hit.me',
-  'https://searx.work',
-  'https://paulgo.io',
-];
 
 const tryFetchSearxng = async (
   baseURL: string,
@@ -76,17 +69,20 @@ const tryFetchSearxng = async (
   }
 };
 
-// Track which instance worked last to avoid retrying failed ones
-let lastWorkingInstance: string | null = null;
-
+/**
+ * Local SearXNG only. A prior version fell back to six public third-party
+ * instances when the local one failed — that sends every user question to
+ * servers Bokari does not control, unacceptable for a product whose pitch is
+ * trust. Local unavailable now simply means "no SearXNG results"; callers
+ * (src/lib/retrieval/) treat that as a miss and continue their own chain.
+ */
 export const searchSearxng = async (
   query: string,
   opts?: SearxngSearchOptions,
 ) => {
-  // 1. Try local SearxNG: the configured URL AND the bundled SEARXNG_API_URL
-  //    env (the Docker image runs SearXNG on :8080). We try both because the
-  //    persisted config can hold a stale dev URL (e.g. :4000) — the env is the
-  //    deployment's source of truth. A dead candidate fails fast (ECONNREFUSED).
+  // The configured URL AND the bundled SEARXNG_API_URL env (the Docker image
+  // runs SearXNG on :8080). We try both because the persisted config can hold
+  // a stale dev URL (e.g. :4000) — the env is the deployment's source of truth.
   const localCandidates = Array.from(
     new Set([getSearxngURL(), process.env.SEARXNG_API_URL].filter(Boolean) as string[]),
   );
@@ -99,35 +95,6 @@ export const searchSearxng = async (
     }
   }
 
-  // 2. Try last working public instance
-  if (lastWorkingInstance) {
-    const result = await tryFetchSearxng(lastWorkingInstance, query, opts);
-    if (result && result.results.length > 0) {
-      return result;
-    }
-    lastWorkingInstance = null;
-  }
-
-  // 3. Try public instances in parallel (race for first success)
-  const shuffled = [...PUBLIC_SEARXNG_INSTANCES].sort(() => Math.random() - 0.5);
-
-  // Try in batches of 3 for speed
-  for (let i = 0; i < shuffled.length; i += 3) {
-    const batch = shuffled.slice(i, i + 3);
-    const results = await Promise.all(
-      batch.map((url) => tryFetchSearxng(url, query, opts).then((r) => ({ url, result: r }))),
-    );
-
-    for (const { url, result } of results) {
-      if (result && result.results.length > 0) {
-        lastWorkingInstance = url;
-        console.log(`[Bokari Search] Using public SearxNG instance: ${url}`);
-        return result;
-      }
-    }
-  }
-
-  // 4. If all SearxNG instances fail, return empty results
-  console.warn('[Bokari Search] All SearxNG instances failed for query:', query);
+  console.warn('[Bokari Search] Local SearXNG unavailable or empty for query:', query);
   return { results: [], suggestions: [] };
 };
