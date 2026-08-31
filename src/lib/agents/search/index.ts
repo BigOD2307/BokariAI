@@ -5,7 +5,7 @@ import Researcher from './researcher';
 import { getWriterPrompt } from '@/lib/prompts/search/writer';
 import { WidgetExecutor } from './widgets';
 import supabase from '@/lib/db';
-import { TextBlock } from '@/lib/types';
+import { TextBlock, Chunk } from '@/lib/types';
 import { withTimeout } from '@/lib/utils/streamTimeout';
 import {
   looksLikeChartRequest,
@@ -15,6 +15,8 @@ import { pickWriterLlm } from './routing';
 import { ROLE_OPTIONS } from '@/lib/ai/roles';
 import { streamTextWithFallback } from '@/lib/ai/gateway';
 import { selectEvidence, DEFAULT_BUDGET } from '@/lib/retrieval/select';
+import { buildEvidence, toChunk } from './evidence';
+import { auditCitations } from './citations';
 import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
 import {
   isRichBlocksEnabled,
@@ -229,17 +231,12 @@ class SearchAgent {
       DEFAULT_BUDGET[input.config.mode],
     );
 
-    // Emitted (and persisted) HERE, not in researcher/index.ts, and with
-    // `evidence` specifically: the writer's [n] citations are numbered
-    // against this exact list, and the client resolves [n] as
-    // `sources[n-1]` from the 'source' block (useChat.tsx) — they must be
-    // the same list in the same order, or a valid citation resolves to the
-    // wrong source.
-    session.emitBlock({
-      id: crypto.randomUUID(),
-      type: 'source',
-      data: evidence,
-    });
+    // C7: stable [S1]/[S2] ids (evidence.ts), not the arrival-order Chunk[]
+    // above. The `source` block is no longer emitted here — a source the
+    // writer was merely handed but never actually cited is not a source
+    // ("Une source non lue n'est pas une source"). It is emitted after the
+    // writer streams, from whichever sources survive `auditCitations`.
+    const evidenceBundle = buildEvidence(evidence);
 
     // Learn mode ("Apprendre"): instead of a prose answer, generate a Socratic
     // reply + flashcards + a quiz from the research context and emit them as
@@ -261,6 +258,17 @@ class SearchAgent {
         learnContext,
         input.config.llm,
       );
+      // Learn mode doesn't use the [Sn] citation contract (the bundle is
+      // Socratic prose + flashcards, not a cited article), but every source
+      // in evidenceBundle WAS actually handed to the model as context, so
+      // showing them still honours "une source non lue n'est pas une
+      // source" — none of these are unread.
+      session.emitBlock({
+        id: crypto.randomUUID(),
+        type: 'source',
+        data: evidenceBundle.sources.map(toChunk),
+      });
+
       if (bundle) {
         session.emitBlock({
           id: crypto.randomUUID(),
@@ -372,25 +380,16 @@ class SearchAgent {
       message: 'Rédaction de la réponse…',
     });
 
-    const finalContext =
-      evidence
-        .map(
-          (f, index) =>
-            `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
-        )
-        .join('\n') || '';
-
     const widgetContext = widgetOutputs
       .map((o) => `<result>${o.llmContext}</result>`)
       .join('\n-------------\n');
 
-    const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
-
     const writerPrompt = getWriterPrompt(
-      finalContextWithWidgets,
+      evidenceBundle,
       input.config.systemInstructions,
       input.config.mode,
       memory || undefined,
+      widgetContext || undefined,
     );
 
     // Route the writer: the fast tier for simple queries, the default
@@ -447,6 +446,36 @@ class SearchAgent {
       }
     }
 
+    // C7: reconcile what the model actually wrote against the sources it was
+    // actually given. Drops any [Sn] the model invented (BUG-21), and the
+    // 'source' block — emitted here, not before the stream — carries only
+    // the sources that survived, in order of first citation ("une source non
+    // lue n'est pas une source").
+    let citedSources: Chunk[] = [];
+    if (responseBlockId) {
+      const fullAnswer =
+        (session.getBlock(responseBlockId) as TextBlock | null)?.data ?? '';
+      const audit = auditCitations(fullAnswer, evidenceBundle.sources);
+      if (audit.invented.length > 0) {
+        // Not user-facing: a prompt-quality signal for us (C7.6 acceptance:
+        // this should stay empty in prod logs over time).
+        console.warn('[Bokari] model invented citations', {
+          chatId: input.chatId,
+          invented: audit.invented,
+          available: evidenceBundle.sources.length,
+        });
+      }
+      session.updateBlock(responseBlockId, [
+        { op: 'replace', path: '/data', value: audit.text },
+      ]);
+      citedSources = audit.cited.map(toChunk);
+    }
+    session.emitBlock({
+      id: crypto.randomUUID(),
+      type: 'source',
+      data: citedSources,
+    });
+
     // Citation faithfulness gate (NLI) — opt-in via BOKARI_FAITHFULNESS_ENABLED.
     // Runs *after* the answer has fully streamed (the user already sees the
     // text); it checks each cited claim against its source extract and emits a
@@ -454,11 +483,10 @@ class SearchAgent {
     if (isFaithfulnessEnabled() && responseBlockId) {
       const answerText =
         (session.getBlock(responseBlockId) as TextBlock | null)?.data ?? '';
-      const sources = evidence
-        .map((f) => ({
-          content: f.content,
-          title: (f.metadata?.title as string) ?? undefined,
-        }));
+      const sources = evidenceBundle.sources.map((s) => ({
+        content: s.passages.join('\n'),
+        title: s.title,
+      }));
       if (answerText && sources.length > 0) {
         session.emit('analyzing', {
           step: 'verifying',

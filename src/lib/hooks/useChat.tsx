@@ -410,9 +410,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       blocks.forEach((block) => {
         if (block.type === 'text') {
           let processedText = block.data;
-          // Only match [number] or [1,2,3] — NOT markdown links [text](url)
-          const citationRegex = /\[(\d+(?:\s*,\s*\d+)*)\](?!\()/g;
-          const regex = /\[(\d+)\](?!\()/g;
+          // C7: citations are stable ids (`[S1]`, `[S3]`…), not positions —
+          // the server (`agents/search/citations.ts`) already strips any id
+          // that isn't in the 'source' block, so a plain `.find()` by id
+          // replaces the old `sources[number - 1]` positional lookup, which
+          // desynced whenever the source list was reranked/truncated/cached
+          // after the writer prompt was built (BUG-21).
+          const citationRegex = /\[(S\d{1,3}(?:\s*,\s*S\d{1,3})*)\](?!\()/g;
+          const regex = /\[S\d{1,3}\](?!\()/g;
 
           if (processedText.includes('<think>')) {
             const openThinkTag = processedText.match(/<think>/g)?.length || 0;
@@ -432,20 +437,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             processedText = processedText.replace(
               citationRegex,
               (_, capturedContent: string) => {
-                const numbers = capturedContent
+                const ids = capturedContent
                   .split(',')
-                  .map((numStr) => numStr.trim());
+                  .map((idStr) => idStr.trim());
 
-                const linksHtml = numbers
-                  .map((numStr) => {
-                    const number = parseInt(numStr);
-
-                    if (isNaN(number) || number <= 0) {
-                      return `[${numStr}]`;
-                    }
-
-                    const source = sources[number - 1];
+                const linksHtml = ids
+                  .map((id) => {
+                    const source = sources.find((s) => s.metadata?.id === id);
                     const url = source?.metadata?.url;
+
+                    if (!source) return ''; // server already stripped these; belt and braces
 
                     if (url) {
                       // Short name: use domain like "Reuters", "BBC", "Le Monde"
@@ -459,7 +460,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                           ? brand.toUpperCase()
                           : brand.charAt(0).toUpperCase() + brand.slice(1);
                       } catch {
-                        shortName = `Source ${number}`;
+                        shortName = id;
                       }
                       const fullTitle = source?.metadata?.title || shortName;
                       return `<citation href="${url}" title="${fullTitle}">${shortName}</citation>`;
