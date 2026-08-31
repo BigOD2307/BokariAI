@@ -29,8 +29,6 @@ export type ChatStreamBody = {
   sources: string[];
   history: [string, string][];
   files: string[];
-  chatModel: { providerId: string; key: string };
-  embeddingModel: { providerId: string; key: string };
   systemInstructions: string | null | undefined;
 };
 

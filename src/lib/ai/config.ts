@@ -38,17 +38,17 @@ export type AiConfig = {
   embedding: EmbeddingRoute;
 };
 
-/** Curated OSS defaults.  Tuned for African + multilingual + cheap. */
+/** Curated defaults. OpenRouter/DeepSeek V4 Flash is the base model (native
+ *  reasoning, cheap, no per-account TPM cliff like the old gpt-4o alias had);
+ *  Groq is the fallback — fast and free-tier generous, but its own rate
+ *  limits make it the wrong choice as primary for a public multi-user chat. */
 const DEFAULTS: AiConfig = {
   chat: {
-    // Groq is fast and free-tier generous.  Llama 3.3 70B is the workhorse.
-    provider: 'groq',
-    model: 'llama-3.3-70b-versatile',
-    // OpenRouter gives us the same model on a different provider — if
-    // Groq is down, we still answer.
+    provider: 'openrouter',
+    model: 'deepseek/deepseek-v4-flash',
     fallback: {
-      provider: 'openrouter',
-      model: 'meta-llama/llama-3.3-70b-instruct',
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
     },
   },
   embedding: {

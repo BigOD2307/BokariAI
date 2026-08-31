@@ -25,10 +25,13 @@ describe('getAiConfig', () => {
 
   it('returns sensible OSS defaults when no env overrides', () => {
     const cfg = getAiConfig();
-    expect(cfg.chat.provider).toBe('groq');
-    expect(cfg.chat.model).toBe('llama-3.3-70b-versatile');
-    expect(cfg.chat.fallback.provider).toBe('openrouter');
-    expect(cfg.chat.fallback.model).toBe('meta-llama/llama-3.3-70b-instruct');
+    // OpenRouter/DeepSeek V4 Flash is the base model (native reasoning, no
+    // per-account TPM cliff like the old gpt-4o alias); Groq is the fallback
+    // — a different provider, so a rate limit on one doesn't take out both.
+    expect(cfg.chat.provider).toBe('openrouter');
+    expect(cfg.chat.model).toBe('deepseek/deepseek-v4-flash');
+    expect(cfg.chat.fallback.provider).toBe('groq');
+    expect(cfg.chat.fallback.model).toBe('llama-3.3-70b-versatile');
     expect(cfg.embedding.provider).toBe('openrouter');
     expect(cfg.embedding.model).toBe('baai/bge-m3');
     expect(cfg.embedding.dimensions).toBe(1024);

@@ -1,15 +1,14 @@
-import { NextResponse } from 'next/server';
-
-const MAX_TOKENS = 20;
-const TEMPERATURE = 0.4;
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+import { resolveModels } from '@/lib/ai/resolve';
+import { ROLE_OPTIONS } from '@/lib/ai/roles';
 
 const SYSTEM_PROMPT = `Tu génères un titre court (3-7 mots) en français ou anglais pour une conversation de recherche.
-Reponds UNIQUEMENT avec le titre, sans guillemets, sans point final, sans prefixe.`;
+Réponds UNIQUEMENT avec le titre, sans guillemets, sans point final, sans préfixe.`;
 
 export interface GeneratedTitle {
   title: string;
-  model: 'gpt-4o-mini' | 'fallback';
+  /** Which tier actually answered — the configured chat model, or the local
+   *  truncation fallback when the LLM call itself failed. */
+  model: string | 'fallback';
   latencyMs: number;
 }
 
@@ -25,60 +24,32 @@ const fallbackTitle = (firstMessage: string): string => {
   return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '...';
 };
 
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface ChatChoice {
-  message?: { content?: string };
-}
-
-interface ChatResponse {
-  choices?: ChatChoice[];
-}
-
-const callOpenAI = async (
-  apiKey: string,
-  messages: ChatMessage[],
-): Promise<string | null> => {
-  const response = await fetch(OPENAI_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages,
-      max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-    }),
-  });
-  if (!response.ok) return null;
-  const data = (await response.json()) as ChatResponse;
-  return data.choices?.[0]?.message?.content ?? null;
-};
-
+/**
+ * Generate a short conversation title from the first message.
+ *
+ * Used to route through a direct `fetch` to OpenAI with `gpt-4o-mini`
+ * hardcoded and its own `OPENAI_API_KEY` read — bypassing the gateway
+ * entirely, so an OpenAI-less deployment silently never got titles. Now goes
+ * through the same server-decided model + fallback as the rest of the chat
+ * (src/lib/ai/resolve.ts, src/lib/ai/gateway.ts).
+ */
 export const generateTitle = async (
   firstMessage: string,
 ): Promise<GeneratedTitle> => {
   const start = Date.now();
   const trimmed = firstMessage.trim().slice(0, 500);
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return {
-      title: fallbackTitle(trimmed),
-      model: 'fallback',
-      latencyMs: Date.now() - start,
-    };
-  }
+
   try {
-    const raw = await callOpenAI(apiKey, [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: trimmed },
-    ]);
-    const cleaned = raw?.trim().replace(/^["']|["']$/g, '').slice(0, 80) ?? '';
+    const { llm, fastLlm } = await resolveModels();
+    const model = fastLlm ?? llm;
+    const { content } = await model.call(
+      [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: trimmed },
+      ],
+      ROLE_OPTIONS.title,
+    );
+    const cleaned = content.trim().replace(/^["']|["']$/g, '').slice(0, 80);
     if (!cleaned) {
       return {
         title: fallbackTitle(trimmed),
@@ -86,11 +57,7 @@ export const generateTitle = async (
         latencyMs: Date.now() - start,
       };
     }
-    return {
-      title: cleaned,
-      model: 'gpt-4o-mini',
-      latencyMs: Date.now() - start,
-    };
+    return { title: cleaned, model: fastLlm ? 'fast-tier' : 'configured', latencyMs: Date.now() - start };
   } catch {
     return {
       title: fallbackTitle(trimmed),

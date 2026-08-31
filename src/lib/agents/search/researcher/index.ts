@@ -6,6 +6,7 @@ import { Message, ReasoningResearchBlock } from '@/lib/types';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { ToolCall } from '@/lib/models/types';
 import { withTimeout } from '@/lib/utils/streamTimeout';
+import { ROLE_OPTIONS } from '@/lib/ai/roles';
 
 /** Per-call LLM stream budgets for the researcher's reasoning loop.
  *  Mirrors the search-agent writer budgets.  Each iteration gets a
@@ -84,6 +85,7 @@ class Researcher {
             ...agentMessageHistory,
           ],
           tools: availableTools,
+          options: ROLE_OPTIONS.researcher,
         }),
         {
           firstChunkMs: RESEARCHER_FIRST_CHUNK_MS,
