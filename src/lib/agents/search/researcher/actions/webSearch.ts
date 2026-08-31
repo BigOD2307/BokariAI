@@ -2,7 +2,8 @@ import z from 'zod';
 import { ResearchAction } from '../../types';
 import { searchSearxng } from '@/lib/search';
 import { Chunk, SearchResultsResearchBlock } from '@/lib/types';
-import { fetchMultipleContent } from '@/lib/utils/extractContent';
+import { readPages, type ReadPage } from '@/lib/retrieval/read';
+import { selectPassages } from '@/lib/retrieval/passages';
 import { getStoredContentForUrls } from '@/lib/supabase/queries';
 
 const actionSchema = z.object({
@@ -194,9 +195,9 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
         }
 
         // Phase 2: look up pre-extracted content from the Discover cache
-        // first, only live-fetch URLs that miss.  Saves 2-6s of network on
+        // first, only live-read URLs that miss.  Saves 2-6s of network on
         // every query that hits a known article.  If the cache lookup
-        // itself blows up, we degrade to live fetch (slower but never
+        // itself blows up, we degrade to live reads (slower but never
         // crash the agent).
         const urlsToRead = uniqueUrls.slice(0, maxFetch);
         let stored: Map<string, { fullContent: string | null }> = new Map();
@@ -206,27 +207,42 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
           console.error('[webSearch] Discover cache lookup failed; falling back to live fetch:', err);
         }
 
-        // Use cached content where available, fall back to live fetch for misses
-        const contentMap = new Map<string, string>();
-        for (const url of urlsToRead) {
-          const hit = stored.get(url);
-          if (hit?.fullContent) {
-            contentMap.set(url, hit.fullContent);
-          }
-        }
-        const cacheMisses = urlsToRead.filter((u) => !contentMap.has(u));
-        if (cacheMisses.length > 0) {
-          const fetched = await fetchMultipleContent(cacheMisses, cacheMisses.length);
-          for (const [url, content] of fetched) {
-            contentMap.set(url, content);
-          }
-        }
+        // Cached content is plain extracted text already; misses go through
+        // Readability (readPage), not the blind 4000-char <article>/<main>
+        // regex truncation this used to run — the whole PAGE used to be
+        // injected verbatim, boilerplate included. Now only the passages
+        // that actually answer the query are kept (selectPassages, BM25),
+        // which is why more pages can be read for less prompt budget.
+        const cacheMisses = urlsToRead.filter((u) => !stored.get(u)?.fullContent);
+        const freshPages = cacheMisses.length > 0 ? await readPages(cacheMisses) : new Map<string, ReadPage>();
 
-        // Enrich results with full content
-        for (const result of results) {
-          const fullContent = contentMap.get(result.metadata.url);
-          if (fullContent) {
-            result.content = `${result.content}\n\n--- Full article content ---\n${fullContent}`;
+        const pages: ReadPage[] = urlsToRead.flatMap((url) => {
+          const cached = stored.get(url)?.fullContent;
+          if (cached) {
+            return [{ url, title: null, text: cached, publishedAt: null, author: null, bytes: 0 }];
+          }
+          const fresh = freshPages.get(url);
+          return fresh ? [fresh] : [];
+        });
+
+        if (pages.length > 0) {
+          const passages = selectPassages(pages, input.queries, {
+            maxPerPage: 2,
+            maxTotal: maxFetch * 2,
+          });
+
+          const passagesByUrl = new Map<string, string[]>();
+          for (const passage of passages) {
+            const arr = passagesByUrl.get(passage.url) ?? [];
+            arr.push(passage.text);
+            passagesByUrl.set(passage.url, arr);
+          }
+
+          for (const result of results) {
+            const texts = passagesByUrl.get(result.metadata.url);
+            if (texts && texts.length > 0) {
+              result.content = `${result.content}\n\n--- Extraits pertinents ---\n${texts.join('\n\n---\n\n')}`;
+            }
           }
         }
       }
