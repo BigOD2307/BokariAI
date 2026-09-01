@@ -72,7 +72,7 @@ async function fetchMemory(
     const seenChats = new Set<string>();
     const memories: string[] = [];
 
-    for (const c of recentChats) {
+    for (const c of recentChats as any[]) {
       if (seenChats.has(c.id)) continue;
       seenChats.add(c.id);
 

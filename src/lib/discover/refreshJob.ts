@@ -2,19 +2,21 @@
  * Discover refresh — the callable core (shared by the API route and the cron).
  *
  * Runs the hybrid-retrieval pipeline for every topic (or one), extracts full
- * content, embeds, and upserts into Supabase `discover_articles`, then prunes
+ * content, embeds, and upserts into Neon `discover_articles`, then prunes
  * rows older than a week. Pulled out of the route so the daily scheduler can
  * invoke it directly without an internal HTTP round-trip.
  *
- * The Supabase admin client is created lazily (not at import) and guarded so
- * `next build` page-data collection never throws on a missing service key.
+ * discover_articles was always a public-read, service-role-write table on
+ * Supabase — no RLS/ownership logic to replicate here, this is a mechanical
+ * translation to Drizzle/Neon.
  */
+import { lt, sql } from 'drizzle-orm';
 import { runDiscoverPipeline, TOPIC_LABELS } from '@/lib/discover';
 import type { Topic } from '@/lib/discover/types';
 import { extractArticlesInParallel } from '@/lib/discover/contentExtractor';
 import { embed } from '@/lib/ai/gateway';
 import { getAiConfig } from '@/lib/ai/config';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 
 const ALL_TOPICS = Object.keys(TOPIC_LABELS) as Topic[];
 
@@ -25,54 +27,10 @@ export type DiscoverRefreshSummary = {
   errors?: string[];
 };
 
-function getAdmin(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!url || !key || key === 'build-time-placeholder') return null;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-async function ensureTable(admin: SupabaseClient): Promise<boolean> {
-  try {
-    const { error } = await admin.from('discover_articles').select('id').limit(1);
-    if (error && /does not exist/i.test(error.message)) {
-      console.error(
-        '[Discover Refresh] discover_articles table missing. Apply supabase/migrations/20260601_initial.sql first.',
-      );
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('[Discover Refresh] ensureTable failed:', err);
-    return false;
-  }
-}
-
 export async function runDiscoverRefresh(
   singleTopic?: string | null,
 ): Promise<DiscoverRefreshSummary> {
   const batchId = `batch-${Date.now()}`;
-  const admin = getAdmin();
-  if (!admin) {
-    return {
-      success: false,
-      totalInserted: 0,
-      batchId,
-      errors: ['Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'],
-    };
-  }
-
-  const ready = await ensureTable(admin);
-  if (!ready) {
-    return {
-      success: false,
-      totalInserted: 0,
-      batchId,
-      errors: ['discover_articles table missing'],
-    };
-  }
 
   const topic = (singleTopic as Topic | null) ?? null;
   const topicsToRefresh: Topic[] = topic
@@ -98,7 +56,7 @@ export async function runDiscoverRefresh(
         timeoutMs: 8_000,
       });
       const extractedByUrl = new Map(extractionResults.map((r) => [r.url, r]));
-      const nowIso = new Date().toISOString();
+      const now = new Date();
 
       const embedInputs = articles.map((a) => {
         const ex = extractedByUrl.get(a.url);
@@ -125,38 +83,62 @@ export async function runDiscoverRefresh(
           thumbnail: a.thumbnail,
           domain: a.domain,
           language: a.language,
-          quality_score: a.qualityScore,
+          qualityScore: a.qualityScore,
           embedding: hasVec ? vec : null,
-          embedding_model: hasVec ? embeddingModel : null,
-          batch_id: batchId,
-          updated_at: nowIso,
+          embeddingModel: hasVec ? embeddingModel : null,
+          batchId,
+          updatedAt: now,
         };
         if (ex?.success) {
           return {
             ...base,
             author: ex.metadata.author ?? a.author,
-            published_at:
-              (ex.metadata.publishedAt ?? a.publishedAt)?.toISOString() ?? null,
-            full_content: ex.fullContent,
-            extracted_at: nowIso,
-            content_hash: ex.contentHash,
+            publishedAt: ex.metadata.publishedAt ?? a.publishedAt ?? null,
+            fullContent: ex.fullContent,
+            extractedAt: now,
+            contentHash: ex.contentHash,
           };
         }
         return {
           ...base,
           author: a.author,
-          published_at: a.publishedAt?.toISOString() ?? null,
+          publishedAt: a.publishedAt ?? null,
         };
       });
 
-      const { error: upsertError, count } = await admin
-        .from('discover_articles')
-        .upsert(rows, { onConflict: 'url', ignoreDuplicates: false });
-
-      if (upsertError) {
-        errors.push(`${t}: ${upsertError.message}`);
-      } else {
-        totalInserted += count ?? rows.length;
+      try {
+        const { discoverArticles: d } = schema;
+        // sql`excluded.${col}` resolves to the quoted column name — ties the
+        // ON CONFLICT SET clause to the real schema instead of hand-typed
+        // snake_case strings that could typo-drift from it.
+        const excluded = (col: any) => sql`excluded.${col}`;
+        await pgDb
+          .insert(d)
+          .values(rows)
+          .onConflictDoUpdate({
+            target: d.url,
+            set: {
+              topic: excluded(d.topic),
+              title: excluded(d.title),
+              content: excluded(d.content),
+              thumbnail: excluded(d.thumbnail),
+              domain: excluded(d.domain),
+              language: excluded(d.language),
+              qualityScore: excluded(d.qualityScore),
+              embedding: excluded(d.embedding),
+              embeddingModel: excluded(d.embeddingModel),
+              batchId: excluded(d.batchId),
+              updatedAt: excluded(d.updatedAt),
+              author: excluded(d.author),
+              publishedAt: excluded(d.publishedAt),
+              fullContent: excluded(d.fullContent),
+              extractedAt: excluded(d.extractedAt),
+              contentHash: excluded(d.contentHash),
+            },
+          });
+        totalInserted += rows.length;
+      } catch (upsertErr) {
+        errors.push(`${t}: ${(upsertErr as Error).message}`);
       }
     } catch (err) {
       console.error(`[Discover Refresh] Error for topic ${t}:`, err);
@@ -165,8 +147,8 @@ export async function runDiscoverRefresh(
   }
 
   // Keep last 7 days.
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  await admin.from('discover_articles').delete().lt('created_at', weekAgo);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  await pgDb.delete(schema.discoverArticles).where(lt(schema.discoverArticles.createdAt, weekAgo));
 
   return {
     success: errors.length === 0,

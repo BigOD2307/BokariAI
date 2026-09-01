@@ -3,7 +3,7 @@ import ModelRegistry from '@/lib/models/registry';
 import { ModelWithProvider } from '@/lib/models/types';
 import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 import { MAX_HISTORY_ENTRIES, truncateHistory } from '@/lib/utils/chatHistory';
 import { createJob, getJob } from '@/lib/jobs/research';
 import { runAsyncResearch } from '@/lib/agents/search/async';
@@ -107,11 +107,8 @@ export const POST = async (req: Request) => {
     // anonymous users — the jobId is the auth secret.
     let userId: string | undefined;
     try {
-      const authClient = createServerClient(req);
-      const {
-        data: { user },
-      } = await authClient.auth.getUser();
-      userId = user?.id;
+      const caller = await getCaller(req);
+      userId = caller?.userId;
     } catch {
       userId = undefined;
     }

@@ -1,25 +1,18 @@
 'use client';
 
-import { supabase } from './client';
+import { getStoredAccessToken } from '@/lib/auth/clientToken';
 
 /**
- * Wrapper around fetch that automatically adds Supabase auth token
+ * Wrapper around fetch that automatically adds the Bokari auth token.
+ *
+ * Used to call `supabase.auth.getSession()`, which is async and — on some
+ * mobile Safari versions — could hang indefinitely on the Web Locks API,
+ * freezing every request behind it. Reading the token straight from the
+ * cookie is synchronous, so that whole failure mode is gone: there's
+ * nothing left to time out.
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  // getSession() can hang (mobile Safari Web-Locks stall — see client.ts). Never
-  // let it pin a request: race it against a short timeout and, if it doesn't
-  // resolve, send the request WITHOUT a token. Guests have no token anyway, and
-  // an anonymous call is far better than the app freezing on "Chargement…".
-  let token: string | undefined;
-  try {
-    const result = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
-    ]);
-    token = result?.data?.session?.access_token;
-  } catch {
-    /* fall back to an anonymous request */
-  }
+  const token = getStoredAccessToken();
 
   const headers = new Headers(options.headers);
   if (token) {

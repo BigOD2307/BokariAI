@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { mapChats } from '@/lib/supabase/mappers';
 
 const QuerySchema = z.object({
@@ -13,12 +15,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const supabase = createServerClient(request);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const caller = await getCaller(request);
 
-    if (!user) {
+    if (!caller) {
       return NextResponse.json({ chats: [], hasMore: false }, { status: 200 });
     }
 
@@ -36,30 +35,31 @@ export async function GET(request: Request) {
     }
     const { cursor, limit, q } = parsed.data;
 
-    let query = supabase
-      .from('chats')
-      .select('id, title, created_at, updated_at')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
+    const conditions = [eq(schema.chats.userId, caller.userId)];
+    if (cursor) conditions.push(lt(schema.chats.updatedAt, new Date(cursor)));
+    // Matches the GIN index idx_chats_title_fr (schema.ts), which is built on
+    // this exact expression, so this scan uses the index.
+    if (q && q.trim().length >= 2) {
+      conditions.push(
+        sql`to_tsvector('french', ${schema.chats.title}) @@ websearch_to_tsquery('french', ${q.trim()})`,
+      );
+    }
+
+    const rows = await pgDb
+      .select({
+        id: schema.chats.id,
+        title: schema.chats.title,
+        createdAt: schema.chats.createdAt,
+        updatedAt: schema.chats.updatedAt,
+      })
+      .from(schema.chats)
+      .where(and(...conditions))
+      .orderBy(desc(schema.chats.updatedAt))
       .limit(limit + 1);
 
-    if (cursor) {
-      query = query.lt('updated_at', cursor);
-    }
-    if (q && q.trim().length >= 2) {
-      query = query.textSearch('title', q.trim(), {
-        type: 'websearch',
-        config: 'french',
-      });
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const rows = data ?? [];
     const hasMore = rows.length > limit;
     const slice = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor = hasMore ? slice[slice.length - 1].updated_at : null;
+    const nextCursor = hasMore ? slice[slice.length - 1].updatedAt.toISOString() : null;
 
     return NextResponse.json(
       {

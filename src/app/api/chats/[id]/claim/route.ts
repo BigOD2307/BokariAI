@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 import supabase from '@/lib/db';
 
 /**
@@ -17,18 +17,14 @@ export const POST = async (
   try {
     const { id } = await params;
 
-    const authClient = createServerClient(req);
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
-
-    if (!user) {
+    const caller = await getCaller(req);
+    if (!caller) {
       return Response.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
     const { error } = await supabase
       .from('chats')
-      .update({ user_id: user.id })
+      .update({ user_id: caller.userId })
       .eq('id', id)
       .is('user_id', null);
 

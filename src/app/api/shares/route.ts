@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { eq } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { createShare, getShareByChat } from '@/lib/auth/shares';
 
 const Body = z.object({
@@ -20,27 +22,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Invalid body' }, { status: 400 });
   }
 
-  const supabase = createServerClient(request);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const caller = await getCaller(request);
+  if (!caller) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: chat, error: chatError } = await supabase
-    .from('chats')
-    .select('id, user_id')
-    .eq('id', body.chatId)
-    .maybeSingle();
-  if (chatError) {
+  let chat: { id: string; userId: string | null } | undefined;
+  try {
+    [chat] = await pgDb
+      .select({ id: schema.chats.id, userId: schema.chats.userId })
+      .from(schema.chats)
+      .where(eq(schema.chats.id, body.chatId))
+      .limit(1);
+  } catch {
     return NextResponse.json({ message: 'Internal error' }, { status: 500 });
   }
-  if (!chat) {
+  // 404 (not 403) when unowned — same "don't confirm existence to a
+  // non-owner" pattern as the rest of the app (see chats/[id]/route.ts).
+  if (!chat || chat.userId !== caller.userId) {
     return NextResponse.json({ message: 'Chat not found' }, { status: 404 });
-  }
-  if (chat.user_id !== user.id) {
-    return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
   }
 
   const existing = await getShareByChat(body.chatId);
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const share = await createShare(user.id, body);
+    const share = await createShare(caller.userId, body);
     return NextResponse.json(
       {
         share,

@@ -1,32 +1,16 @@
 /**
- * Real Supabase Postgres client (data persistence + RLS-aware auth).
+ * Real Postgres client (data persistence). Neon, not Supabase — see
+ * `src/lib/db/postgres/compat.ts` for why this keeps the Supabase-shaped
+ * `.from().select()...`/`.rpc()` chain instead of Drizzle syntax: it lets
+ * every one of this module's ~7 call sites (the chat write path, quota
+ * enforcement, chat ownership) keep working unchanged.
  *
- * Use this for every DB read/write. SQLite (src/lib/db/sqlite.ts) is
- * reserved for tests and local ephemeral caches.
+ * SQLite (src/lib/db/sqlite.ts) is reserved for tests and local ephemeral
+ * caches — unrelated to this file.
  */
-import { createClient } from '@supabase/supabase-js';
+import { createCompatClient } from './postgres/compat';
+import { pool } from './postgres/client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-
-// `next build` imports route modules to collect page data, so don't crash the
-// build when env is absent (server secrets aren't build args). Fail fast only
-// at RUNTIME, where the env is provided via --env-file.
-if (
-  process.env.NEXT_PHASE !== 'phase-production-build' &&
-  (!supabaseUrl || !supabaseServiceKey)
-) {
-  throw new Error(
-    '[Bokari DB] Missing Supabase env vars. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local.',
-  );
-}
-
-const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder-service-role-key',
-  {
-    auth: { autoRefreshToken: false, persistSession: false },
-  },
-);
+const supabase = createCompatClient(pool);
 
 export default supabase;

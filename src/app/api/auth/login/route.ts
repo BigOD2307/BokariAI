@@ -1,5 +1,8 @@
-import { supabase } from '@/lib/supabase/client';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { pgDb, schema } from '@/lib/db/postgres/client';
+import { verifyPassword } from '@/lib/auth/password';
+import { signAccessToken, accessTokenCookie } from '@/lib/auth/tokens';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalide'),
@@ -19,32 +22,40 @@ export const POST = async (req: Request) => {
     }
 
     const { email, password } = parsed.data;
+    const normalizedEmail = email.toLowerCase();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase(),
-      password,
-    });
+    const [user] = await pgDb
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, normalizedEmail))
+      .limit(1);
 
-    if (error) {
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return Response.json(
         { message: 'Email ou mot de passe incorrect' },
         { status: 401 },
       );
     }
 
-    const user = data.user;
-    const session = data.session;
-
-    return Response.json({
-      user: {
-        id: user.id,
-        name: user.user_metadata?.name || '',
-        email: user.email,
-        plan: user.user_metadata?.plan || 'free',
-      },
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
+    const token = await signAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified,
     });
+
+    return Response.json(
+      {
+        user: {
+          id: user.id,
+          name: user.name || '',
+          email: user.email,
+          plan: user.plan,
+        },
+        access_token: token,
+      },
+      { headers: { 'Set-Cookie': accessTokenCookie(token) } },
+    );
   } catch (err) {
     console.error('[Bokari Auth] Login error:', err);
     return Response.json(

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 import { createDeck, listDecks } from '@/lib/learn/decks';
 
 /**
@@ -17,12 +17,10 @@ const createSchema = z.object({
 });
 
 export const GET = async (req: Request) => {
-  const {
-    data: { user },
-  } = await createServerClient(req).auth.getUser();
-  if (!user) return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const caller = await getCaller(req);
+  if (!caller) return Response.json({ message: 'Unauthorized' }, { status: 401 });
   try {
-    return Response.json({ decks: await listDecks(user.id) });
+    return Response.json({ decks: await listDecks(caller.userId) });
   } catch (err) {
     console.error('[Bokari Learn] listDecks:', err);
     return Response.json({ message: 'Erreur' }, { status: 500 });
@@ -30,10 +28,8 @@ export const GET = async (req: Request) => {
 };
 
 export const POST = async (req: Request) => {
-  const {
-    data: { user },
-  } = await createServerClient(req).auth.getUser();
-  if (!user) return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const caller = await getCaller(req);
+  if (!caller) return Response.json({ message: 'Unauthorized' }, { status: 401 });
   try {
     const parsed = createSchema.safeParse(await req.json());
     if (!parsed.success) {
@@ -44,7 +40,7 @@ export const POST = async (req: Request) => {
     }
     const { sourceQuery, title, subject, cards } = parsed.data;
     const deckTitle = (title?.trim() || sourceQuery).slice(0, 80);
-    const { deck, created } = await createDeck(user.id, {
+    const { deck, created } = await createDeck(caller.userId, {
       title: deckTitle,
       sourceQuery,
       subject: subject ?? null,

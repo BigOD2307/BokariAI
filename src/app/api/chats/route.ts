@@ -1,26 +1,23 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { desc, eq } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { mapChats } from '@/lib/supabase/mappers';
 
 export const GET = async (req: Request) => {
   try {
-    const supabase = createServerClient(req);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const caller = await getCaller(req);
 
-    if (!user) {
+    if (!caller) {
       return Response.json({ chats: [] }, { status: 200 });
     }
 
-    const { data: chats, error } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    const chats = await pgDb
+      .select()
+      .from(schema.chats)
+      .where(eq(schema.chats.userId, caller.userId))
+      .orderBy(desc(schema.chats.createdAt));
 
-    if (error) throw error;
-
-    return Response.json({ chats: mapChats(chats || []) }, { status: 200 });
+    return Response.json({ chats: mapChats(chats) }, { status: 200 });
   } catch (err) {
     console.error('Error in getting chats: ', err);
     return Response.json(
