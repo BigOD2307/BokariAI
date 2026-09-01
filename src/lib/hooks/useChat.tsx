@@ -22,7 +22,6 @@ import {
   takePendingLandingQuery,
 } from '@/lib/uploads/landingHandoff';
 import { getSuggestions } from '../actions';
-import { MinimalProvider } from '../models/types';
 import { getAutoMediaSearch } from '../config/clientRegistry';
 import { applyPatch } from 'rfc6902';
 import { truncateHistory } from '../utils/chatHistory';
@@ -106,108 +105,20 @@ const checkConfig = async (
   setIsConfigReady: (ready: boolean) => void,
   setHasError: (hasError: boolean) => void,
 ) => {
-  try {
-    let chatModelKey = localStorage.getItem('chatModelKey');
-    let chatModelProviderId = localStorage.getItem('chatModelProviderId');
-    let embeddingModelKey = localStorage.getItem('embeddingModelKey');
-    let embeddingModelProviderId = localStorage.getItem(
-      'embeddingModelProviderId',
-    );
-
-    // Hard timeout: a stalled /api/providers must surface a clean error (with a
-    // "Réessayer" path) rather than pin the app on "Chargement…" forever.
-    const cfgAbort = new AbortController();
-    const cfgTimer = setTimeout(() => cfgAbort.abort(), 15_000);
-    let res: Response;
-    try {
-      res = await fetch(`/api/providers`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: cfgAbort.signal,
-      });
-    } finally {
-      clearTimeout(cfgTimer);
-    }
-
-    if (!res.ok) {
-      throw new Error(
-        `Provider fetching failed with status code ${res.status}`,
-      );
-    }
-
-    const data = await res.json();
-    const providers: MinimalProvider[] = data.providers;
-
-    if (providers.length === 0) {
-      throw new Error(
-        'No chat model providers found, please configure them in the settings page.',
-      );
-    }
-
-    const chatModelProvider =
-      providers.find(
-        (p) => p.id === chatModelProviderId && p.chatModels.length > 0,
-      ) ?? providers.find((p) => p.chatModels.length > 0);
-
-    if (!chatModelProvider) {
-      throw new Error(
-        'No chat models found, pleae configure them in the settings page.',
-      );
-    }
-
-    chatModelProviderId = chatModelProvider.id;
-
-    const chatModel =
-      chatModelProvider.chatModels.find((m) => m.key === chatModelKey) ??
-      chatModelProvider.chatModels[0];
-    chatModelKey = chatModel.key;
-
-    const embeddingModelProvider =
-      providers.find(
-        (p) => p.id === embeddingModelProviderId && p.embeddingModels.length > 0,
-      ) ?? providers.find((p) => p.embeddingModels.length > 0);
-
-    if (!embeddingModelProvider) {
-      throw new Error(
-        'No embedding models found, pleae configure them in the settings page.',
-      );
-    }
-
-    embeddingModelProviderId = embeddingModelProvider.id;
-
-    const embeddingModel =
-      embeddingModelProvider.embeddingModels.find(
-        (m) => m.key === embeddingModelKey,
-      ) ?? embeddingModelProvider.embeddingModels[0];
-    embeddingModelKey = embeddingModel.key;
-
-    localStorage.setItem('chatModelKey', chatModelKey);
-    localStorage.setItem('chatModelProviderId', chatModelProviderId);
-    localStorage.setItem('embeddingModelKey', embeddingModelKey);
-    localStorage.setItem('embeddingModelProviderId', embeddingModelProviderId);
-
-    setChatModelProvider({
-      key: chatModelKey,
-      providerId: chatModelProviderId,
-    });
-
-    setEmbeddingModelProvider({
-      key: embeddingModelKey,
-      providerId: embeddingModelProviderId,
-    });
-
-    console.debug('[Bokari] config ready', {
-      chat: `${chatModelProviderId}/${chatModelKey}`,
-      embed: `${embeddingModelProviderId}/${embeddingModelKey}`,
-    });
-    setIsConfigReady(true);
-  } catch (err: any) {
-    console.error('An error occurred while checking the configuration:', err);
-    toast.error(err.message);
-    setIsConfigReady(false);
-    setHasError(true);
-  }
+  // This used to fetch /api/providers to populate the model choice, but the
+  // server resolves the actual chat/embedding model unconditionally now
+  // (src/lib/ai/resolve.ts, BOKARI_CHAT_PROVIDER/MODEL) — /api/chat silently
+  // strips chatModel/embeddingModel from the request body if sent. Meanwhile
+  // /api/providers is (correctly) admin-only, since it exposes provider
+  // config — so this fetch 401'd for every non-admin visitor, isConfigReady
+  // never flipped true, and the whole app hung on "Chargement…" then
+  // "Connexion un peu lente" for anyone who wasn't an admin. No network call
+  // needed here at all; these values are inert placeholders sent-but-ignored
+  // server-side, kept only because sendMessage still checks they're non-empty.
+  void setHasError;
+  setChatModelProvider({ key: 'server', providerId: 'server' });
+  setEmbeddingModelProvider({ key: 'server', providerId: 'server' });
+  setIsConfigReady(true);
 };
 
 const loadMessages = async (
