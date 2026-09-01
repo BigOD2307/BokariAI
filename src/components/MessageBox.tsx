@@ -295,7 +295,7 @@ const MessageBox = ({
 
                 {/* Action bar (hidden until the answer is unlocked) */}
                 {user && !(loading && isLast) && (
-                  <div className="flex items-center justify-between w-full pt-4 mt-2 border-t border-black/[0.05] dark:border-white/[0.05]">
+                  <div className="flex items-center justify-between w-full pt-4 mt-2 border-t border-black/[0.08] dark:border-white/[0.08]">
                     <div className="flex items-center -ml-1.5">
                       <Rewrite
                         rewrite={rewrite}
@@ -314,7 +314,7 @@ const MessageBox = ({
                             ? 'text-bokari-500 bg-bokari-500/8'
                             : ttsLoading
                               ? 'text-bokari-500'
-                              : 'text-black/35 dark:text-white/30 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50',
+                              : 'text-black/50 dark:text-white/45 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50',
                         )}
                         title={isPlaying ? 'Arreter la lecture' : 'Ecouter la reponse'}
                       >

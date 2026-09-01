@@ -133,7 +133,7 @@ const Feedback = ({ section }: { section: Section }) => {
         className={`p-2 rounded-xl transition-all duration-200 ${
           isUp
             ? 'text-bokari-600 dark:text-bokari-400 bg-bokari-500/10'
-            : 'text-black/35 dark:text-white/30 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50'
+            : 'text-black/50 dark:text-white/45 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50'
         }`}
       >
         {upLoading ? (
@@ -152,7 +152,7 @@ const Feedback = ({ section }: { section: Section }) => {
         className={`p-2 rounded-xl transition-all duration-200 ${
           isDown
             ? 'text-red-500 bg-red-500/10'
-            : 'text-black/35 dark:text-white/30 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50'
+            : 'text-black/50 dark:text-white/45 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50'
         }`}
       >
         {downLoading ? (

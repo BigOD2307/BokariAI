@@ -781,16 +781,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           }, 200);
         }
 
-        // Check if there are sources and no suggestions
-
-        const hasSourceBlocks = (currentMsg?.responseBlocks || []).some(
-          (block) => block.type === 'source' && block.data.length > 0,
+        // Generate follow-up suggestions whenever the message actually
+        // produced an answer. Used to gate on a non-empty 'source' block,
+        // but C7's citation contract means that block now only carries
+        // sources the model actually cited with [Sn] — a confident,
+        // uncited answer (common for well-known facts) legitimately has
+        // zero sources, which silently killed suggestions for those
+        // messages even though there was a perfectly good answer to
+        // follow up on.
+        const hasTextContent = (currentMsg?.responseBlocks || []).some(
+          (block) => block.type === 'text' && block.data.trim().length > 0,
         );
         const hasSuggestions = (currentMsg?.responseBlocks || []).some(
           (block) => block.type === 'suggestion',
         );
 
-        if (hasSourceBlocks && !hasSuggestions) {
+        if (hasTextContent && !hasSuggestions) {
           const suggestions = await getSuggestions(newHistory);
           const suggestionBlock: Block = {
             id: randomHex(7),
