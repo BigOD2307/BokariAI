@@ -108,10 +108,14 @@ export async function runDiscoverRefresh(
 
       try {
         const { discoverArticles: d } = schema;
-        // sql`excluded.${col}` resolves to the quoted column name — ties the
-        // ON CONFLICT SET clause to the real schema instead of hand-typed
-        // snake_case strings that could typo-drift from it.
-        const excluded = (col: any) => sql`excluded.${col}`;
+        // Ties the ON CONFLICT SET clause to the real schema instead of
+        // hand-typed snake_case strings that could typo-drift from it.
+        // NOTE: interpolating the column object itself (`sql`excluded.${col}``)
+        // renders a fully-qualified "table"."column" reference — producing
+        // invalid SQL like `excluded."discover_articles"."topic"` (Postgres:
+        // "invalid reference to FROM-clause entry for table
+        // 'discover_articles'"). Use `.name` for the bare column identifier.
+        const excluded = (col: { name: string }) => sql.raw(`excluded."${col.name}"`);
         await pgDb
           .insert(d)
           .values(rows)
