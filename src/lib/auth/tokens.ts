@@ -45,12 +45,23 @@ export async function signAccessToken(user: AuthUser): Promise<string> {
     .sign(secretKey);
 }
 
+// `Secure` must track whether THIS deployment is actually served over HTTPS,
+// not just NODE_ENV — a production Next build is still `NODE_ENV=production`
+// when served over plain HTTP (true for bokari.space today: no Cloudflare/TLS
+// yet). A `Secure` cookie on an http:// origin is silently dropped by the
+// browser, which breaks every session with no visible error — this was live
+// on prod for a few minutes during the Neon migration before being caught by
+// a smoke test. Derives from NEXT_PUBLIC_APP_URL, which already has to be set
+// correctly for other reasons (build-time inlining, autodeploy) — flips on
+// by itself once that's updated to an https:// URL, no separate flag needed.
+const IS_HTTPS = (process.env.NEXT_PUBLIC_APP_URL ?? '').startsWith('https://');
+
 export function accessTokenCookie(token: string): string {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = IS_HTTPS ? '; Secure' : '';
   return `${ACCESS_TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${ACCESS_TOKEN_TTL_SECONDS}; SameSite=Lax${secure}`;
 }
 
 export function clearAccessTokenCookie(): string {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = IS_HTTPS ? '; Secure' : '';
   return `${ACCESS_TOKEN_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
 }
