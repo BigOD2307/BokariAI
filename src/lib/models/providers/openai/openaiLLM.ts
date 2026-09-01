@@ -247,9 +247,15 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
               } else {
                 const existingCall = recievedToolCalls[tc.index];
                 existingCall.arguments += tc.function?.arguments || '';
+                // A non-first delta for the same tool call can still carry no
+                // argument characters yet (seen with DeepSeek V4 via
+                // OpenRouter) — parse('') throws (" is empty", from the
+                // partial-json lib), which killed the whole search agent on
+                // an otherwise-normal streaming pattern. Same '{}' fallback
+                // the first-chunk branch above already has.
                 return {
                   ...existingCall,
-                  arguments: parse(existingCall.arguments),
+                  arguments: parse(existingCall.arguments || '{}'),
                 };
               }
             }) || [],
