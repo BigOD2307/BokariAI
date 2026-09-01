@@ -1,4 +1,6 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { and, asc, eq } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { mapChat, mapMessages } from '@/lib/supabase/mappers';
 
 export const GET = async (
@@ -7,40 +9,34 @@ export const GET = async (
 ) => {
   try {
     const { id } = await params;
-    const supabase = createServerClient(req);
 
-    const { data: chat, error: chatError } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+    const [chat] = await pgDb
+      .select()
+      .from(schema.chats)
+      .where(eq(schema.chats.id, id))
+      .limit(1);
 
-    if (chatError) throw chatError;
     if (!chat) {
       return Response.json({ message: 'Chat not found' }, { status: 404 });
     }
 
     // Owned chats are private to their owner. Unowned guest chats
     // (user_id null) stay readable by anyone holding the 40-byte id.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (chat.user_id && (!user || chat.user_id !== user.id)) {
+    const caller = await getCaller(req);
+    if (chat.userId && (!caller || chat.userId !== caller.userId)) {
       return Response.json({ message: 'Chat not found' }, { status: 404 });
     }
 
-    const { data: messages, error: msgError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', id)
-      .order('id', { ascending: true });
-
-    if (msgError) throw msgError;
+    const messages = await pgDb
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.chatId, id))
+      .orderBy(asc(schema.messages.id));
 
     return Response.json(
       {
         chat: mapChat(chat),
-        messages: mapMessages(messages || []),
+        messages: mapMessages(messages),
       },
       { status: 200 },
     );
@@ -59,36 +55,29 @@ export const DELETE = async (
 ) => {
   try {
     const { id } = await params;
-    const supabase = createServerClient(req);
 
     // Require an authenticated owner — never delete a chat for an
     // unauthenticated caller, and only the owner may delete their chat.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const caller = await getCaller(req);
+    if (!caller) {
       return Response.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: chat, error: chatError } = await supabase
-      .from('chats')
-      .select('user_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (chatError) throw chatError;
+    const [chat] = await pgDb
+      .select({ userId: schema.chats.userId })
+      .from(schema.chats)
+      .where(eq(schema.chats.id, id))
+      .limit(1);
+
     // 404 (not 403) when missing or not owned, so we don't leak existence.
-    if (!chat || chat.user_id !== user.id) {
+    if (!chat || chat.userId !== caller.userId) {
       return Response.json({ message: 'Chat not found' }, { status: 404 });
     }
 
-    await supabase.from('messages').delete().eq('chat_id', id);
-    const { error } = await supabase
-      .from('chats')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
+    await pgDb.delete(schema.messages).where(eq(schema.messages.chatId, id));
+    await pgDb
+      .delete(schema.chats)
+      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, caller.userId)));
 
     return Response.json(
       { message: 'Chat deleted successfully' },

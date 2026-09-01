@@ -1,39 +1,27 @@
 import { customAlphabet } from 'nanoid';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import type { CreateShareInput, Share } from '@/lib/types/shares';
 
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 10);
-
-let _admin: SupabaseClient | null = null;
-
-function getAdmin(): SupabaseClient {
-  if (_admin) return _admin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error('[shares] Missing SUPABASE env vars.');
-  }
-  _admin = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  return _admin;
-}
 
 export const generateShareId = (): string => `shr_${nanoid()}`;
 
 export const generateShareSlug = (): string => nanoid();
 
-const rowToShare = (row: any): Share => ({
+type ShareRow = typeof schema.shares.$inferSelect;
+
+const rowToShare = (row: ShareRow): Share => ({
   id: row.id,
-  chatId: row.chat_id,
-  userId: row.user_id,
+  chatId: row.chatId,
+  userId: row.userId,
   slug: row.slug,
-  isIndexed: row.is_indexed,
-  anonymousAuthor: row.anonymous_author,
-  viewCount: row.view_count,
-  createdAt: row.created_at,
-  expiresAt: row.expires_at,
-  revokedAt: row.revoked_at,
+  isIndexed: row.isIndexed,
+  anonymousAuthor: row.anonymousAuthor,
+  viewCount: row.viewCount,
+  createdAt: row.createdAt.toISOString(),
+  expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
+  revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
 });
 
 export const createShare = async (
@@ -43,118 +31,110 @@ export const createShare = async (
   const id = generateShareId();
   const slug = generateShareSlug();
   const expiresAt = input.expiresInDays
-    ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+    ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
     : null;
-  const { data, error } = await getAdmin()
-    .from('shares')
-    .insert({
+  const [row] = await pgDb
+    .insert(schema.shares)
+    .values({
       id,
-      chat_id: input.chatId,
-      user_id: userId,
+      chatId: input.chatId,
+      userId,
       slug,
-      is_indexed: input.isIndexed ?? true,
-      anonymous_author: input.anonymousAuthor ?? false,
-      expires_at: expiresAt,
+      isIndexed: input.isIndexed ?? true,
+      anonymousAuthor: input.anonymousAuthor ?? false,
+      expiresAt,
     })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return rowToShare(data);
+    .returning();
+  return rowToShare(row);
 };
 
+/** Replicates the old "Public shares are publicly readable" RLS policy:
+ *  `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`. */
 export const getShareBySlug = async (slug: string): Promise<Share | null> => {
-  const { data, error } = await getAdmin()
-    .from('shares')
-    .select('*')
-    .eq('slug', slug)
-    .is('revoked_at', null)
-    .maybeSingle();
-  if (error) {
+  try {
+    const [row] = await pgDb
+      .select()
+      .from(schema.shares)
+      .where(and(eq(schema.shares.slug, slug), isNull(schema.shares.revokedAt)))
+      .limit(1);
+    if (!row) return null;
+    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
+    return rowToShare(row);
+  } catch (error) {
     console.error('[shares] getShareBySlug error:', error);
     return null;
   }
-  if (!data) return null;
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return null;
-  }
-  return rowToShare(data);
 };
 
 export const getShareById = async (id: string): Promise<Share | null> => {
-  const { data, error } = await getAdmin()
-    .from('shares')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle();
-  if (error) {
+  try {
+    const [row] = await pgDb.select().from(schema.shares).where(eq(schema.shares.id, id)).limit(1);
+    return row ? rowToShare(row) : null;
+  } catch (error) {
     console.error('[shares] getShareById error:', error);
     return null;
   }
-  return data ? rowToShare(data) : null;
 };
 
 export const getShareByChat = async (chatId: string): Promise<Share | null> => {
-  const { data, error } = await getAdmin()
-    .from('shares')
-    .select('*')
-    .eq('chat_id', chatId)
-    .is('revoked_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
+  try {
+    const [row] = await pgDb
+      .select()
+      .from(schema.shares)
+      .where(and(eq(schema.shares.chatId, chatId), isNull(schema.shares.revokedAt)))
+      .orderBy(desc(schema.shares.createdAt))
+      .limit(1);
+    return row ? rowToShare(row) : null;
+  } catch (error) {
     console.error('[shares] getShareByChat error:', error);
     return null;
   }
-  return data ? rowToShare(data) : null;
 };
 
+/** Was an RPC (`increment_share_view_count`) with a select+update fallback
+ *  when the RPC errored — there's no separate RPC layer against Neon, so
+ *  this now IS the direct path: a single atomic UPDATE ... RETURNING. */
 export const incrementViewCount = async (id: string): Promise<number> => {
-  const { data, error } = await getAdmin().rpc('increment_share_view_count', {
-    p_share_id: id,
-  });
-  if (error) {
-    try {
-      const { data: current } = await getAdmin()
-        .from('shares')
-        .select('view_count')
-        .eq('id', id)
-        .single();
-      const next = (current?.view_count ?? 0) + 1;
-      await getAdmin()
-        .from('shares')
-        .update({ view_count: next })
-        .eq('id', id);
-      return next;
-    } catch {
-      return 0;
-    }
+  try {
+    const [row] = await pgDb
+      .update(schema.shares)
+      .set({ viewCount: sql`${schema.shares.viewCount} + 1` })
+      .where(eq(schema.shares.id, id))
+      .returning({ viewCount: schema.shares.viewCount });
+    return row?.viewCount ?? 0;
+  } catch {
+    return 0;
   }
-  return data ?? 0;
 };
 
 export const logShareView = async (
   shareId: string,
   meta: { referrer?: string; country?: string; userAgent?: string },
 ): Promise<void> => {
-  await getAdmin().from('share_views').insert({
-    share_id: shareId,
+  await pgDb.insert(schema.shareViews).values({
+    shareId,
     referrer: meta.referrer ?? null,
     country: meta.country ?? null,
-    user_agent: meta.userAgent ?? null,
+    userAgent: meta.userAgent ?? null,
   });
 };
 
 export const revokeShare = async (id: string, userId: string): Promise<boolean> => {
-  const { error, count } = await getAdmin()
-    .from('shares')
-    .update({ revoked_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('user_id', userId)
-    .is('revoked_at', null);
-  if (error) {
+  try {
+    const rows = await pgDb
+      .update(schema.shares)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(schema.shares.id, id),
+          eq(schema.shares.userId, userId),
+          isNull(schema.shares.revokedAt),
+        ),
+      )
+      .returning({ id: schema.shares.id });
+    return rows.length > 0;
+  } catch (error) {
     console.error('[shares] revokeShare error:', error);
     return false;
   }
-  return (count ?? 0) > 0;
 };

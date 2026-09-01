@@ -14,6 +14,11 @@ process.env.DATA_DIR = dir;
 process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'test-anon-key';
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'test-service-role-key';
+// Neon Postgres (src/lib/db/postgres/client.ts) throws at import time if this
+// is missing — a placeholder is enough for modules that only construct the
+// Pool/drizzle client without a test ever issuing a real query against it.
+process.env.NEON_DATABASE_URL =
+  process.env.NEON_DATABASE_URL ?? 'postgresql://test:test@localhost:5432/test';
 // HS256 signing secret for local JWT verification (src/lib/auth/jwt.ts). Set
 // here so it's present before any test imports that module — it reads the env
 // var once at module load, not per-call.

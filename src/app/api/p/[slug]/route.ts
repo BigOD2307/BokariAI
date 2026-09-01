@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { eq } from 'drizzle-orm';
 import { getShareBySlug } from '@/lib/auth/shares';
-import { createServerClient } from '@/lib/supabase/server';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { mapChat, mapMessages } from '@/lib/supabase/mappers';
 import { incrementViewCount } from '@/lib/auth/shares';
 import type { PublicChatView } from '@/lib/types/shares';
@@ -50,27 +51,22 @@ export async function GET(
     return NextResponse.json({ message: 'Not found' }, { status: 404 });
   }
 
-  const supabase = createServerClient(request);
-  const { data: chat, error: chatError } = await supabase
-    .from('chats')
-    .select('*')
-    .eq('id', share.chatId)
-    .maybeSingle();
-  if (chatError || !chat) {
-    return NextResponse.json({ message: 'Not found' }, { status: 404 });
-  }
-
-  const { data: messages, error: msgError } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('chat_id', share.chatId)
-    .order('id', { ascending: true });
-  if (msgError) {
+  let chat: typeof schema.chats.$inferSelect | undefined;
+  let messages: (typeof schema.messages.$inferSelect)[];
+  try {
+    [chat] = await pgDb.select().from(schema.chats).where(eq(schema.chats.id, share.chatId)).limit(1);
+    if (!chat) return NextResponse.json({ message: 'Not found' }, { status: 404 });
+    messages = await pgDb
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.chatId, share.chatId))
+      .orderBy(schema.messages.id);
+  } catch {
     return NextResponse.json({ message: 'Internal error' }, { status: 500 });
   }
 
   const mappedChat = mapChat(chat);
-  const mappedMessages = mapMessages(messages || []);
+  const mappedMessages = mapMessages(messages);
 
   const firstUserMessage = mappedMessages.find((m: any) => m.role === 'user') ?? null;
   const assistantMessage = mappedMessages.find((m: any) => m.role === 'assistant') ?? null;
@@ -85,12 +81,13 @@ export async function GET(
 
   let authorName = 'Utilisateur Bokari';
   if (!share.anonymousAuthor) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('name')
-      .eq('id', share.userId)
-      .maybeSingle();
-    authorName = profile?.name ?? authorName;
+    // `profiles` no longer exists — `users` absorbed it, same `name` column.
+    const [author] = await pgDb
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, share.userId))
+      .limit(1);
+    authorName = author?.name ?? authorName;
   }
 
   incrementViewCount(share.id).catch(() => undefined);

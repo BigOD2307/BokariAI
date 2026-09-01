@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 import { generateTitle } from '@/lib/agents/title';
 
 const Body = z.object({
@@ -25,22 +27,17 @@ export async function POST(
       );
     }
 
-    const supabase = createServerClient(request);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const caller = await getCaller(request);
+    if (!caller) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: chat, error: chatError } = await supabase
-      .from('chats')
-      .select('id, title')
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const [chat] = await pgDb
+      .select({ id: schema.chats.id, title: schema.chats.title })
+      .from(schema.chats)
+      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, caller.userId)))
+      .limit(1);
 
-    if (chatError) throw chatError;
     if (!chat) {
       return NextResponse.json({ message: 'Chat not found' }, { status: 404 });
     }
@@ -54,18 +51,15 @@ export async function POST(
 
     const result = await generateTitle(body.firstMessage);
 
-    const { data, error } = await supabase
-      .from('chats')
-      .update({
-        title: result.title,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select('id, title, updated_at')
-      .single();
-
-    if (error) throw error;
+    const [data] = await pgDb
+      .update(schema.chats)
+      .set({ title: result.title, updatedAt: new Date() })
+      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, caller.userId)))
+      .returning({
+        id: schema.chats.id,
+        title: schema.chats.title,
+        updatedAt: schema.chats.updatedAt,
+      });
 
     return NextResponse.json(
       { chat: data, model: result.model, latencyMs: result.latencyMs },

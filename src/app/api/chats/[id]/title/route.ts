@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
+import { getCaller } from '@/lib/auth/require';
+import { pgDb, schema } from '@/lib/db/postgres/client';
 
 const Body = z.object({
   title: z.string().min(1).max(200).trim(),
@@ -24,26 +26,21 @@ export async function PATCH(
       );
     }
 
-    const supabase = createServerClient(request);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const caller = await getCaller(request);
+    if (!caller) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('chats')
-      .update({
-        title: body.title,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select('id, title, updated_at')
-      .single();
+    const [data] = await pgDb
+      .update(schema.chats)
+      .set({ title: body.title, updatedAt: new Date() })
+      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, caller.userId)))
+      .returning({
+        id: schema.chats.id,
+        title: schema.chats.title,
+        updatedAt: schema.chats.updatedAt,
+      });
 
-    if (error) throw error;
     if (!data) {
       return NextResponse.json({ message: 'Chat not found' }, { status: 404 });
     }

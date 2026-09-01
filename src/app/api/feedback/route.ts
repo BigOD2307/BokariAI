@@ -19,7 +19,7 @@
  */
 import { z } from 'zod';
 import supabase from '@/lib/db';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -102,11 +102,8 @@ export const POST = async (req: Request) => {
     // get to leave feedback, and the row will be user_id = NULL).
     let userId: string | null = null;
     try {
-      const authClient = createServerClient(req);
-      const {
-        data: { user },
-      } = await authClient.auth.getUser();
-      userId = user?.id ?? null;
+      const caller = await getCaller(req);
+      userId = caller?.userId ?? null;
     } catch {
       userId = null;
     }

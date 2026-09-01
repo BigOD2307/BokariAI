@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createServerClient } from '@/lib/supabase/server';
+import { getCaller } from '@/lib/auth/require';
 import { persistReview } from '@/lib/learn/decks';
 
 /** Grade a flashcard review: maps the grade → SM-2 → next due date. */
@@ -12,16 +12,14 @@ export const POST = async (
   { params }: { params: Promise<{ id: string }> },
 ) => {
   const { id } = await params;
-  const {
-    data: { user },
-  } = await createServerClient(req).auth.getUser();
-  if (!user) return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const caller = await getCaller(req);
+  if (!caller) return Response.json({ message: 'Unauthorized' }, { status: 401 });
   try {
     const parsed = reviewSchema.safeParse(await req.json());
     if (!parsed.success) {
       return Response.json({ message: 'Note invalide' }, { status: 400 });
     }
-    const result = await persistReview(user.id, id, parsed.data.grade);
+    const result = await persistReview(caller.userId, id, parsed.data.grade);
     if (!result) {
       return Response.json({ message: 'Carte introuvable' }, { status: 404 });
     }

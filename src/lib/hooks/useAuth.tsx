@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { getStoredAccessToken } from '@/lib/auth/clientToken';
 
 export interface User {
   id: string;
@@ -138,72 +138,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (initialized.current) return;
     initialized.current = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name || '',
-          email: session.user.email || '',
-          plan: session.user.user_metadata?.plan || 'free',
-        });
-        setAccessToken(session.access_token);
-      }
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session?.user) {
+    // The browser sends the sb-access-token cookie automatically
+    // (same-origin fetch) — /api/auth/me reads it server-side via
+    // getCaller() and returns the profile, or { user: null } if there's no
+    // valid session. No client-side token verification needed here.
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
           setUser({
-            id: session.user.id,
-            name: session.user.user_metadata?.name || '',
-            email: session.user.email || '',
-            plan: session.user.user_metadata?.plan || 'free',
+            id: data.user.id,
+            name: data.user.name || '',
+            email: data.user.email || '',
+            plan: data.user.plan || 'free',
           });
-          setAccessToken(session.access_token);
-        } else {
-          setUser(null);
-          setAccessToken(null);
+          setAccessToken(getStoredAccessToken());
         }
         setLoading(false);
-      },
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.toLowerCase(),
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
+      const data = await res.json();
 
-      if (error) {
-        return { success: false, message: 'Email ou mot de passe incorrect' };
+      if (!res.ok) {
+        return { success: false, message: data.message || 'Email ou mot de passe incorrect' };
       }
 
-      if (data.user) {
-        // signInWithPassword returns a session on success; if it's somehow
-        // absent, treat it as a failed login rather than a half-logged-in
-        // state (user set but no access token → protected calls would 401).
-        if (!data.session) {
-          return { success: false, message: 'Email ou mot de passe incorrect' };
-        }
-        setUser({
-          id: data.user.id,
-          name: data.user.user_metadata?.name || '',
-          email: data.user.email || '',
-          plan: data.user.user_metadata?.plan || 'free',
-        });
-        setAccessToken(data.session.access_token);
-        setShowAuthModal(false);
-        return { success: true };
-      }
-
-      return { success: false, message: 'Erreur de connexion' };
+      setUser({
+        id: data.user.id,
+        name: data.user.name || '',
+        email: data.user.email || '',
+        plan: data.user.plan || 'free',
+      });
+      setAccessToken(data.access_token);
+      setShowAuthModal(false);
+      return { success: true };
     } catch {
       return { success: false, message: 'Erreur reseau' };
     }
@@ -211,56 +188,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.toLowerCase(),
-        password,
-        options: {
-          data: {
-            name,
-            plan: 'free',
-          },
-        },
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
       });
+      const data = await res.json();
 
-      if (error) {
-        if (error.message.includes('already registered')) {
-          return { success: false, message: 'Un compte avec cet email existe deja' };
-        }
-        return { success: false, message: error.message };
+      if (!res.ok) {
+        return { success: false, message: data.message || "Erreur lors de l'inscription" };
       }
 
-      if (data.user) {
-        // Instant access: a session is returned only when email confirmation is
-        // DISABLED on the Supabase project (Authentication ▸ Providers ▸ Email ▸
-        // "Confirm email" = OFF). If confirmation is ON, signUp returns a user
-        // but NO session — surface that clearly instead of a half-logged-in
-        // state with no access token.
-        if (!data.session) {
-          return {
-            success: false,
-            message:
-              'Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.',
-          };
-        }
-        setUser({
-          id: data.user.id,
-          name: data.user.user_metadata?.name || name,
-          email: data.user.email || email,
-          plan: 'free',
-        });
-        setAccessToken(data.session.access_token);
-        setShowAuthModal(false);
-        return { success: true };
-      }
-
-      return { success: false, message: 'Erreur lors de l\'inscription' };
+      // Unlike the old Supabase flow, registration is always instant here —
+      // there's no email-confirmation step to gate on.
+      setUser({
+        id: data.user.id,
+        name: data.user.name || name,
+        email: data.user.email || email,
+        plan: data.user.plan || 'free',
+      });
+      setAccessToken(data.access_token);
+      setShowAuthModal(false);
+      return { success: true };
     } catch {
       return { success: false, message: 'Erreur reseau' };
     }
   }, []);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // clear local state regardless of network failure
+    }
     setUser(null);
     setAccessToken(null);
   }, []);

@@ -22,7 +22,7 @@ export const USER_EMAIL_HEADER = 'x-bokari-user-email';
  *  request still gets metered by `chargeOrReject` (src/lib/quota/guard.ts) at
  *  the handler level, against a guest fingerprint quota instead of a user id. */
 const PUBLIC_API = [
-  /^\/api\/auth\//,               // Supabase Auth wrappers — no secrets, GoTrue gates itself
+  /^\/api\/auth\//,                // register/login/me/logout must be reachable without a token; each gates itself (me/logout tolerate anonymous callers, register/login validate their own body)
   /^\/api\/p\/[^/]+$/,            // public share payload
   /^\/api\/shares\/[^/]+\/view$/, // view counter
   /^\/api\/discover$/,            // read-only feed, cached
