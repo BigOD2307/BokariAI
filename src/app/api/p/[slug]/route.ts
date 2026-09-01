@@ -22,17 +22,21 @@ const stripAssistantText = (raw: string): string => {
     .trim();
 };
 
+// A 'source' block's `data` is a `Chunk[]` (src/lib/types.ts: `{ content,
+// metadata: { url, title, ... } }`) — NOT `{ source: { metadata_url, ... } }`.
+// That mismatched shape meant this always matched zero sources.
 const buildSources = (messages: any[]): PublicChatView['sources'] => {
   const sources = new Map<string, { title: string; url: string; snippet?: string }>();
   for (const msg of messages) {
     for (const block of msg.responseBlocks ?? []) {
-      if (block?.type === 'source' && block?.source?.metadata_url) {
-        const url = block.source.metadata_url;
-        if (!sources.has(url)) {
+      if (block?.type !== 'source' || !Array.isArray(block.data)) continue;
+      for (const chunk of block.data) {
+        const url = chunk?.metadata?.url;
+        if (url && !sources.has(url)) {
           sources.set(url, {
             url,
-            title: block.source.metadata_title ?? url,
-            snippet: block.source.text?.slice(0, 200),
+            title: chunk.metadata?.title ?? url,
+            snippet: typeof chunk.content === 'string' ? chunk.content.slice(0, 200) : undefined,
           });
         }
       }
@@ -68,14 +72,19 @@ export async function GET(
   const mappedChat = mapChat(chat);
   const mappedMessages = mapMessages(messages);
 
-  const firstUserMessage = mappedMessages.find((m: any) => m.role === 'user') ?? null;
-  const assistantMessage = mappedMessages.find((m: any) => m.role === 'assistant') ?? null;
-  const answerBlocks = (assistantMessage?.responseBlocks ?? []) as any[];
-  const answerText = answerBlocks
-    .filter((b) => b?.type === 'text' || b?.type === 'p')
-    .map((b) => b?.text ?? b?.content ?? '')
-    .join(' ')
-    .trim() || stripAssistantText(assistantMessage?.content ?? '');
+  // Each row in `messages` is one turn — the user's `query` plus its own
+  // `responseBlocks` (src/lib/types.ts), not separate role-tagged rows.
+  // ShareButton shares a whole chatId with no messageId, and the share UI
+  // shows a single question/answer pair, so the first turn is the one that
+  // matches both the H1 (data.chat.title, itself derived from turn 1) and
+  // the answer shown beneath it.
+  const primaryMessage = (mappedMessages[0] ?? null) as any;
+  const answerBlocks = (primaryMessage?.responseBlocks ?? []) as any[];
+  const rawAnswer = answerBlocks
+    .filter((b) => b?.type === 'text')
+    .map((b) => (typeof b?.data === 'string' ? b.data : ''))
+    .join('\n\n');
+  const answerText = stripAssistantText(rawAnswer);
 
   const sources = buildSources(mappedMessages);
 
@@ -116,8 +125,8 @@ export async function GET(
       name: authorName,
       isAnonymous: share.anonymousAuthor,
     },
-    firstUserMessage: firstUserMessage
-      ? { content: (firstUserMessage as any).content ?? (firstUserMessage as any).query ?? '' }
+    firstUserMessage: primaryMessage?.query
+      ? { content: primaryMessage.query }
       : null,
     answer: answerText,
     sources,
