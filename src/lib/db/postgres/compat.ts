@@ -58,6 +58,24 @@ function toPgError(err: unknown): PgError {
   return { code: e.code ?? 'UNKNOWN', message: e.message ?? String(err) };
 }
 
+/**
+ * `pg` does not serialise JS arrays/objects for `jsonb` columns — a bare
+ * array like `['web']` gets sent using Postgres's ARRAY literal wire format
+ * (`{web}`), which fails (or silently mis-casts) against a jsonb column
+ * expecting `'[...]'::jsonb`. This codebase has no per-column type info to
+ * consult (that's the whole point of the shim — it mirrors Supabase's
+ * untyped `.insert()`), so plain arrays/objects are JSON-stringified
+ * unconditionally. Every jsonb write in this codebase (chats.sources/files,
+ * messages.response_blocks, feedback.captured) already passes a plain
+ * array/object here, and nothing passes one to a non-jsonb column.
+ */
+function toSqlParam(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return JSON.stringify(value);
+  if (typeof value === 'object' && !(value instanceof Date)) return JSON.stringify(value);
+  return value;
+}
+
 class QueryBuilder<T = Record<string, unknown>> implements PromiseLike<ManyResult<T>> {
   private op: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
   private cols = '*';
@@ -149,14 +167,14 @@ class QueryBuilder<T = Record<string, unknown>> implements PromiseLike<ManyResul
         const entries = Object.entries(this.payload ?? {}).filter(([, v]) => v !== undefined);
         const cols = entries.map(([k]) => quoteIdent(k)).join(', ');
         const placeholders = entries.map((_, i) => `$${i + 1}`).join(', ');
-        const params = entries.map(([, v]) => v);
+        const params = entries.map(([, v]) => toSqlParam(v));
         const sql = `INSERT INTO ${quoteIdent(this.table)} (${cols}) VALUES (${placeholders}) RETURNING ${this.cols}`;
         result = await this.pool.query(sql, params);
       } else if (this.op === 'upsert') {
         const entries = Object.entries(this.payload ?? {}).filter(([, v]) => v !== undefined);
         const cols = entries.map(([k]) => quoteIdent(k)).join(', ');
         const placeholders = entries.map((_, i) => `$${i + 1}`).join(', ');
-        const params = entries.map(([, v]) => v);
+        const params = entries.map(([, v]) => toSqlParam(v));
         const conflictCols = (this.onConflictCols ?? []).map(quoteIdent).join(', ');
         const updateCols = entries
           .map(([k]) => k)
@@ -167,7 +185,7 @@ class QueryBuilder<T = Record<string, unknown>> implements PromiseLike<ManyResul
       } else if (this.op === 'update') {
         const entries = Object.entries(this.payload ?? {}).filter(([, v]) => v !== undefined);
         const setParts = entries.map(([k], i) => `${quoteIdent(k)} = $${i + 1}`).join(', ');
-        const setParams = entries.map(([, v]) => v);
+        const setParams = entries.map(([, v]) => toSqlParam(v));
         const { sql: where, params: whereParams } = filterClause(this.filters, entries.length + 1);
         const sql = `UPDATE ${quoteIdent(this.table)} SET ${setParts}${where} RETURNING ${this.cols}`;
         result = await this.pool.query(sql, [...setParams, ...whereParams]);
