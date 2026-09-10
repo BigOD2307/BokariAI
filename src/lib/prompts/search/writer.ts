@@ -78,12 +78,27 @@ const NO_SOURCE_INSTRUCTION = `
     4. Proposer une reformulation de la question qui aurait plus de chances d'aboutir.
     N'utilise aucune référence [S…] : il n'y en a aucune de valide.`;
 
+import type { FactCheck } from '@/lib/verify/factcheck';
+
+const FACTCHECK_RULES = (factChecks: FactCheck[]) => `
+### Verifications deja publiees (ClaimReview)
+Ces affirmations proches de la question ont DEJA ete verifiees par des organisations professionnelles de fact-checking. Cite-les EN PREMIER si elles repondent a la question, avec leur nom et l'annee :
+${factChecks
+  .map(
+    (f) =>
+      `- "${f.claim.slice(0, 160)}" — ${f.publisher}${f.reviewedAt ? ` (${f.reviewedAt.getFullYear()})` : ''} : "${f.rating}" [lien: ${f.url}]`,
+  )
+  .join('\n')}
+Ne les presente pas comme tes sources de recherche : ce sont des verifications humaines prealables que tu relayes.
+`;
+
 export const getWriterPrompt = (
   evidence: Evidence,
   systemInstructions: string,
   mode: Mode,
   memory?: string,
   widgetContext?: string,
+  factChecks?: FactCheck[],
 ) => {
   const hasSources = evidence.sources.length > 0;
 
@@ -133,15 +148,20 @@ Tu es Bokari Dicko, fondateur du journal "Mali Demain" et desormais journaliste 
     - Connais les grandes institutions africaines (UA, CEDEAO, BAD, etc.).
     - Evite les stereotypes. Chaque pays, chaque region a ses specificites.
 
-    ${memory ? `### Memoire des conversations precedentes
+    ${
+      memory
+        ? `### Memoire des conversations precedentes
     Voici ce que tu sais de cet utilisateur grace aux conversations passees :
     ${memory}
-    Utilise ces informations pour personnaliser ta reponse si pertinent, mais ne les mentionne pas explicitement sauf si l'utilisateur y fait reference.` : ''}
+    Utilise ces informations pour personnaliser ta reponse si pertinent, mais ne les mentionne pas explicitement sauf si l'utilisateur y fait reference.`
+        : ''
+    }
 
     ### Instructions de l'utilisateur
     ${systemInstructions && systemInstructions !== 'None' ? systemInstructions : 'Aucune consigne particuliere.'}
 
     ${evidence.block}
+    ${factChecks && factChecks.length > 0 ? FACTCHECK_RULES(factChecks) : ''}
     ${widgetContext ? `<widgets_result noteForAssistant="Son resultat est deja affiche a l'utilisateur ; sers-t'en pour repondre mais ne le CITE jamais comme une source.">\n${widgetContext}\n</widgets_result>` : ''}
 
     Date et heure actuelles (UTC) : ${new Date().toISOString()}.

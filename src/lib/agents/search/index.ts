@@ -16,6 +16,10 @@ import { ROLE_OPTIONS } from '@/lib/ai/roles';
 import { streamTextWithFallback } from '@/lib/ai/gateway';
 import { selectEvidence, DEFAULT_BUDGET } from '@/lib/retrieval/select';
 import { buildEvidence, toChunk } from './evidence';
+import {
+  searchFactChecks,
+  looksLikeFactCheckIntent,
+} from '@/lib/verify/factcheck';
 import { auditCitations } from './citations';
 import { checkFaithfulness, isFaithfulnessEnabled } from './faithfulness';
 import {
@@ -206,16 +210,33 @@ class SearchAgent {
 
     const memoryPromise = fetchMemory(input.userId ?? null, input.chatId);
 
+    // C8 — fact-check cross-referencing: when the question reads like a claim
+    // to verify ("est-il vrai que…", "rumeur", "démenti"), look up the Google
+    // Fact Check index (Africa Check, Fasocheck, AFP Factuel…) IN PARALLEL with
+    // the search, so it adds zero latency. Empty on any failure; never a
+    // dependency of the answer path.
+    const factCheckPromise = looksLikeFactCheckIntent(input.followUp)
+      ? searchFactChecks(input.followUp, { language: 'fr' }).catch(() => [])
+      : Promise.resolve([]);
+
     session.emit('analyzing', {
       step: 'reading',
       message: 'Lecture des sources…',
     });
 
-    const [widgetOutputs, searchResults, memory] = await Promise.all([
-      widgetPromise,
-      searchPromise,
-      memoryPromise,
-    ]);
+    const [widgetOutputs, searchResults, memory, factChecks] =
+      await Promise.all([
+        widgetPromise,
+        searchPromise,
+        memoryPromise,
+        factCheckPromise,
+      ]);
+
+    if (factChecks.length > 0) {
+      // Visible in the research steps; the injected prompt block below tells
+      // the writer to lead with them when they answer the question.
+      session.emit('data', { type: 'factChecks', factChecks });
+    }
 
     session.emit('data', { type: 'researchComplete' });
 
@@ -316,12 +337,11 @@ class SearchAgent {
     });
 
     if (looksLikeChartRequest(input.followUp)) {
-      const chartSources = evidence
-        .map((f, index) => ({
-          id: index + 1,
-          title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
-          content: f.content,
-        }));
+      const chartSources = evidence.map((f, index) => ({
+        id: index + 1,
+        title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
+        content: f.content,
+      }));
       try {
         const chart = await extractChartSpec(
           input.followUp,
@@ -341,12 +361,11 @@ class SearchAgent {
     // as chart extraction (parallel, before the writer streams) so it adds no
     // serial latency. Each extractor fails closed to prose.
     if (isRichBlocksEnabled()) {
-      const richSources = evidence
-        .map((f, index) => ({
-          id: index + 1,
-          title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
-          content: f.content,
-        }));
+      const richSources = evidence.map((f, index) => ({
+        id: index + 1,
+        title: (f.metadata?.title as string) ?? `Source ${index + 1}`,
+        content: f.content,
+      }));
       if (richSources.length > 0) {
         const richLlm = input.config.llm;
         const jobs: Promise<RichBlock | null>[] = [];
@@ -390,6 +409,7 @@ class SearchAgent {
       input.config.mode,
       memory || undefined,
       widgetContext || undefined,
+      factChecks.length > 0 ? factChecks : undefined,
     );
 
     // Route the writer: the fast tier for simple queries, the default
