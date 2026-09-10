@@ -9,6 +9,7 @@ import uploadsSearchAction from './uploadsSearch';
 import webSearchAction from './webSearch';
 import youtubeSearchAction from './youtubeSearch';
 import youtubeComprehendAction from './youtubeComprehend';
+import newsSearchAction from './newsSearch';
 
 ActionRegistry.register(webSearchAction);
 ActionRegistry.register(doneAction);
@@ -20,5 +21,6 @@ ActionRegistry.register(socialSearchAction);
 ActionRegistry.register(youtubeSearchAction);
 ActionRegistry.register(youtubeComprehendAction);
 ActionRegistry.register(discoverSearchAction);
+ActionRegistry.register(newsSearchAction);
 
 export { ActionRegistry };

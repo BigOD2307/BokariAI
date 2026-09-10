@@ -1,6 +1,9 @@
 /**
- * The three autonomous content jobs.
+ * The four autonomous content jobs.
  *
+ *  - news-crawl       : every hour, ingest a batch of African news feeds into
+ *                       the corpus (C9) — the source Bokari reads before the
+ *                       search engines do.
  *  - discover-daily   : refresh the Discover feed once a day (all topics).
  *  - articles-rotate  : every 5h, generate one draft article for the *next*
  *                       category in rotation (6 beats → full tour in 30h).
@@ -13,6 +16,7 @@
 import { CATEGORY_ORDER, getCategory } from '@/lib/blog/categories';
 import { generateArticleForCategory } from '@/lib/blog/generate';
 import { runDiscoverRefresh } from '@/lib/discover/refreshJob';
+import { crawlBatch } from '@/lib/news/crawl';
 import { updateAfricaStats } from '@/lib/stats/update';
 import { getCursor, setCursor, markRunning, markDone } from './state';
 
@@ -23,7 +27,11 @@ export async function runDiscoverDaily(): Promise<JobSummary> {
   await markRunning(job);
   try {
     const summary = await runDiscoverRefresh();
-    await markDone(job, summary.success ? 'ok' : 'error', summary.errors?.join('; '));
+    await markDone(
+      job,
+      summary.success ? 'ok' : 'error',
+      summary.errors?.join('; '),
+    );
     return { job, ...summary };
   } catch (err) {
     await markDone(job, 'error', (err as Error)?.message ?? String(err));
@@ -31,7 +39,9 @@ export async function runDiscoverDaily(): Promise<JobSummary> {
   }
 }
 
-export async function runArticlesRotation(forceCategory?: string): Promise<JobSummary> {
+export async function runArticlesRotation(
+  forceCategory?: string,
+): Promise<JobSummary> {
   const job = 'articles-rotate';
   const cursor = await getCursor(job);
   const slug =
@@ -43,13 +53,21 @@ export async function runArticlesRotation(forceCategory?: string): Promise<JobSu
     const res = await generateArticleForCategory(slug);
     // Record the REAL outcome so a skip/failure is visible in scheduler_state
     // (it used to always record 'ok', hiding dry beats and LLM errors).
-    await markDone(job, res.ok ? 'ok' : 'error', res.ok ? undefined : res.reason);
+    await markDone(
+      job,
+      res.ok ? 'ok' : 'error',
+      res.ok ? undefined : res.reason,
+    );
     return {
       job,
       category: slug,
       generated: res.ok,
       ...(res.ok
-        ? { slug: res.article.slug, title: res.article.title, status: res.article.status }
+        ? {
+            slug: res.article.slug,
+            title: res.article.title,
+            status: res.article.status,
+          }
         : { reason: res.reason }),
     };
   } catch (err) {
@@ -60,6 +78,23 @@ export async function runArticlesRotation(forceCategory?: string): Promise<JobSu
     if (!forceCategory) {
       await setCursor(job, (cursor + 1) % CATEGORY_ORDER.length);
     }
+  }
+}
+
+export async function runNewsCrawl(): Promise<JobSummary> {
+  const job = 'news-crawl';
+  await markRunning(job);
+  try {
+    const summary = await crawlBatch();
+    await markDone(
+      job,
+      summary.errors.length > 0 ? 'error' : 'ok',
+      summary.errors.join('; ').slice(0, 500) || undefined,
+    );
+    return { job, ...summary };
+  } catch (err) {
+    await markDone(job, 'error', (err as Error)?.message ?? String(err));
+    throw err;
   }
 }
 
@@ -85,7 +120,9 @@ export async function runStatsWeekly(): Promise<JobSummary> {
  */
 function dailyAt(hour: number) {
   return (now: Date): number => {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour));
+    const d = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour),
+    );
     if (d.getTime() > now.getTime()) d.setUTCDate(d.getUTCDate() - 1);
     return d.getTime();
   };
@@ -93,13 +130,20 @@ function dailyAt(hour: number) {
 function everyHours(n: number) {
   return (now: Date): number => {
     const slot = now.getUTCHours() - (now.getUTCHours() % n);
-    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), slot);
+    return Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      slot,
+    );
   };
 }
 function weeklyAt(dow: number, hour: number) {
   // dow: 0=Sun … 1=Mon … 6=Sat
   return (now: Date): number => {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour));
+    const d = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour),
+    );
     const diff = (d.getUTCDay() - dow + 7) % 7;
     d.setUTCDate(d.getUTCDate() - diff);
     if (d.getTime() > now.getTime()) d.setUTCDate(d.getUTCDate() - 7);
@@ -115,8 +159,15 @@ export type CronJob = {
 };
 
 export const JOBS: CronJob[] = [
+  // Hourly: full tour of ~39 sources at 6 per pass = ~6.5h, every outlet is
+  // visited at least once every 7 hours. First sources (never fetched) go first.
+  { name: 'news-crawl', lastOccurrence: everyHours(1), run: runNewsCrawl },
   { name: 'discover-daily', lastOccurrence: dailyAt(4), run: runDiscoverDaily },
-  { name: 'articles-rotate', lastOccurrence: everyHours(5), run: () => runArticlesRotation() },
+  {
+    name: 'articles-rotate',
+    lastOccurrence: everyHours(5),
+    run: () => runArticlesRotation(),
+  },
   { name: 'stats-weekly', lastOccurrence: weeklyAt(1, 3), run: runStatsWeekly },
 ];
 
