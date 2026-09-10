@@ -701,6 +701,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           ),
         );
       }
+      // C8: the report also arrives as a persisted `faithfulness` block (part
+      // of response_blocks). Feed `msg.faithfulness` from the block so both
+      // the live path and the reload path share one source of truth.
+      if (data.type === 'block' && data.block?.type === 'faithfulness') {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === messageId
+              ? { ...msg, faithfulness: data.block.data }
+              : msg,
+          ),
+        );
+      }
 
       if (data.type === 'richBlock' && data.block) {
         setMessages((prev) =>

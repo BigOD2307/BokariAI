@@ -151,6 +151,19 @@ export type QuizBlock = {
   };
 };
 
+/**
+ * C8 — persisted per-claim faithfulness report. Lives in `response_blocks`,
+ * so it survives reloads and appears in public shares. The reader-facing
+ * rule: every `supported` verdict carries a verbatim quote that is really
+ * present in the cited source; `unavailable` means the check could not run
+ * and the UI must render nothing rather than a reassuring badge.
+ */
+export type FaithfulnessBlock = {
+  id: string;
+  type: 'faithfulness';
+  data: import('@/lib/agents/search/faithfulness').FaithfulnessReport;
+};
+
 export type Block =
   | TextBlock
   | SourceBlock
@@ -158,4 +171,5 @@ export type Block =
   | WidgetBlock
   | ResearchBlock
   | FlashcardBlock
-  | QuizBlock;
+  | QuizBlock
+  | FaithfulnessBlock;

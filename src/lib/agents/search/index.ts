@@ -476,16 +476,16 @@ class SearchAgent {
       data: citedSources,
     });
 
-    // Citation faithfulness gate (NLI) — opt-in via BOKARI_FAITHFULNESS_ENABLED.
-    // Runs *after* the answer has fully streamed (the user already sees the
-    // text); it checks each cited claim against its source extract and emits a
-    // verdict the UI can badge. Never alters or blocks the answer.
-    if (isFaithfulnessEnabled() && responseBlockId) {
+    // C8 — citation faithfulness gate, per claim, with verbatim proof. On by
+    // default (BOKARI_FAITHFULNESS_ENABLED=false turns it off). Runs after the
+    // answer has fully streamed; emits a persisted `faithfulness` block so the
+    // report survives reloads and shows in public shares.
+    if (responseBlockId && isFaithfulnessEnabled()) {
       const answerText =
         (session.getBlock(responseBlockId) as TextBlock | null)?.data ?? '';
       const sources = evidenceBundle.sources.map((s) => ({
-        content: s.passages.join('\n'),
-        title: s.title,
+        id: s.id,
+        passages: s.passages,
       }));
       if (answerText && sources.length > 0) {
         session.emit('analyzing', {
@@ -499,9 +499,14 @@ class SearchAgent {
             input.config.fastLlm ?? input.config.llm,
           );
           if (report.total > 0) {
-            session.emit('data', { type: 'faithfulness', faithfulness: report });
+            session.emitBlock({
+              id: crypto.randomUUID(),
+              type: 'faithfulness',
+              data: report,
+            });
           }
         } catch (verifyErr) {
+          // The gate must never break the answer path.
           console.warn('[Bokari] faithfulness gate failed:', verifyErr);
         }
       }

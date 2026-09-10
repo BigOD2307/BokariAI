@@ -5,19 +5,23 @@ import { ShieldCheck, ShieldAlert, ShieldX, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
   FaithfulnessReport,
-  ClaimLabel,
+  ClaimVerdict,
 } from '@/lib/agents/search/faithfulness';
 
-const LABEL_FR: Record<ClaimLabel, string> = {
+const LABEL_FR: Record<ClaimVerdict, string> = {
   supported: 'Soutenue',
   partial: 'Partielle',
   unsupported: 'Non soutenue',
 };
 
 /**
- * Compact trust badge for the citation faithfulness gate (NLI). Renders
- * "X/Y affirmations vérifiées" and expands to list the claims that aren't fully
- * supported — Bokari's "chaque affirmation vérifiée à sa source" made visible.
+ * C8 — per-claim faithfulness badge with showable proof. Renders
+ * "X/Y affirmations vérifiées" and expands to list every claim that is not
+ * fully supported. A `supported` claim carries a verbatim quote from its
+ * source — the reader checks the proof itself, not our badge.
+ *
+ * When `report.unavailable` is set the check could not run: we render nothing,
+ * never a badge computed from missing data.
  */
 export default function FaithfulnessBadge({
   report,
@@ -25,12 +29,16 @@ export default function FaithfulnessBadge({
   report: FaithfulnessReport;
 }) {
   const [open, setOpen] = useState(false);
-  if (!report || report.total === 0) return null;
+  if (!report || report.unavailable || report.total === 0) return null;
 
   const allGood = report.unsupported === 0 && report.partial === 0;
   const hasFail = report.unsupported > 0;
+  // More than a third of claims unsupported → warning tone even without a
+  // hard fail, so a plausible-looking answer can't masquerade as verified.
+  const mostlyUnsupported =
+    report.unsupported / report.total > 1 / 3;
 
-  const tone = hasFail
+  const tone = hasFail || mostlyUnsupported
     ? 'text-rose-700 bg-rose-50 border-rose-200'
     : allGood
       ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
@@ -40,7 +48,7 @@ export default function FaithfulnessBadge({
 
   // Surface only claims that aren't fully supported — those are the ones a
   // reader should double-check.
-  const flagged = report.verdicts.filter((v) => v.label !== 'supported');
+  const flagged = report.claims.filter((c) => c.verdict !== 'supported');
 
   return (
     <div className="mt-3">
@@ -69,7 +77,7 @@ export default function FaithfulnessBadge({
 
       {open && flagged.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
-          {flagged.map((v, i) => (
+          {flagged.map((claim, i) => (
             <li
               key={i}
               className="rounded-xl border border-black/[0.06] bg-white/60 px-3 py-2 text-xs"
@@ -78,21 +86,18 @@ export default function FaithfulnessBadge({
                 <span
                   className={cn(
                     'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                    v.label === 'unsupported'
+                    claim.verdict === 'unsupported'
                       ? 'bg-rose-100 text-rose-700'
                       : 'bg-amber-100 text-amber-700',
                   )}
                 >
-                  {LABEL_FR[v.label]}
+                  {LABEL_FR[claim.verdict]}
                 </span>
                 <span className="text-black/40">
-                  source {v.citations.join(', ')}
+                  source {claim.sourceIds.join(', ')}
                 </span>
               </div>
-              <p className="mt-1 text-black/70">{v.text}</p>
-              {v.reason && (
-                <p className="mt-0.5 italic text-black/40">{v.reason}</p>
-              )}
+              <p className="mt-1 text-black/70">{claim.text}</p>
             </li>
           ))}
         </ul>

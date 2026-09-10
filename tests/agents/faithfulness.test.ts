@@ -1,72 +1,141 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
-  extractCitedClaims,
-  scoreFaithfulness,
+  checkFaithfulness,
+  extractClaims,
   isFaithfulnessEnabled,
-  type ClaimVerdict,
 } from '@/lib/agents/search/faithfulness';
 
-describe('faithfulness — claim extraction', () => {
-  it('keeps only cited sentences, strips markers, dedupes + sorts citations', () => {
-    const answer =
-      'Le PIB du Sénégal a augmenté de 5% en 2024 [1]. La capitale est Dakar. Le franc CFA est utilisé dans huit pays [2][1].';
-    const claims = extractCitedClaims(answer);
+const sources = [
+  {
+    id: 'S1',
+    passages: [
+      'Le budget 2026 du Mali atteint 3 200 milliards de FCFA selon la loi de finances.',
+    ],
+  },
+  {
+    id: 'S2',
+    passages: ["L'inflation a ralenti au troisième trimestre."],
+  },
+];
 
-    expect(claims).toHaveLength(2); // the uncited "La capitale…" is dropped
-    expect(claims[0]!.citations).toEqual([1]);
-    expect(claims[0]!.text).toContain('PIB');
-    expect(claims[0]!.text).not.toContain('[1]');
-    expect(claims[1]!.citations).toEqual([1, 2]); // deduped + sorted
-    expect(claims[1]!.text).toContain('franc CFA');
+const llmReturning = (results: unknown) =>
+  ({
+    generateObject: vi.fn(async () => ({ results })),
+  }) as any;
+
+describe('faithfulness — claim extraction', () => {
+  it('keeps only cited [Sn] sentences long enough to be claims', () => {
+    const claims = extractClaims(
+      "Le budget 2026 du Mali atteint 3 200 milliards de FCFA selon la loi de finances [S1]. Court. Une phrase sans source qui est assez longue pour compter mais rien à vérifier.",
+    );
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.sourceIds).toEqual(['S1']);
+    expect(claims[0]!.text).not.toContain('[S1]');
+  });
+
+  it('dedupes multiple citations on one sentence (order of appearance)', () => {
+    const claims = extractClaims(
+      "L'inflation a ralenti au troisième trimestre et d'autres faits encore assez longs pour compter [S2][S2][S1].",
+    );
+    expect(claims[0]!.sourceIds).toEqual(['S2', 'S1']);
   });
 
   it('returns nothing for empty or uncited answers', () => {
-    expect(extractCitedClaims('')).toEqual([]);
-    expect(extractCitedClaims('No citations here. Just prose.')).toEqual([]);
+    expect(extractClaims('')).toEqual([]);
+    expect(extractClaims('Pas de citations ici. Juste de la prose assez longue.')).toEqual([]);
   });
 });
 
-describe('faithfulness — scoring', () => {
-  const v = (label: ClaimVerdict['label']): ClaimVerdict => ({
-    text: 'x',
-    citations: [1],
-    label,
-  });
-
-  it('counts labels and gives partial half credit', () => {
-    const report = scoreFaithfulness([
-      v('supported'),
-      v('partial'),
-      v('unsupported'),
-    ]);
-    expect(report.total).toBe(3);
+describe('checkFaithfulness', () => {
+  it('keeps a supported verdict whose quote is verbatim in the source', async () => {
+    const report = await checkFaithfulness(
+      'Le budget 2026 du Mali atteint 3 200 milliards de FCFA [S1].',
+      sources,
+      llmReturning([
+        {
+          index: 1,
+          verdict: 'supported',
+          quote: 'Le budget 2026 du Mali atteint 3 200 milliards de FCFA',
+        },
+      ]),
+    );
+    expect(report.claims[0]!.verdict).toBe('supported');
+    expect(report.claims[0]!.quote).toContain('3 200 milliards');
     expect(report.supported).toBe(1);
-    expect(report.partial).toBe(1);
+  });
+
+  it('downgrades a supported verdict whose quote is NOT in the source', async () => {
+    const report = await checkFaithfulness(
+      'Le budget 2026 du Mali atteint 3 200 milliards de FCFA [S1].',
+      sources,
+      llmReturning([
+        { index: 1, verdict: 'supported', quote: 'une phrase que personne n a ecrite' },
+      ]),
+    );
+    expect(report.claims[0]!.verdict).toBe('partial');
+    expect(report.claims[0]!.quote).toBe('');
+  });
+
+  it('treats an unjudged claim as unsupported, never as partial', async () => {
+    const report = await checkFaithfulness(
+      "L'inflation a ralenti au troisième trimestre selon les données [S2].",
+      sources,
+      llmReturning([]),
+    );
+    expect(report.claims[0]!.verdict).toBe('unsupported');
     expect(report.unsupported).toBe(1);
-    expect(report.score).toBeCloseTo((1 + 0.5) / 3); // 0.5
+    expect(report.partial).toBe(0);
   });
 
-  it('treats an all-supported answer as fully faithful', () => {
-    const report = scoreFaithfulness([v('supported'), v('supported')]);
-    expect(report.score).toBe(1);
+  it('normalises quotes (whitespace, apostrophes) before verifying', async () => {
+    const report = await checkFaithfulness(
+      "L'inflation a ralenti au troisième trimestre d'après l'institut [S2].",
+      sources,
+      llmReturning([
+        {
+          index: 1,
+          verdict: 'supported',
+          quote: "L'inflation  a ralenti au troisième   trimestre",
+        },
+      ]),
+    );
+    expect(report.claims[0]!.verdict).toBe('supported');
   });
 
-  it('returns a neutral report for no cited claims', () => {
-    const report = scoreFaithfulness([]);
+  it('reports unavailability instead of a reassuring zero', async () => {
+    const failing = {
+      generateObject: vi.fn(async () => {
+        throw new Error('502');
+      }),
+    } as any;
+    const report = await checkFaithfulness(
+      'Une affirmation assez longue pour compter comme une vérification [S1].',
+      sources,
+      failing,
+    );
+    expect(report.unavailable).toBe('502');
+    expect(report.supported).toBe(0);
+    expect(report.total).toBe(1);
+  });
+
+  it('returns an empty report when nothing is checkable (no LLM call)', async () => {
+    const llm = { generateObject: vi.fn() } as any;
+    const report = await checkFaithfulness('Réponse sans aucune citation.', sources, llm);
     expect(report.total).toBe(0);
-    expect(report.score).toBe(1);
+    expect(llm.generateObject).not.toHaveBeenCalled();
   });
 });
 
-describe('faithfulness — feature flag', () => {
-  it('is opt-in via BOKARI_FAITHFULNESS_ENABLED', () => {
+describe('feature flag', () => {
+  it('is ON by default, off only with BOKARI_FAITHFULNESS_ENABLED=false', () => {
     const prev = process.env.BOKARI_FAITHFULNESS_ENABLED;
-    process.env.BOKARI_FAITHFULNESS_ENABLED = 'true';
+    delete process.env.BOKARI_FAITHFULNESS_ENABLED;
     expect(isFaithfulnessEnabled()).toBe(true);
     process.env.BOKARI_FAITHFULNESS_ENABLED = 'false';
     expect(isFaithfulnessEnabled()).toBe(false);
-    delete process.env.BOKARI_FAITHFULNESS_ENABLED;
-    expect(isFaithfulnessEnabled()).toBe(false);
+    process.env.BOKARI_FAITHFULNESS_ENABLED = 'true';
+    expect(isFaithfulnessEnabled()).toBe(true);
     if (prev !== undefined) process.env.BOKARI_FAITHFULNESS_ENABLED = prev;
+    else delete process.env.BOKARI_FAITHFULNESS_ENABLED;
   });
 });
