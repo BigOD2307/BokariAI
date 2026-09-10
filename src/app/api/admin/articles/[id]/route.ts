@@ -21,7 +21,9 @@ export async function PATCH(
   try {
     await requireAdmin(req);
   } catch (err) {
-    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
   }
 
   const { id } = await ctx.params;
@@ -64,7 +66,9 @@ export async function GET(
   try {
     await requireAdmin(req);
   } catch (err) {
-    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
   }
   const { id } = await ctx.params;
   const article = await getArticleById(id);

@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Markdown from 'markdown-to-jsx';
-import { Check, X, Eye, RotateCcw, Sparkles, Loader2, ExternalLink } from 'lucide-react';
+import {
+  Check,
+  X,
+  Eye,
+  RotateCcw,
+  Sparkles,
+  Loader2,
+  ExternalLink,
+} from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { CATEGORIES, getCategory } from '@/lib/blog/categories';
 
@@ -76,7 +84,10 @@ export default function AdminArticlesPage() {
     load();
   }, [load]);
 
-  const act = async (id: string, action: 'publish' | 'reject' | 'unpublish') => {
+  const act = async (
+    id: string,
+    action: 'publish' | 'reject' | 'unpublish',
+  ) => {
     setBusy(id);
     try {
       await fetch(`/api/admin/articles/${id}`, {
@@ -103,10 +114,12 @@ export default function AdminArticlesPage() {
       const s = data?.summary;
       setNotice(
         s?.generated
-          ? `Brouillon créé : « ${s.title} »`
+          ? s.status === 'published'
+            ? `Auto-publié : « ${s.title} » (fidélité vérifiée ≥ 90 %)`
+            : `Brouillon créé : « ${s.title} »`
           : `Aucun article généré (${s?.reason ?? 'raison inconnue'})`,
       );
-      if (tab === 'draft') await load();
+      await load();
     } catch {
       setNotice('Échec de la génération.');
     } finally {
@@ -118,7 +131,8 @@ export default function AdminArticlesPage() {
     return (
       <Shell>
         <p className="text-[15px] text-[color:var(--bk-ink-soft,#334155)]">
-          Connecte-toi avec un compte administrateur pour accéder à la file de relecture.
+          Connecte-toi avec un compte administrateur pour accéder à la file de
+          relecture.
         </p>
       </Shell>
     );
@@ -128,7 +142,8 @@ export default function AdminArticlesPage() {
     return (
       <Shell>
         <p className="text-[15px] text-[color:var(--bk-ink-soft,#334155)]">
-          Accès réservé. Le compte <strong>{user.email}</strong> n&apos;est pas administrateur.
+          Accès réservé. Le compte <strong>{user.email}</strong> n&apos;est pas
+          administrateur.
         </p>
       </Shell>
     );
@@ -138,7 +153,10 @@ export default function AdminArticlesPage() {
     <Shell>
       {/* Generate on demand */}
       <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-[color:var(--bk-ink,#0f172a)]/12 bg-white p-4">
-        <Sparkles size={18} className="text-[color:var(--bk-teal-700,#0f766e)]" />
+        <Sparkles
+          size={18}
+          className="text-[color:var(--bk-teal-700,#0f766e)]"
+        />
         <span className="text-[14px] font-medium">Générer un brouillon</span>
         <select
           value={genCategory}
@@ -156,10 +174,18 @@ export default function AdminArticlesPage() {
           disabled={generating}
           className="inline-flex items-center gap-1.5 rounded-lg border-2 border-[color:var(--bk-teal-700,#0f766e)] bg-[color:var(--bk-teal,#14b8a6)] px-3.5 py-1.5 text-[14px] font-medium text-white disabled:opacity-60"
         >
-          {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          {generating ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Sparkles size={15} />
+          )}
           Générer
         </button>
-        {notice && <span className="text-[13px] text-[color:var(--bk-ink-soft,#334155)]">{notice}</span>}
+        {notice && (
+          <span className="text-[13px] text-[color:var(--bk-ink-soft,#334155)]">
+            {notice}
+          </span>
+        )}
       </div>
 
       {/* Tabs */}
@@ -207,12 +233,20 @@ export default function AdminArticlesPage() {
                     </span>
                   )}
                   <span className="text-[color:var(--bk-ink,#0f172a)]/45">
-                    {a.origin === 'auto' ? 'IA' : a.origin} · {a.readingMinutes} min ·{' '}
-                    {a.sources.length} sources
+                    {a.origin === 'auto' ? 'IA' : a.origin} · {a.readingMinutes}{' '}
+                    min · {a.sources.length} sources ·{' '}
+                    {new Set(a.sources.map((s) => s.outlet)).size} domaines
                   </span>
+                  {a.origin === 'auto' && a.status === 'published' && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      auto-publié (fidélité ≥ 90 %)
+                    </span>
+                  )}
                 </div>
 
-                <h3 className="mt-3 text-[19px] font-semibold leading-snug">{a.title}</h3>
+                <h3 className="mt-3 text-[19px] font-semibold leading-snug">
+                  {a.title}
+                </h3>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-[color:var(--bk-ink-soft,#334155)]">
                   {a.excerpt}
                 </p>
@@ -275,14 +309,23 @@ export default function AdminArticlesPage() {
                 {isOpen && (
                   <div className="mt-5 border-t border-[color:var(--bk-ink,#0f172a)]/10 pt-5">
                     <div className="prose prose-slate max-w-none prose-headings:text-[color:var(--bk-ink,#0f172a)] prose-p:text-[color:var(--bk-ink-soft,#334155)]">
-                      <Markdown options={{ forceBlock: true }}>{a.body}</Markdown>
+                      <Markdown options={{ forceBlock: true }}>
+                        {a.body}
+                      </Markdown>
                     </div>
                     {a.sources.length > 0 && (
                       <ol className="mt-4 flex flex-col gap-1.5 text-[13px]">
                         {a.sources.map((s) => (
                           <li key={s.id} className="flex gap-2">
-                            <span className="font-bold text-[color:var(--bk-teal-700,#0f766e)]">[{s.id}]</span>
-                            <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline">
+                            <span className="font-bold text-[color:var(--bk-teal-700,#0f766e)]">
+                              [{s.id}]
+                            </span>
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
                               {s.title} · {s.outlet}
                             </a>
                           </li>
@@ -309,8 +352,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           File de relecture
         </h1>
         <p className="mt-3 text-[15px] text-[color:var(--bk-ink-soft,#334155)]">
-          Les articles générés par Bokari toutes les 5h arrivent ici en brouillon. Relis, puis
-          publie ou rejette.
+          Les articles générés par Bokari toutes les 5h arrivent ici en
+          brouillon. Relis, puis publie ou rejette.
         </p>
         <div className="mt-8">{children}</div>
       </main>

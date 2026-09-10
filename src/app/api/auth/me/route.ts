@@ -21,6 +21,7 @@ export const GET = async (req: Request) => {
         name: user.name || '',
         email: user.email,
         plan: user.plan,
+        role: caller.role,
         createdAt: user.createdAt,
       },
     });

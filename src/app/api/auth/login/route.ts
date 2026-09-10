@@ -51,6 +51,7 @@ export const POST = async (req: Request) => {
           name: user.name || '',
           email: user.email,
           plan: user.plan,
+          role: user.role,
         },
         access_token: token,
       },

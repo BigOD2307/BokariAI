@@ -1,6 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { getStoredAccessToken } from '@/lib/auth/clientToken';
 
 export interface User {
@@ -8,6 +15,7 @@ export interface User {
   name: string;
   email: string;
   plan: string;
+  role?: string;
   phone?: string | null;
   authProvider?: 'email' | 'whatsapp';
 }
@@ -27,8 +35,15 @@ interface AuthContextType {
   loading: boolean;
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; message?: string }>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   requireAuth: () => boolean;
   accessToken: string | null;
@@ -61,7 +76,9 @@ const GUEST_NOOP_STATE: GuestSessionState = {
 
 export const useGuestSession = (): GuestSessionState => {
   const { user } = useContext(AuthContext);
-  const [state, setState] = useState<Omit<GuestSessionState, 'increment' | 'refresh'>>({
+  const [state, setState] = useState<
+    Omit<GuestSessionState, 'increment' | 'refresh'>
+  >({
     isGuest: !user,
     id: '',
     queriesCount: 0,
@@ -151,6 +168,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             name: data.user.name || '',
             email: data.user.email || '',
             plan: data.user.plan || 'free',
+            role: data.user.role,
           });
           setAccessToken(getStoredAccessToken());
         }
@@ -169,7 +187,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const data = await res.json();
 
       if (!res.ok) {
-        return { success: false, message: data.message || 'Email ou mot de passe incorrect' };
+        return {
+          success: false,
+          message: data.message || 'Email ou mot de passe incorrect',
+        };
       }
 
       setUser({
@@ -177,6 +198,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         name: data.user.name || '',
         email: data.user.email || '',
         plan: data.user.plan || 'free',
+        role: data.user.role,
       });
       setAccessToken(data.access_token);
       setShowAuthModal(false);
@@ -186,34 +208,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
-      });
-      const data = await res.json();
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password }),
+        });
+        const data = await res.json();
 
-      if (!res.ok) {
-        return { success: false, message: data.message || "Erreur lors de l'inscription" };
+        if (!res.ok) {
+          return {
+            success: false,
+            message: data.message || "Erreur lors de l'inscription",
+          };
+        }
+
+        // Unlike the old Supabase flow, registration is always instant here —
+        // there's no email-confirmation step to gate on.
+        setUser({
+          id: data.user.id,
+          name: data.user.name || name,
+          email: data.user.email || email,
+          plan: data.user.plan || 'free',
+        });
+        setAccessToken(data.access_token);
+        setShowAuthModal(false);
+        return { success: true };
+      } catch {
+        return { success: false, message: 'Erreur reseau' };
       }
-
-      // Unlike the old Supabase flow, registration is always instant here —
-      // there's no email-confirmation step to gate on.
-      setUser({
-        id: data.user.id,
-        name: data.user.name || name,
-        email: data.user.email || email,
-        plan: data.user.plan || 'free',
-      });
-      setAccessToken(data.access_token);
-      setShowAuthModal(false);
-      return { success: true };
-    } catch {
-      return { success: false, message: 'Erreur reseau' };
-    }
-  }, []);
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     try {

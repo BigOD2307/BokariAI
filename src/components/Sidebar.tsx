@@ -1,7 +1,15 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Search, Compass, Plus, Menu, User, GraduationCap } from 'lucide-react';
+import {
+  Search,
+  Compass,
+  Plus,
+  Menu,
+  User,
+  GraduationCap,
+  Gauge,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments, useRouter } from 'next/navigation';
 import React, { useState } from 'react';
@@ -46,9 +54,35 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
   };
 
   const navLinks = [
-    { icon: Search, href: '/', active: segments.length === 0 || segments.includes('c'), label: 'Recherche' },
-    { icon: Compass, href: '/discover', active: segments.includes('discover'), label: 'Découvrir' },
-    { icon: GraduationCap, href: '/learn', active: segments.includes('learn'), label: 'Apprendre' },
+    {
+      icon: Search,
+      href: '/',
+      active: segments.length === 0 || segments.includes('c'),
+      label: 'Recherche',
+    },
+    {
+      icon: Compass,
+      href: '/discover',
+      active: segments.includes('discover'),
+      label: 'Découvrir',
+    },
+    {
+      icon: GraduationCap,
+      href: '/learn',
+      active: segments.includes('learn'),
+      label: 'Apprendre',
+    },
+    // Admin surface: visible only to admin-role accounts.
+    ...(user?.role === 'admin'
+      ? [
+          {
+            icon: Gauge,
+            href: '/admin',
+            active: segments.includes('admin'),
+            label: 'Admin',
+          },
+        ]
+      : []),
   ];
 
   const renderSidebar = (collapsed: boolean) => (
@@ -63,7 +97,11 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             collapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
           )}
         >
-          <Plus size={16} strokeWidth={2.5} className="flex-shrink-0 text-[color:var(--bk-teal-600,#0d9488)]" />
+          <Plus
+            size={16}
+            strokeWidth={2.5}
+            className="flex-shrink-0 text-[color:var(--bk-teal-600,#0d9488)]"
+          />
           {!collapsed && (
             <span className="font-hand whitespace-nowrap text-[15px] uppercase tracking-wide text-[color:var(--bk-ink,#0f172a)]">
               Nouveau fil
@@ -88,7 +126,11 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             title={collapsed ? link.label : undefined}
           >
             <link.icon size={18} strokeWidth={2} className="flex-shrink-0" />
-            {!collapsed && <span className="font-hand whitespace-nowrap text-[15px]">{link.label}</span>}
+            {!collapsed && (
+              <span className="font-hand whitespace-nowrap text-[15px]">
+                {link.label}
+              </span>
+            )}
           </Link>
         ))}
       </nav>
@@ -150,7 +192,9 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           onMouseLeave={() => setHovered(false)}
           className={cn(
             'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r-2 border-[color:var(--bk-ink,#0f172a)] bg-[color:var(--bk-paper,#ffffff)] transition-[width] duration-200',
-            hovered ? 'w-[260px] shadow-[10px_0_30px_-12px_rgba(15,23,42,0.30)]' : 'w-[68px]',
+            hovered
+              ? 'w-[260px] shadow-[10px_0_30px_-12px_rgba(15,23,42,0.30)]'
+              : 'w-[68px]',
           )}
           aria-label="Barre laterale"
         >
@@ -185,7 +229,11 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         >
           <Menu size={20} strokeWidth={2} />
         </button>
-        <Link href="/" className="flex items-center gap-2" aria-label="Accueil Bokari">
+        <Link
+          href="/"
+          className="flex items-center gap-2"
+          aria-label="Accueil Bokari"
+        >
           <BokariAvatar size={38} />
           <span className="font-display text-[19px] leading-none text-[color:var(--bk-ink,#0f172a)]">
             Bokari
@@ -197,7 +245,9 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
       <Layout>{children}</Layout>
 
       <AnimatePresence>
-        {settingsOpen && <SettingsDialogue isOpen={settingsOpen} setIsOpen={setSettingsOpen} />}
+        {settingsOpen && (
+          <SettingsDialogue isOpen={settingsOpen} setIsOpen={setSettingsOpen} />
+        )}
       </AnimatePresence>
     </div>
   );

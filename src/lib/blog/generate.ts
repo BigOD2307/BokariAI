@@ -11,14 +11,21 @@
  */
 import { parse as parsePartial, Allow } from 'partial-json';
 import type { Message } from '@/lib/types';
-import { chatWithFallback } from '@/lib/ai/gateway';
+import { chatWithFallback, embed } from '@/lib/ai/gateway';
 import { searchNews } from '@/lib/search';
+import { readPage } from '@/lib/retrieval/read';
+import { checkFaithfulness } from '@/lib/agents/search/faithfulness';
 import { getCategory, CATEGORY_ORDER } from './categories';
 import { insertArticle, listArticles, type StoredArticle } from './store';
 import type { ArticleSource } from './articles';
 import { injectBacklinks, stripModelLinks, brandFiche } from './backlinks';
 
-type FetchedSource = { title: string; outlet: string; url: string; snippet: string };
+type FetchedSource = {
+  title: string;
+  outlet: string;
+  url: string;
+  snippet: string;
+};
 
 function hostnameOf(url: string): string {
   try {
@@ -45,7 +52,10 @@ function sanitizeSnippet(s: string): string {
 }
 
 /** Pull fresh results across the category's seed queries, dedupe by URL. */
-async function gatherSources(seeds: string[], limit = 8): Promise<FetchedSource[]> {
+async function gatherSources(
+  seeds: string[],
+  limit = 8,
+): Promise<FetchedSource[]> {
   const settled = await Promise.allSettled(seeds.map((q) => searchNews(q)));
   const seen = new Set<string>();
   const out: FetchedSource[] = [];
@@ -76,10 +86,80 @@ async function gatherSources(seeds: string[], limit = 8): Promise<FetchedSource[
   return out;
 }
 
+/**
+ * C10 — full-text material for the writer. The corpus (C9) already contains
+ * the articles our RSS crawler read with Readability; matching sources are
+ * upgraded from a 600-char snippet to up to 4 000 chars of real text (capped
+ * at ~20 000 chars total). This is the change that makes articles "justes"
+ * instead of merely "plausibles": 20k chars of matter instead of 4.8k.
+ */
+async function enrichWithCorpus(
+  sources: FetchedSource[],
+): Promise<FetchedSource[]> {
+  const out: FetchedSource[] = [];
+  let budget = 20_000;
+  for (const s of sources) {
+    if (budget <= 1_000) break;
+    try {
+      const page = await readPage(s.url);
+      const text = page?.text ? sanitizeSnippet(page.text) : '';
+      const full = text.length > s.snippet.length * 2 ? text : s.snippet;
+      const body = full.slice(0, Math.min(4_000, budget));
+      budget -= body.length;
+      out.push({ ...s, snippet: body });
+    } catch {
+      out.push(s); // corpus read failed — the snippet is still there
+    }
+  }
+  return out;
+}
+
+/**
+ * C10 — thematic dedup: compare the category seed to the last 30 published
+ * articles by embedding cosine; above 0.88 the beat already ran this week,
+ * so generating again would rewrite the same story. Returns the closest
+ * similarity (0 when nothing compares).
+ */
+async function recentTopicOverlap(seeds: string[]): Promise<number> {
+  try {
+    const recent = await listArticles({ status: 'published', limit: 30 });
+    if (recent.length === 0) return 0;
+    const [seedVec] = await embed([seeds.join(' ')]);
+    if (!seedVec) return 0;
+    let max = 0;
+    const inputs = recent.map((a) => `${a.title}\n${a.excerpt ?? ''}`);
+    const vecs = await embed(inputs);
+    for (const v of vecs) {
+      const sim = cosine(seedVec, v);
+      if (sim > max) max = sim;
+    }
+    return max;
+  } catch {
+    return 0; // embedding outage must not block generation
+  }
+}
+
+function cosine(a: number[], b: number[]): number {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 /** Titles of recently published articles in this + adjacent beats — fed to the
  *  model so it can naturally weave a related-article phrase (linked later by the
  *  deterministic backlink pass). Titles only; no URLs ever reach the model. */
-async function candidateArticleTitles(category: string, max = 8): Promise<string[]> {
+async function candidateArticleTitles(
+  category: string,
+  max = 8,
+): Promise<string[]> {
   try {
     const rows = await listArticles({ status: 'published', limit: 40 });
     const idx = CATEGORY_ORDER.indexOf(category);
@@ -88,7 +168,9 @@ async function candidateArticleTitles(category: string, max = 8): Promise<string
         ? [
             category,
             CATEGORY_ORDER[(idx + 1) % CATEGORY_ORDER.length],
-            CATEGORY_ORDER[(idx - 1 + CATEGORY_ORDER.length) % CATEGORY_ORDER.length],
+            CATEGORY_ORDER[
+              (idx - 1 + CATEGORY_ORDER.length) % CATEGORY_ORDER.length
+            ],
           ]
         : [category],
     );
@@ -159,7 +241,9 @@ function buildPrompt(
   fiche: string,
 ): Message[] {
   const dataBlock = sources
-    .map((s, i) => `[${i + 1}] ${s.title} — ${s.outlet}\n<<<\n${s.snippet}\n>>>`)
+    .map(
+      (s, i) => `[${i + 1}] ${s.title} — ${s.outlet}\n<<<\n${s.snippet}\n>>>`,
+    )
     .join('\n\n');
 
   const articlesBlock =
@@ -214,7 +298,11 @@ function extractFieldsLoose(raw: string): ParsedArticle | null {
   const excerpt = excerptM ? unescapeJsonish(excerptM[1]).trim() : undefined;
   // Strip the opening quote and any trailing wrapping (closing quote and/or the
   // JSON object's closing brace) the model left dangling after the Markdown.
-  let body = bodyM[1].trim().replace(/^"/, '').replace(/\s*"?\s*\}?\s*$/, '').trim();
+  let body = bodyM[1]
+    .trim()
+    .replace(/^"/, '')
+    .replace(/\s*"?\s*\}?\s*$/, '')
+    .trim();
   body = unescapeJsonish(body);
   if (title.length < 8 || body.length < 200) return null;
   return { title, excerpt, body };
@@ -233,7 +321,8 @@ export function parseArticle(raw: string): ParsedArticle | null {
   if (fenced) txt = fenced[1];
   const start = txt.indexOf('{');
   const end = txt.lastIndexOf('}');
-  const jsonish = start >= 0 ? txt.slice(start, end > start ? end + 1 : undefined) : txt;
+  const jsonish =
+    start >= 0 ? txt.slice(start, end > start ? end + 1 : undefined) : txt;
 
   // 1. strict JSON — only accept if it actually has a body.
   try {
@@ -319,10 +408,20 @@ export async function generateArticleForCategory(
   const cat = getCategory(categorySlug);
   if (!cat) return { ok: false, reason: `unknown category ${categorySlug}` };
 
-  const sources = await gatherSources(cat.searchSeeds);
+  // C10 — thematic dedup: skip this beat if the topic already ran recently.
+  const overlap = await recentTopicOverlap(cat.searchSeeds);
+  if (overlap >= 0.88) {
+    return {
+      ok: false,
+      reason: `topic already covered recently (cosine ${overlap.toFixed(2)})`,
+    };
+  }
+
+  let sources = await gatherSources(cat.searchSeeds);
   if (sources.length < 2) {
     return { ok: false, reason: `not enough sources (${sources.length})` };
   }
+  sources = await enrichWithCorpus(sources);
 
   const candidateTitles = await candidateArticleTitles(categorySlug);
   const messages = buildPrompt(
@@ -345,7 +444,10 @@ export async function generateArticleForCategory(
     );
     content = res.content ?? '';
   } catch (err) {
-    return { ok: false, reason: `llm error: ${(err as Error)?.message ?? err}` };
+    return {
+      ok: false,
+      reason: `llm error: ${(err as Error)?.message ?? err}`,
+    };
   }
 
   const parsed = parseArticle(content);
@@ -363,7 +465,10 @@ export async function generateArticleForCategory(
   // article opens on the lede and doesn't end on a labelled "Conclusion".
   const bodyRaw = parsed.body
     .trim()
-    .replace(/^[ \t]*#{1,4}[ \t]*(introduction|conclusion)\b[^\n]*\r?\n+/gim, '')
+    .replace(
+      /^[ \t]*#{1,4}[ \t]*(introduction|conclusion)\b[^\n]*\r?\n+/gim,
+      '',
+    )
     .trim();
   if (title.length < 8 || bodyRaw.length < 300) {
     return { ok: false, reason: 'output too short' };
@@ -373,17 +478,55 @@ export async function generateArticleForCategory(
   // Quality floor: a real article cross-references at least two sources. Prefer
   // "no article this cycle" over thin, single-source filler.
   if (finalSources.length < 2) {
-    return { ok: false, reason: `too few distinct sources cited (${finalSources.length})` };
+    return {
+      ok: false,
+      reason: `too few distinct sources cited (${finalSources.length})`,
+    };
   }
 
   // Backlinks: strip any URL the model emitted (it shouldn't), then inject the
   // verified internal + brand links deterministically — the model never authors
   // a link target, so no fabricated slug or brand URL can ship.
   const cleanBody = stripModelLinks(body);
-  const linkedBody = await injectBacklinks(cleanBody, { category: categorySlug });
+  const linkedBody = await injectBacklinks(cleanBody, {
+    category: categorySlug,
+  });
 
-  const excerpt =
-    (parsed.excerpt?.trim() || bodyRaw.replace(/[#*`>]/g, '').split('\n')[0] || '').slice(0, 200);
+  const excerpt = (
+    parsed.excerpt?.trim() ||
+    bodyRaw.replace(/[#*`>]/g, '').split('\n')[0] ||
+    ''
+  ).slice(0, 200);
+
+  // C10 — fidelity gate BEFORE publication, reusing the C8 module on the raw
+  // body (citations here are [n] positional, mapped to the pruned sources).
+  // The writer prompt's [n] contract matches FaithfulnessSource lookup by id;
+  // we build synthetic S-ids in source order.
+  const faithSources = finalSources.map((s, i) => ({
+    id: `S${i + 1}`,
+    passages: [sources[s.id - 1]?.snippet ?? ''],
+  }));
+  const bodyWithS = linkedBody.replace(/\[(\d+)\]/g, (_m, d) => `[S${d}]`);
+  let report: Awaited<ReturnType<typeof checkFaithfulness>> | null = null;
+  try {
+    report = await chatWithFallback(
+      (model) => checkFaithfulness(bodyWithS, faithSources, model),
+      `faithfulness:${categorySlug}`,
+    );
+  } catch (err) {
+    console.warn('[blog/generate] faithfulness check failed:', err);
+  }
+
+  // Distinct domains cited: West African outlets republish each other, so
+  // counting URLs would manufacture consensus.
+  const distinctDomains = new Set(finalSources.map((s) => s.outlet)).size;
+  const canAutoPublish =
+    report !== null &&
+    !report.unavailable &&
+    report.total > 0 &&
+    distinctDomains >= 3 &&
+    report.unsupported === 0 &&
+    report.supported / report.total >= 0.9;
 
   const article = await insertArticle({
     category: categorySlug,
@@ -391,14 +534,14 @@ export async function generateArticleForCategory(
     excerpt,
     body: linkedBody,
     sources: finalSources,
-    status: 'draft',
+    status: canAutoPublish ? 'published' : 'draft',
     origin: 'auto',
     author: 'Bokari',
   });
 
   console.log(
-    `[blog/generate] ${categorySlug}: drafted "${article.title}" ` +
-      `(${finalSources.length} sources, ${article.readingMinutes}min, slug=${article.slug})`,
+    `[blog/generate] ${categorySlug}: ${canAutoPublish ? 'PUBLISHED' : 'drafted'} "${article.title}" ` +
+      `(${finalSources.length} sources / ${distinctDomains} domains, fidelity ${report && report.total > 0 ? `${report.supported}/${report.total}` : 'n/a'}, ${article.readingMinutes}min, slug=${article.slug})`,
   );
   return { ok: true, article };
 }

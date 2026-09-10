@@ -10,10 +10,13 @@ export async function GET(req: Request) {
   try {
     await requireAdmin(req);
   } catch (err) {
-    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
   }
 
-  const status = (new URL(req.url).searchParams.get('status') || 'draft') as ArticleStatus;
+  const status = (new URL(req.url).searchParams.get('status') ||
+    'draft') as ArticleStatus;
   const articles = await listArticles({ status, limit: 100 });
   return Response.json({ articles });
 }
@@ -26,7 +29,9 @@ export async function POST(req: Request) {
   try {
     await requireAdmin(req);
   } catch (err) {
-    return err instanceof HttpError ? err.toResponse() : Response.json({}, { status: 404 });
+    return err instanceof HttpError
+      ? err.toResponse()
+      : Response.json({}, { status: 404 });
   }
 
   let category: string | undefined;
