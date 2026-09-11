@@ -255,6 +255,18 @@
   animation: fade-in 0.4s ease-out;
 }
 
+/* Citation click target: brief outline pulse when jumping from an inline
+ * citation ([Sn]) to its source card (Perplexity-style round-trip). */
+@keyframes source-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  30% { box-shadow: 0 0 0 3px var(--bokari-flash, rgba(13, 148, 136, 0.45)); }
+}
+
+.source-flash {
+  animation: source-flash 1.2s ease-out;
+  border-radius: 0.75rem;
+}
+
 /* Source card hover */
 .source-card {
   transition: all 0.2s ease;

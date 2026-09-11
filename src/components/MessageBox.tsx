@@ -156,7 +156,7 @@ const MessageBox = ({
   );
 
   return (
-    <div className="bokari-fade-in">
+    <div className="bokari-fade-in" data-message-section>
       {/* User query */}
       <div className="pt-6 pb-5">
         <h2 className="text-black/90 dark:text-white/90 font-medium text-2xl lg:text-[28px] lg:w-9/12 leading-snug tracking-tight">
@@ -187,7 +187,7 @@ const MessageBox = ({
         <div ref={dividerRef} className="flex flex-col gap-5 w-full lg:w-9/12">
           {/* Sources */}
           {sources.length > 0 && (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-2.5" data-sources-block>
               <div className="flex items-center gap-2">
                 <BookCopy className="text-bokari-500" size={16} />
                 <h3 className="text-black/80 dark:text-white/80 font-medium text-sm">
@@ -364,7 +364,7 @@ const MessageBox = ({
                         </h3>
                       </div>
                       <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] overflow-hidden divide-y divide-black/[0.04] dark:divide-white/[0.04]">
-                        {section.suggestions.map(
+                        {section.suggestions.slice(0, 3).map(
                           (suggestion: string, i: number) => (
                             <button
                               key={i}

@@ -374,7 +374,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         shortName = id;
                       }
                       const fullTitle = source?.metadata?.title || shortName;
-                      return `<citation href="${url}" title="${fullTitle}">${shortName}</citation>`;
+                      return `<citation href="${url}" title="${fullTitle}" data-source="${id}">${shortName}</citation>`;
                     } else {
                       return ``;
                     }

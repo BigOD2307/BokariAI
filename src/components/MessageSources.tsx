@@ -37,7 +37,8 @@ const SourceCard = ({ source, index }: { source: Chunk; index: number }) => {
 
   return (
     <a
-      className="source-card bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] rounded-xl p-3 flex flex-col justify-between gap-2 border border-transparent hover:border-black/[0.06] dark:hover:border-white/[0.06] transition-all duration-200"
+      data-source-card={source.metadata.id ?? ''}
+      className="source-card bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] rounded-xl p-3 flex flex-col justify-between gap-2 border border-transparent hover:border-black/[0.06] dark:hover:border-white/[0.06] transition-all duration-200 scroll-mt-24"
       href={source.metadata.url}
       target="_blank"
     >
