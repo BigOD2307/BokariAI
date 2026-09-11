@@ -3,7 +3,7 @@
  * seed definitions in ./schema. The /data page reads `getAfricaStats()`; the
  * weekly cron writes via `setStat()`.
  */
-import { all, run } from '@/lib/db/sqlite';
+import { all, get, run } from '@/lib/db/sqlite';
 import { STAT_DEFS, sourceById, type StatDef } from './schema';
 
 export type StatValue = {
@@ -56,8 +56,15 @@ export async function setStat(
   value: string,
   numeric: number,
   sourceUrl: string | null,
+  dataYear?: number | null,
 ): Promise<void> {
   const now = new Date().toISOString();
+  // C11: append to the value history BEFORE overwriting, but only when the
+  // figure actually moves — a history of identical rows is noise, not signal.
+  const prev = await get<Row>(
+    'SELECT value, numeric, source_url FROM africa_stats WHERE key = ?',
+    [def.key],
+  ).catch(() => null);
   await run(
     `INSERT INTO africa_stats (key, value, numeric, source_url, updated_at, last_checked_at)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -69,13 +76,58 @@ export async function setStat(
        last_checked_at = excluded.last_checked_at`,
     [def.key, value, numeric, sourceUrl, now, now],
   );
+  if (!prev || prev.value !== value) {
+    await run(
+      `INSERT INTO africa_stat_history (key, value, numeric, source_url, data_year, recorded_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [def.key, value, numeric, sourceUrl, dataYear ?? null, now],
+    ).catch(() => {
+      /* history table missing (migration not yet applied) — the live value stands */
+    });
+  }
+}
+
+/** Last N value changes across all stats, newest first — the admin diff. */
+export async function recentStatChanges(limit = 10): Promise<
+  Array<{
+    key: string;
+    value: string;
+    numeric: number | null;
+    sourceUrl: string | null;
+    dataYear: number | null;
+    recordedAt: string;
+  }>
+> {
+  try {
+    const rows = await all<{
+      key: string;
+      value: string;
+      numeric: number | null;
+      source_url: string | null;
+      data_year: number | null;
+      recorded_at: string;
+    }>(
+      `SELECT key, value, numeric, source_url, data_year, recorded_at FROM africa_stat_history ORDER BY recorded_at DESC LIMIT ?`,
+      [Math.max(1, Math.floor(limit))],
+    );
+    return rows.map((r) => ({
+      key: r.key,
+      value: r.value,
+      numeric: r.numeric,
+      sourceUrl: r.source_url,
+      dataYear: r.data_year,
+      recordedAt: r.recorded_at,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** Record that we checked a stat but didn't change it (for observability). */
 export async function touchChecked(key: string): Promise<void> {
   const now = new Date().toISOString();
-  await run(
-    `UPDATE africa_stats SET last_checked_at = ? WHERE key = ?`,
-    [now, key],
-  );
+  await run(`UPDATE africa_stats SET last_checked_at = ? WHERE key = ?`, [
+    now,
+    key,
+  ]);
 }

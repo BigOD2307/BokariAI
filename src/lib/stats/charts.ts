@@ -16,12 +16,37 @@
 export type ChartSource = { id: number; label: string; url: string };
 
 export const CHART_SOURCES: ChartSource[] = [
-  { id: 1, label: 'ONU DESA — World Population Prospects 2024', url: 'https://population.un.org/wpp/' },
-  { id: 3, label: 'FMI — World Economic Outlook', url: 'https://www.imf.org/en/Publications/WEO' },
-  { id: 4, label: 'Banque africaine de développement — Perspectives économiques 2026', url: 'https://www.afdb.org/en/knowledge/publications/african-economic-outlook' },
-  { id: 5, label: 'GSMA — The Mobile Economy Sub-Saharan Africa 2024', url: 'https://www.gsmaintelligence.com/research/the-mobile-economy-sub-saharan-africa-2024' },
-  { id: 6, label: 'GSMA — State of the Industry Report on Mobile Money 2025', url: 'https://www.gsma.com/sotir/' },
-  { id: 7, label: 'Banque mondiale / Statista — PIB par secteur, Afrique subsaharienne 2023', url: 'https://data.worldbank.org/' },
+  {
+    id: 1,
+    label: 'ONU DESA — World Population Prospects 2024',
+    url: 'https://population.un.org/wpp/',
+  },
+  {
+    id: 3,
+    label: 'FMI — World Economic Outlook',
+    url: 'https://www.imf.org/en/Publications/WEO',
+  },
+  {
+    id: 4,
+    label: 'Banque africaine de développement — Perspectives économiques 2026',
+    url: 'https://www.afdb.org/en/knowledge/publications/african-economic-outlook',
+  },
+  {
+    id: 5,
+    label: 'GSMA — The Mobile Economy Sub-Saharan Africa 2024',
+    url: 'https://www.gsmaintelligence.com/research/the-mobile-economy-sub-saharan-africa-2024',
+  },
+  {
+    id: 6,
+    label: 'GSMA — State of the Industry Report on Mobile Money 2025',
+    url: 'https://www.gsma.com/sotir/',
+  },
+  {
+    id: 7,
+    label:
+      'Banque mondiale / Statista — PIB par secteur, Afrique subsaharienne 2023',
+    url: 'https://data.worldbank.org/',
+  },
 ];
 
 /** Top African countries by population (millions, UN WPP 2024 estimates). */

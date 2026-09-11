@@ -50,6 +50,14 @@ type Overview = {
     misses: number;
     hitRate: number | null;
   };
+  statsChanges?: Array<{
+    key: string;
+    value: string;
+    numeric: number | null;
+    sourceUrl: string | null;
+    dataYear: number | null;
+    recordedAt: string;
+  }>;
 };
 
 function fmtTokens(n: number): string {
@@ -350,6 +358,49 @@ export default function AdminOverviewPage() {
               </CardContent>
             </Card>
           </section>
+
+          {/* Données (/data) — derniers changements de valeurs */}
+          {data.statsChanges && data.statsChanges.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-sm font-medium text-neutral-700">
+                Données — derniers changements
+              </h2>
+              <Card>
+                <CardContent className="divide-y divide-neutral-100 p-0">
+                  {data.statsChanges.map((c, i) => (
+                    <div
+                      key={`${c.key}-${c.recordedAt}-${i}`}
+                      className="px-5 py-2.5"
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium">{c.key}</span>
+                        <span className="text-sm font-semibold tabular-nums">
+                          {c.value}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-neutral-500">
+                        {c.dataYear ? `données ${c.dataYear} · ` : ''}
+                        {new Date(c.recordedAt).toLocaleString('fr-FR')}
+                        {c.sourceUrl ? (
+                          <>
+                            {' · '}
+                            <a
+                              href={c.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
+                            >
+                              source
+                            </a>
+                          </>
+                        ) : null}
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </section>
+          )}
         </div>
       )}
     </div>

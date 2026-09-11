@@ -16,6 +16,13 @@ import { chatWithFallback } from '@/lib/ai/gateway';
 import { searchSearxng } from '@/lib/searxng';
 import { getAutoStatDefs, type StatDef } from './schema';
 import { setStat, touchChecked } from './store';
+import {
+  fetchIndicator,
+  latestValue,
+  sumLatest,
+  indicatorUrl,
+  type WBPoint,
+} from './worldbank';
 
 export type StatsUpdateSummary = {
   updated: number;
@@ -37,7 +44,73 @@ function extractNumber(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function refreshOne(def: StatDef): Promise<'updated' | 'unchanged' | 'rejected' | 'error'> {
+/**
+ * C11 — primary-source refresh. Reads the figure from the World Bank open
+ * API (one HTTP call, zero LLM tokens) and applies the same [min, max]
+ * sanity bounds as the legacy path. Returns the numeric value + data year,
+ * or null when the API has nothing usable — the caller then falls back to
+ * the legacy search+LLM refresh rather than leaving a stale figure.
+ */
+async function refreshViaWorldBank(
+  def: StatDef,
+): Promise<{ numeric: number; year: number } | null> {
+  const wb = def.wb;
+  if (!wb) return null;
+  try {
+    let point: WBPoint | null;
+    if (wb.sum) {
+      point = await sumLatest(wb.countries, wb.indicator);
+    } else {
+      const map = await fetchIndicator(wb.countries, wb.indicator);
+      point = map.get(wb.countries[0].toUpperCase()) ?? null;
+    }
+    if (!point) return null;
+
+    let value = point.value;
+    let year = point.year;
+    if (wb.percentOf) {
+      // (%/100) × reference population. Both legs must exist; the year is
+      // the stalest of the two (same honesty rule as sumLatest).
+      const refPoint =
+        wb.percentOf.countries.length === 1
+          ? await latestValue(wb.percentOf.countries[0], wb.percentOf.indicator)
+          : await sumLatest(wb.percentOf.countries, wb.percentOf.indicator);
+      if (!refPoint) return null;
+      value = (value / 100) * refPoint.value;
+      year = Math.min(year, refPoint.year);
+    }
+
+    const numeric = value / (wb.scale ?? 1);
+    if (!Number.isFinite(numeric)) return null;
+    if (numeric < (def.min as number) || numeric > (def.max as number))
+      return null;
+    return { numeric, year };
+  } catch {
+    return null;
+  }
+}
+
+async function refreshOne(
+  def: StatDef,
+): Promise<'updated' | 'unchanged' | 'rejected' | 'error'> {
+  // C11: primary source first — one World Bank HTTP call, zero LLM tokens.
+  // Falls through to the legacy search+LLM refresh only when the API has
+  // nothing usable for this figure.
+  if (def.wb) {
+    const primary = await refreshViaWorldBank(def);
+    if (primary) {
+      const value = def.format!(primary.numeric);
+      await setStat(
+        def,
+        value,
+        primary.numeric,
+        indicatorUrl(def.wb.indicator),
+        primary.year,
+      );
+      return 'updated';
+    }
+  }
+
   let results: { title: string; url: string; content?: string }[] = [];
   try {
     const r = await searchSearxng(def.query as string);
@@ -65,7 +138,11 @@ async function refreshOne(def: StatDef): Promise<'updated' | 'unchanged' | 'reje
   let content = '';
   try {
     const res = await chatWithFallback(
-      (model) => model.generateText({ messages, options: { temperature: 0, maxTokens: 160 } }),
+      (model) =>
+        model.generateText({
+          messages,
+          options: { temperature: 0, maxTokens: 160 },
+        }),
       `stat:${def.key}`,
     );
     content = res.content ?? '';
@@ -80,8 +157,12 @@ async function refreshOne(def: StatDef): Promise<'updated' | 'unchanged' | 'reje
   if (start >= 0 && end > start) {
     try {
       const parsed = JSON.parse(content.slice(start, end + 1));
-      numeric = typeof parsed.numeric === 'number' ? parsed.numeric : extractNumber(String(parsed.numeric ?? ''));
-      sourceIndex = typeof parsed.sourceIndex === 'number' ? parsed.sourceIndex : null;
+      numeric =
+        typeof parsed.numeric === 'number'
+          ? parsed.numeric
+          : extractNumber(String(parsed.numeric ?? ''));
+      sourceIndex =
+        typeof parsed.sourceIndex === 'number' ? parsed.sourceIndex : null;
     } catch {
       numeric = extractNumber(content);
     }
@@ -128,7 +209,9 @@ export async function updateAfricaStats(): Promise<StatsUpdateSummary> {
       summary.details.push(`${def.key}: ${outcome}`);
     } catch (err) {
       summary.errors += 1;
-      summary.details.push(`${def.key}: error ${(err as Error)?.message ?? err}`);
+      summary.details.push(
+        `${def.key}: error ${(err as Error)?.message ?? err}`,
+      );
     }
   }
   return summary;

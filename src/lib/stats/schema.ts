@@ -32,19 +32,59 @@ export type StatDef = {
   max?: number;
   /** Render a fresh numeric back into the display string. */
   format?: (n: number) => string;
+  /**
+   * C11 — World Bank primary source. When set, the cron reads the figure
+   * from the open WB API (no key, no LLM, no search) and only falls back to
+   * the legacy query+LLM refresh when the API has nothing usable.
+   *  - `countries`: one code (latest value) or several with `sum: true`.
+   *  - `scale`: divisor applied to the raw value (1e6 → millions).
+   *  - `percentOf`: for percentage indicators — (%/100) × the reference
+   *    indicator over the same scope (e.g. internet users = % × population).
+   */
+  wb?: {
+    indicator: string;
+    countries: string[];
+    sum?: boolean;
+    scale?: number;
+    percentOf?: { indicator: string; countries: string[] };
+  };
 };
 
 export type StatSource = { id: number; label: string; url: string };
 
 export const SOURCES: StatSource[] = [
-  { id: 1, label: 'ONU DESA — World Population Prospects 2024', url: 'https://population.un.org/wpp/' },
-  { id: 2, label: 'Banque mondiale — Indicateurs du développement', url: 'https://data.worldbank.org/' },
-  { id: 3, label: 'GSMA Intelligence — The Mobile Economy 2024', url: 'https://www.gsma.com/mobileeconomy/' },
-  { id: 4, label: 'FMI — World Economic Outlook', url: 'https://www.imf.org/en/Publications/WEO' },
+  {
+    id: 1,
+    label: 'ONU DESA — World Population Prospects 2024',
+    url: 'https://population.un.org/wpp/',
+  },
+  {
+    id: 2,
+    label: 'Banque mondiale — Indicateurs du développement',
+    url: 'https://data.worldbank.org/',
+  },
+  {
+    id: 3,
+    label: 'GSMA Intelligence — The Mobile Economy 2024',
+    url: 'https://www.gsma.com/mobileeconomy/',
+  },
+  {
+    id: 4,
+    label: 'FMI — World Economic Outlook',
+    url: 'https://www.imf.org/en/Publications/WEO',
+  },
   { id: 5, label: 'Union africaine — États membres', url: 'https://au.int/' },
-  { id: 6, label: 'Ethnologue — Languages of the World', url: 'https://www.ethnologue.com/' },
+  {
+    id: 6,
+    label: 'Ethnologue — Languages of the World',
+    url: 'https://www.ethnologue.com/',
+  },
   { id: 7, label: 'UIT — Mesure du numérique', url: 'https://www.itu.int/' },
-  { id: 8, label: 'UNESCO UIS — Alphabétisation', url: 'https://uis.unesco.org/' },
+  {
+    id: 8,
+    label: 'UNESCO UIS — Alphabétisation',
+    url: 'https://uis.unesco.org/',
+  },
 ];
 
 const pct = (n: number) => `~${Math.round(n)} %`;
@@ -66,13 +106,28 @@ export const STAT_DEFS: StatDef[] = [
     label: 'habitants',
     seedValue: '1,52 Md',
     seedNumeric: 1520, // millions (UN WPP 2024)
-    sourceId: 1,
+    sourceId: 2, // World Bank now (was UN WPP) — SSF aggregate + North Africa
     query: "population totale de l'Afrique 2026 en millions d'habitants",
     min: 1300,
     max: 1800,
     format: billionsFromMillions,
+    // Africa ≈ Sub-Saharan Africa aggregate + the six North-African countries
+    // (WB puts them in the MEA region). sumLatest takes the stalest year.
+    wb: {
+      indicator: 'SP.POP.TOTL',
+      countries: ['SSF', 'DZA', 'EGY', 'LBY', 'MAR', 'TUN', 'SDN'],
+      sum: true,
+      scale: 1e6,
+    },
   },
-  { key: 'hero.countries', group: 'hero', label: 'pays', seedValue: '54', seedNumeric: 54, sourceId: 5 },
+  {
+    key: 'hero.countries',
+    group: 'hero',
+    label: 'pays',
+    seedValue: '54',
+    seedNumeric: 54,
+    sourceId: 5,
+  },
   {
     key: 'hero.medianAge',
     group: 'hero',
@@ -80,12 +135,19 @@ export const STAT_DEFS: StatDef[] = [
     seedValue: '19,5 ans',
     seedNumeric: 19.5,
     sourceId: 1,
-    query: "âge médian de la population en Afrique 2026",
+    query: 'âge médian de la population en Afrique 2026',
     min: 15,
     max: 26,
     format: years,
   },
-  { key: 'hero.languages', group: 'hero', label: 'langues', seedValue: '~2 100', seedNumeric: 2100, sourceId: 6 },
+  {
+    key: 'hero.languages',
+    group: 'hero',
+    label: 'langues',
+    seedValue: '~2 100',
+    seedNumeric: 2100,
+    sourceId: 6,
+  },
 
   // ── Population & démographie ───────────────────────────────
   {
@@ -99,6 +161,7 @@ export const STAT_DEFS: StatDef[] = [
     min: 30,
     max: 60,
     format: pct,
+    wb: { indicator: 'SP.URB.TOTL.IN.ZS', countries: ['SSF'] },
   },
   {
     key: 'pop.youth',
@@ -107,36 +170,167 @@ export const STAT_DEFS: StatDef[] = [
     seedValue: '~19 %',
     seedNumeric: 19,
     sourceId: 2,
-    query: "part des 15-24 ans dans la population africaine pourcentage",
+    query: 'part des 15-24 ans dans la population africaine pourcentage',
     min: 12,
     max: 28,
     format: pct,
   },
-  // Top-5 population (millions)
-  { key: 'pop.rank.nigeria', group: 'population', label: 'Nigeria', seedValue: '223', seedNumeric: 223, unit: 'M', sourceId: 1, query: 'population du Nigeria 2026 en millions', min: 180, max: 320, format: plain },
-  { key: 'pop.rank.ethiopia', group: 'population', label: 'Éthiopie', seedValue: '123', seedNumeric: 123, unit: 'M', sourceId: 1, query: "population de l'Éthiopie 2026 en millions", min: 100, max: 180, format: plain },
-  { key: 'pop.rank.egypt', group: 'population', label: 'Égypte', seedValue: '107', seedNumeric: 107, unit: 'M', sourceId: 1, query: "population de l'Égypte 2026 en millions", min: 90, max: 150, format: plain },
-  { key: 'pop.rank.drc', group: 'population', label: 'RD Congo', seedValue: '99', seedNumeric: 99, unit: 'M', sourceId: 1, query: 'population de la RD Congo 2026 en millions', min: 80, max: 160, format: plain },
-  { key: 'pop.rank.tanzania', group: 'population', label: 'Tanzanie', seedValue: '65', seedNumeric: 65, unit: 'M', sourceId: 1, query: 'population de la Tanzanie 2026 en millions', min: 55, max: 110, format: plain },
+  // Top-5 population (millions) — World Bank SP.POP.TOTL, live values 2025.
+  {
+    key: 'pop.rank.nigeria',
+    group: 'population',
+    label: 'Nigeria',
+    seedValue: '223',
+    seedNumeric: 223,
+    unit: 'M',
+    sourceId: 2,
+    query: 'population du Nigeria 2026 en millions',
+    min: 180,
+    max: 320,
+    format: plain,
+    wb: { indicator: 'SP.POP.TOTL', countries: ['NGA'], scale: 1e6 },
+  },
+  {
+    key: 'pop.rank.ethiopia',
+    group: 'population',
+    label: 'Éthiopie',
+    seedValue: '123',
+    seedNumeric: 123,
+    unit: 'M',
+    sourceId: 2,
+    query: "population de l'Éthiopie 2026 en millions",
+    min: 100,
+    max: 180,
+    format: plain,
+    wb: { indicator: 'SP.POP.TOTL', countries: ['ETH'], scale: 1e6 },
+  },
+  {
+    key: 'pop.rank.egypt',
+    group: 'population',
+    label: 'Égypte',
+    seedValue: '107',
+    seedNumeric: 107,
+    unit: 'M',
+    sourceId: 2,
+    query: "population de l'Égypte 2026 en millions",
+    min: 90,
+    max: 150,
+    format: plain,
+    wb: { indicator: 'SP.POP.TOTL', countries: ['EGY'], scale: 1e6 },
+  },
+  {
+    key: 'pop.rank.drc',
+    group: 'population',
+    label: 'RD Congo',
+    seedValue: '99',
+    seedNumeric: 99,
+    unit: 'M',
+    sourceId: 2,
+    query: 'population de la RD Congo 2026 en millions',
+    min: 80,
+    max: 160,
+    format: plain,
+    wb: { indicator: 'SP.POP.TOTL', countries: ['COD'], scale: 1e6 },
+  },
+  {
+    key: 'pop.rank.tanzania',
+    group: 'population',
+    label: 'Tanzanie',
+    seedValue: '65',
+    seedNumeric: 65,
+    unit: 'M',
+    sourceId: 2,
+    query: 'population de la Tanzanie 2026 en millions',
+    min: 55,
+    max: 110,
+    format: plain,
+    wb: { indicator: 'SP.POP.TOTL', countries: ['TZA'], scale: 1e6 },
+  },
 
   // ── Économie ───────────────────────────────────────────────
-  // Top-5 GDP nominal (Md $)
-  { key: 'eco.rank.nigeria', group: 'economy', label: 'Nigeria', seedValue: '477', seedNumeric: 477, unit: 'Md $', sourceId: 4, query: 'PIB nominal du Nigeria 2026 en milliards de dollars', min: 200, max: 700, format: plain },
-  { key: 'eco.rank.egypt', group: 'economy', label: 'Égypte', seedValue: '406', seedNumeric: 406, unit: 'Md $', sourceId: 4, query: "PIB nominal de l'Égypte 2026 en milliards de dollars", min: 200, max: 700, format: plain },
-  { key: 'eco.rank.southafrica', group: 'economy', label: 'Afrique du Sud', seedValue: '405', seedNumeric: 405, unit: 'Md $', sourceId: 4, query: "PIB nominal de l'Afrique du Sud 2026 en milliards de dollars", min: 250, max: 600, format: plain },
-  { key: 'eco.rank.algeria', group: 'economy', label: 'Algérie', seedValue: '267', seedNumeric: 267, unit: 'Md $', sourceId: 4, query: "PIB nominal de l'Algérie 2026 en milliards de dollars", min: 150, max: 450, format: plain },
-  { key: 'eco.rank.morocco', group: 'economy', label: 'Maroc', seedValue: '162', seedNumeric: 162, unit: 'Md $', sourceId: 4, query: 'PIB nominal du Maroc 2026 en milliards de dollars', min: 100, max: 350, format: plain },
+  // Top-5 GDP nominal (Md $) — World Bank NY.GDP.MKTP.CD, live values 2025.
+  {
+    key: 'eco.rank.nigeria',
+    group: 'economy',
+    label: 'Nigeria',
+    seedValue: '477',
+    seedNumeric: 477,
+    unit: 'Md $',
+    sourceId: 2,
+    query: 'PIB nominal du Nigeria 2026 en milliards de dollars',
+    min: 200,
+    max: 700,
+    format: plain,
+    wb: { indicator: 'NY.GDP.MKTP.CD', countries: ['NGA'], scale: 1e9 },
+  },
+  {
+    key: 'eco.rank.egypt',
+    group: 'economy',
+    label: 'Égypte',
+    seedValue: '406',
+    seedNumeric: 406,
+    unit: 'Md $',
+    sourceId: 2,
+    query: "PIB nominal de l'Égypte 2026 en milliards de dollars",
+    min: 200,
+    max: 700,
+    format: plain,
+    wb: { indicator: 'NY.GDP.MKTP.CD', countries: ['EGY'], scale: 1e9 },
+  },
+  {
+    key: 'eco.rank.southafrica',
+    group: 'economy',
+    label: 'Afrique du Sud',
+    seedValue: '405',
+    seedNumeric: 405,
+    unit: 'Md $',
+    sourceId: 2,
+    query: "PIB nominal de l'Afrique du Sud 2026 en milliards de dollars",
+    min: 250,
+    max: 600,
+    format: plain,
+    wb: { indicator: 'NY.GDP.MKTP.CD', countries: ['ZAF'], scale: 1e9 },
+  },
+  {
+    key: 'eco.rank.algeria',
+    group: 'economy',
+    label: 'Algérie',
+    seedValue: '267',
+    seedNumeric: 267,
+    unit: 'Md $',
+    sourceId: 2,
+    query: "PIB nominal de l'Algérie 2026 en milliards de dollars",
+    min: 150,
+    max: 450,
+    format: plain,
+    wb: { indicator: 'NY.GDP.MKTP.CD', countries: ['DZA'], scale: 1e9 },
+  },
+  {
+    key: 'eco.rank.morocco',
+    group: 'economy',
+    label: 'Maroc',
+    seedValue: '162',
+    seedNumeric: 162,
+    unit: 'Md $',
+    sourceId: 2,
+    query: 'PIB nominal du Maroc 2026 en milliards de dollars',
+    min: 100,
+    max: 350,
+    format: plain,
+    wb: { indicator: 'NY.GDP.MKTP.CD', countries: ['MAR'], scale: 1e9 },
+  },
   {
     key: 'eco.senegalGrowth',
     group: 'economy',
     label: 'Sénégal',
     seedValue: '+4,8 %',
     seedNumeric: 4.8,
-    sourceId: 4,
+    sourceId: 2,
     query: 'taux de croissance du PIB du Sénégal 2026 pourcentage',
     min: -5,
     max: 15,
     format: signedPct,
+    wb: { indicator: 'NY.GDP.MKTP.KD.ZG', countries: ['SEN'] },
   },
   {
     key: 'eco.literacy',
@@ -144,11 +338,12 @@ export const STAT_DEFS: StatDef[] = [
     label: 'Alphabétisation',
     seedValue: '~67 %',
     seedNumeric: 67,
-    sourceId: 8,
+    sourceId: 2,
     query: "taux d'alphabétisation des adultes en Afrique pourcentage",
     min: 45,
     max: 85,
     format: pct,
+    wb: { indicator: 'SE.ADT.LITR.ZS', countries: ['SSF'] },
   },
   {
     key: 'eco.renewable',
@@ -157,7 +352,8 @@ export const STAT_DEFS: StatDef[] = [
     seedValue: '~48 %',
     seedNumeric: 48,
     sourceId: 2,
-    query: "part de l'électricité d'origine renouvelable en Afrique pourcentage",
+    query:
+      "part de l'électricité d'origine renouvelable en Afrique pourcentage",
     min: 20,
     max: 75,
     format: pct,
@@ -182,11 +378,19 @@ export const STAT_DEFS: StatDef[] = [
     label: 'Internautes',
     seedValue: '~320 M',
     seedNumeric: 320,
-    sourceId: 7,
+    sourceId: 2,
     query: "nombre d'internautes en Afrique en millions",
     min: 200,
     max: 700,
     format: millions,
+    // WB only publishes the share (% of population): derive millions as
+    // (%/100) × the SSF population of the same vintage.
+    wb: {
+      indicator: 'IT.NET.USER.ZS',
+      countries: ['SSF'],
+      scale: 1e6,
+      percentOf: { indicator: 'SP.POP.TOTL', countries: ['SSF'] },
+    },
   },
   {
     key: 'dig.mobileMoney',
@@ -202,9 +406,29 @@ export const STAT_DEFS: StatDef[] = [
   },
 
   // ── Diversité (stables) ────────────────────────────────────
-  { key: 'div.languages', group: 'diversity', label: 'Langues parlées', seedValue: '~2 100', seedNumeric: 2100, sourceId: 6 },
-  { key: 'div.countries', group: 'diversity', label: 'Pays', seedValue: '54', seedNumeric: 54, sourceId: 5 },
-  { key: 'div.dataCost', group: 'diversity', label: 'Coût des données', seedValue: '~1,5–3 %', sourceId: 3 },
+  {
+    key: 'div.languages',
+    group: 'diversity',
+    label: 'Langues parlées',
+    seedValue: '~2 100',
+    seedNumeric: 2100,
+    sourceId: 6,
+  },
+  {
+    key: 'div.countries',
+    group: 'diversity',
+    label: 'Pays',
+    seedValue: '54',
+    seedNumeric: 54,
+    sourceId: 5,
+  },
+  {
+    key: 'div.dataCost',
+    group: 'diversity',
+    label: 'Coût des données',
+    seedValue: '~1,5–3 %',
+    sourceId: 3,
+  },
 ];
 
 export function getStatDef(key: string): StatDef | undefined {
@@ -212,7 +436,9 @@ export function getStatDef(key: string): StatDef | undefined {
 }
 
 export function getAutoStatDefs(): StatDef[] {
-  return STAT_DEFS.filter((d) => d.query && d.format && d.min !== undefined && d.max !== undefined);
+  return STAT_DEFS.filter(
+    (d) => d.query && d.format && d.min !== undefined && d.max !== undefined,
+  );
 }
 
 export function sourceById(id: number): StatSource | undefined {

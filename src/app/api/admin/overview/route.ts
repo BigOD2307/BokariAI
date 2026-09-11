@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 import { summarizeUsage } from '@/lib/ai/usage';
 import { fastTierStatus } from '@/lib/ai/resolve';
 import { getCacheStats } from '@/lib/cache/semantic';
+import { recentStatChanges } from '@/lib/stats/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,5 +104,7 @@ export async function GET(req: Request) {
         return { size: 0, hits: 0, misses: 0, hitRate: null };
       }
     })(),
+    // C11: last value changes on /data — the before/after diff.
+    statsChanges: await recentStatChanges(10).catch(() => []),
   });
 }
