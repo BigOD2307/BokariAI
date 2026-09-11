@@ -44,6 +44,12 @@ type Overview = {
   fastTier?:
     | { configured: true; provider: string; model: string }
     | { configured: false; reason: string };
+  cache?: {
+    size: number;
+    hits: number;
+    misses: number;
+    hitRate: number | null;
+  };
 };
 
 function fmtTokens(n: number): string {
@@ -269,6 +275,20 @@ export default function AdminOverviewPage() {
                       compteurs sont en mémoire et repartent à zéro au
                       déploiement.
                     </p>
+                  )}
+                  {data.cache && (
+                    <div className="flex items-center gap-2 border-t border-neutral-100 pt-3">
+                      <p className="text-xs text-neutral-500">
+                        Cache réponses :{' '}
+                        <span className="font-semibold text-neutral-700">
+                          {data.cache.hitRate === null
+                            ? '—'
+                            : `${Math.round(data.cache.hitRate * 100)} %`}
+                        </span>{' '}
+                        de hits ({data.cache.hits} hits / {data.cache.misses}{' '}
+                        miss, {data.cache.size} entrées)
+                      </p>
+                    </div>
                   )}
                 </CardContent>
               </Card>

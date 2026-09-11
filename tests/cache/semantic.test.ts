@@ -53,19 +53,22 @@ describe('normaliseQuery', () => {
   it('drops English stop words (incl. interrogatives like "what")', () => {
     // The multilingual cache treats interrogatives as fillers so
     // "what is the capital of France" collides with "capital of France".
-    expect(normaliseQuery('What is the capital of France?'))
-      .toBe('capital france');
+    expect(normaliseQuery('What is the capital of France?')).toBe(
+      'capital france',
+    );
   });
 
   it('preserves numbers', () => {
     // "who" is dropped as a filler; the salient number/terms survive.
-    expect(normaliseQuery('Who won the 2022 World Cup?'))
-      .toBe('2022 cup won world');
+    expect(normaliseQuery('Who won the 2022 World Cup?')).toBe(
+      '2022 cup won world',
+    );
   });
 
   it('is order-insensitive for word re-orderings', () => {
-    expect(normaliseQuery('capital of France'))
-      .toBe(normaliseQuery('France capital'));
+    expect(normaliseQuery('capital of France')).toBe(
+      normaliseQuery('France capital'),
+    );
   });
 
   it('returns empty string for stop-word-only input', () => {
@@ -103,7 +106,9 @@ describe('scopeKey / isCacheable / hashHistory', () => {
   });
 
   it('differs when mode differs', () => {
-    expect(scopeKey(scope({ mode: 'speed' }))).not.toBe(scopeKey(scope({ mode: 'quality' })));
+    expect(scopeKey(scope({ mode: 'speed' }))).not.toBe(
+      scopeKey(scope({ mode: 'quality' })),
+    );
   });
 
   it('differs when history differs', () => {
@@ -124,8 +129,14 @@ describe('scopeKey / isCacheable / hashHistory', () => {
   });
 
   it('hashHistory is deterministic and order-sensitive', () => {
-    const a: [string, string][] = [['human', 'bonjour'], ['ai', 'salut']];
-    const b: [string, string][] = [['ai', 'salut'], ['human', 'bonjour']];
+    const a: [string, string][] = [
+      ['human', 'bonjour'],
+      ['ai', 'salut'],
+    ];
+    const b: [string, string][] = [
+      ['ai', 'salut'],
+      ['human', 'bonjour'],
+    ];
     expect(hashHistory(a)).toBe(hashHistory(a));
     expect(hashHistory(a)).not.toBe(hashHistory(b));
   });
@@ -134,14 +145,30 @@ describe('scopeKey / isCacheable / hashHistory', () => {
 describe('tryGetCachedResponse', () => {
   it('misses on an empty cache', async () => {
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('What is the capital of France?', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse(
+      'What is the capital of France?',
+      embed,
+      scope(),
+      { store: cache },
+    );
     expect(got).toBeNull();
   });
 
   it('hits on the exact normalised query', async () => {
-    await cacheResponse('What is the capital of France?', [0.1, 0.2, 0.3], 'Paris', scope(), { store: cache });
+    await cacheResponse(
+      'What is the capital of France?',
+      [0.1, 0.2, 0.3],
+      'Paris',
+      scope(),
+      { store: cache },
+    );
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('What is the capital of France?', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse(
+      'What is the capital of France?',
+      embed,
+      scope(),
+      { store: cache },
+    );
     expect(got).not.toBeNull();
     expect(got!.response).toBe('Paris');
     expect(got!.hitType).toBe('exact');
@@ -150,10 +177,17 @@ describe('tryGetCachedResponse', () => {
 
   it('hits via cosine similarity on a near-identical query', async () => {
     const v = Array.from({ length: 16 }, (_, i) => Math.sin(i * 0.1));
-    await cacheResponse('capital of France', v, 'Paris', scope(), { store: cache });
+    await cacheResponse('capital of France', v, 'Paris', scope(), {
+      store: cache,
+    });
     const v2 = v.map((x) => x + 0.0001);
     const embed = async () => v2;
-    const got = await tryGetCachedResponse('France capital please', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse(
+      'France capital please',
+      embed,
+      scope(),
+      { store: cache },
+    );
     expect(got).not.toBeNull();
     expect(got!.response).toBe('Paris');
     expect(got!.hitType).toBe('semantic');
@@ -163,66 +197,198 @@ describe('tryGetCachedResponse', () => {
   it('misses when the best similarity is below the threshold', async () => {
     const v1 = Array.from({ length: 16 }, (_, i) => Math.sin(i * 0.1 + 1));
     const v2 = Array.from({ length: 16 }, (_, i) => Math.sin(i * 0.1 + 999));
-    await cacheResponse('capital of France', v1, 'Paris', scope(), { store: cache });
+    await cacheResponse('capital of France', v1, 'Paris', scope(), {
+      store: cache,
+    });
     const embed = async () => v2;
-    const got = await tryGetCachedResponse('something totally different', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse(
+      'something totally different',
+      embed,
+      scope(),
+      { store: cache },
+    );
     expect(got).toBeNull();
   });
 
   it('never reads or writes for a file-grounded scope (BUG-25)', async () => {
     const fileScope = scope({ fileIds: ['file-1'] });
-    const id = await cacheResponse('resume ce document', [0.1, 0.2, 0.3], 'Le document dit...', fileScope, {
-      store: cache,
-    });
+    const id = await cacheResponse(
+      'resume ce document',
+      [0.1, 0.2, 0.3],
+      'Le document dit...',
+      fileScope,
+      {
+        store: cache,
+      },
+    );
     expect(id).toBeNull();
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('resume ce document', embed, fileScope, { store: cache });
+    const got = await tryGetCachedResponse(
+      'resume ce document',
+      embed,
+      fileScope,
+      { store: cache },
+    );
     expect(got).toBeNull();
     expect(getCacheStats({ store: cache }).size).toBe(0);
   });
 
   it('does not serve a hit written under a different mode (BUG-25)', async () => {
-    await cacheResponse('et au senegal', [0.1, 0.2, 0.3], 'Reponse conversation A', scope({ mode: 'speed' }), {
-      store: cache,
-    });
+    await cacheResponse(
+      'et au senegal',
+      [0.1, 0.2, 0.3],
+      'Reponse conversation A',
+      scope({ mode: 'speed' }),
+      {
+        store: cache,
+      },
+    );
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('et au senegal', embed, scope({ mode: 'quality' }), { store: cache });
+    const got = await tryGetCachedResponse(
+      'et au senegal',
+      embed,
+      scope({ mode: 'quality' }),
+      { store: cache },
+    );
     expect(got).toBeNull();
   });
 
   it('does not serve a hit written under a different conversation history (BUG-25)', async () => {
-    const scopeA = scope({ historyHash: hashHistory([['human', 'parlons du mali']]) });
-    const scopeB = scope({ historyHash: hashHistory([['human', 'parlons du senegal']]) });
-    await cacheResponse('et le budget', [0.1, 0.2, 0.3], 'Reponse pour le Mali', scopeA, { store: cache });
+    const scopeA = scope({
+      historyHash: hashHistory([['human', 'parlons du mali']]),
+    });
+    const scopeB = scope({
+      historyHash: hashHistory([['human', 'parlons du senegal']]),
+    });
+    await cacheResponse(
+      'et le budget',
+      [0.1, 0.2, 0.3],
+      'Reponse pour le Mali',
+      scopeA,
+      { store: cache },
+    );
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('et le budget', embed, scopeB, { store: cache });
+    const got = await tryGetCachedResponse('et le budget', embed, scopeB, {
+      store: cache,
+    });
     expect(got).toBeNull();
   });
 
   it('returns the sources stored alongside the response, exact-hash path', async () => {
-    const sources = [{ metadata: { url: 'https://lefaso.net/a', title: 'Titre' } }];
-    await cacheResponse('capital du mali', [0.1, 0.2, 0.3], 'Bamako', scope(), { store: cache, sources });
+    const sources = [
+      { metadata: { url: 'https://lefaso.net/a', title: 'Titre' } },
+    ];
+    await cacheResponse('capital du mali', [0.1, 0.2, 0.3], 'Bamako', scope(), {
+      store: cache,
+      sources,
+    });
     const embed = async () => [0.1, 0.2, 0.3];
-    const got = await tryGetCachedResponse('capital du mali', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse('capital du mali', embed, scope(), {
+      store: cache,
+    });
     expect(got!.sources).toEqual(sources);
   });
 
   it('returns the sources stored alongside the response, semantic path', async () => {
     const v = Array.from({ length: 16 }, (_, i) => Math.sin(i * 0.1));
-    const sources = [{ metadata: { url: 'https://lefaso.net/a', title: 'Titre' } }];
-    await cacheResponse('capital du mali', v, 'Bamako', scope(), { store: cache, sources });
+    const sources = [
+      { metadata: { url: 'https://lefaso.net/a', title: 'Titre' } },
+    ];
+    await cacheResponse('capital du mali', v, 'Bamako', scope(), {
+      store: cache,
+      sources,
+    });
     const v2 = v.map((x) => x + 0.0001);
     const embed = async () => v2;
-    const got = await tryGetCachedResponse('capitale mali svp', embed, scope(), { store: cache });
+    const got = await tryGetCachedResponse(
+      'capitale mali svp',
+      embed,
+      scope(),
+      { store: cache },
+    );
     expect(got!.sources).toEqual(sources);
   });
 });
 
 describe('cacheResponse', () => {
   it('persists the response and bumps the cache size', async () => {
-    const id = await cacheResponse('hello', [0.1, 0.2, 0.3], 'world', scope(), { store: cache });
+    const id = await cacheResponse('hello', [0.1, 0.2, 0.3], 'world', scope(), {
+      store: cache,
+    });
     expect(id).toBeGreaterThan(0);
     const stats = getCacheStats({ store: cache });
     expect(stats.size).toBe(1);
+  });
+});
+
+describe('cache observability (hit rate + opportunistic prune)', () => {
+  const embedSame = async () => [0.1, 0.2, 0.3];
+  const embedFar = async () => [0.9, -0.8, 0.7];
+
+  it('starts with a null hit rate (no lookups yet — not a reassuring 0%)', () => {
+    expect(getCacheStats({ store: cache }).hitRate).toBeNull();
+  });
+
+  it('counts real misses but not early returns', async () => {
+    // Real miss: scoped lookup finds nothing.
+    expect(
+      await tryGetCachedResponse('question inconnue', embedFar, scope(), {
+        store: cache,
+      }),
+    ).toBeNull();
+    // Early returns are not lookups: file-grounded scope, empty query.
+    expect(
+      await tryGetCachedResponse('x', embedFar, scope({ fileIds: ['f1'] }), {
+        store: cache,
+      }),
+    ).toBeNull();
+    const stats = getCacheStats({ store: cache });
+    expect(stats.misses).toBe(1);
+    expect(stats.hits).toBe(0);
+    expect(stats.hitRate).toBe(0);
+  });
+
+  it('computes the hit rate from hits and misses', async () => {
+    await cacheResponse('capital du mali', [0.1, 0.2, 0.3], 'Bamako', scope(), {
+      store: cache,
+      pruneProbability: 0,
+    });
+    // 1 hit (exact) + 1 miss (different query, far vector).
+    expect(
+      await tryGetCachedResponse('capital du mali', embedSame, scope(), {
+        store: cache,
+      }),
+    ).not.toBeNull();
+    expect(
+      await tryGetCachedResponse('tout autre sujet', embedFar, scope(), {
+        store: cache,
+      }),
+    ).toBeNull();
+    const stats = getCacheStats({ store: cache });
+    expect(stats.hits).toBe(1);
+    expect(stats.misses).toBe(1);
+    expect(stats.hitRate).toBe(0.5);
+  });
+
+  it('prunes expired rows when pruneProbability is 1, never when 0', async () => {
+    await cacheResponse('ephemere', [0.1, 0.2], 'vieux', scope(), {
+      store: cache,
+      ttlMs: 1,
+      pruneProbability: 0,
+    });
+    expect(getCacheStats({ store: cache }).size).toBe(1);
+    await new Promise((r) => setTimeout(r, 5));
+    // A write with p=0 must not prune.
+    await cacheResponse('frais', [0.1, 0.2], 'neuf', scope(), {
+      store: cache,
+      pruneProbability: 0,
+    });
+    expect(getCacheStats({ store: cache }).size).toBe(2);
+    // A write with p=1 must prune the expired row.
+    await cacheResponse('encore', [0.1, 0.2], 'plus', scope(), {
+      store: cache,
+      pruneProbability: 1,
+    });
+    expect(getCacheStats({ store: cache }).size).toBe(2);
   });
 });

@@ -47,7 +47,13 @@ export type CacheScope = {
  *  filtered to the same scope, not just the exact-hash fast path. */
 export function scopeKey(scope: CacheScope): string {
   return createHash('sha256')
-    .update(JSON.stringify([scope.mode, scope.historyHash, [...scope.sources].sort()]))
+    .update(
+      JSON.stringify([
+        scope.mode,
+        scope.historyHash,
+        [...scope.sources].sort(),
+      ]),
+    )
     .digest('hex')
     .slice(0, 16);
 }
@@ -61,8 +67,13 @@ export function isCacheable(scope: CacheScope): boolean {
 /** Stable fingerprint of the recent conversation, for CacheScope.historyHash.
  *  Order-sensitive on purpose: the same question after a different prior
  *  turn is a different request. */
-export function hashHistory(history: ReadonlyArray<readonly [string, string]>): string {
-  return createHash('sha256').update(JSON.stringify(history)).digest('hex').slice(0, 16);
+export function hashHistory(
+  history: ReadonlyArray<readonly [string, string]>,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify(history))
+    .digest('hex')
+    .slice(0, 16);
 }
 
 /**
@@ -106,18 +117,116 @@ export type CachedResponse = {
  *  do NOT include domain terms (model names, country names, etc). */
 const STOP_WORDS = new Set([
   // English fillers
-  'a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'for', 'is', 'are', 'was',
-  'were', 'be', 'been', 'being', 'do', 'does', 'did', 'i', 'you', 'we', 'they',
-  'me', 'my', 'your', 'our', 'what', 'whats', 'how', 'why', 'when', 'where', 'who',
+  'a',
+  'an',
+  'the',
+  'of',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'do',
+  'does',
+  'did',
+  'i',
+  'you',
+  'we',
+  'they',
+  'me',
+  'my',
+  'your',
+  'our',
+  'what',
+  'whats',
+  'how',
+  'why',
+  'when',
+  'where',
+  'who',
   // French fillers + elisions (apostrophes are stripped → bare single letters)
-  'le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'et', 'ou', 'au', 'aux',
-  'ce', 'cet', 'cette', 'ces', 'est', 'sont', 'etre', 'qui', 'que', 'quoi',
-  'quel', 'quelle', 'quels', 'quelles', 'comment', 'pourquoi', 'dans', 'sur',
-  'pour', 'par', 'avec', 'en', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils',
-  'elles', 'on', 'te', 'se', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son',
-  'sa', 'ses', 'notre', 'nos', 'votre', 'vos', 'leur', 'leurs', 'ne', 'pas',
-  'plus', 'ca', 'cela', 'ceci',
-  'c', 'd', 'j', 'l', 'm', 'n', 's', 't', 'qu',
+  'le',
+  'la',
+  'les',
+  'un',
+  'une',
+  'des',
+  'de',
+  'du',
+  'et',
+  'ou',
+  'au',
+  'aux',
+  'ce',
+  'cet',
+  'cette',
+  'ces',
+  'est',
+  'sont',
+  'etre',
+  'qui',
+  'que',
+  'quoi',
+  'quel',
+  'quelle',
+  'quels',
+  'quelles',
+  'comment',
+  'pourquoi',
+  'dans',
+  'sur',
+  'pour',
+  'par',
+  'avec',
+  'en',
+  'je',
+  'tu',
+  'il',
+  'elle',
+  'nous',
+  'vous',
+  'ils',
+  'elles',
+  'on',
+  'te',
+  'se',
+  'mon',
+  'ma',
+  'mes',
+  'ton',
+  'ta',
+  'tes',
+  'son',
+  'sa',
+  'ses',
+  'notre',
+  'nos',
+  'votre',
+  'vos',
+  'leur',
+  'leurs',
+  'ne',
+  'pas',
+  'plus',
+  'ca',
+  'cela',
+  'ceci',
+  'c',
+  'd',
+  'j',
+  'l',
+  'm',
+  'n',
+  's',
+  't',
+  'qu',
 ]);
 
 /** Strip accents/diacritics so "élection" == "election" and accented FR /
@@ -183,6 +292,18 @@ export function setSemanticCacheStore(store: SemanticCache | null): void {
 }
 
 /**
+ * Miss counters, per store instance (WeakMap so test stores never pollute
+ * prod stats and entries vanish with the store). Only real lookup misses
+ * count — early returns (not cacheable, empty query) are not lookups.
+ * Combined with the store's hit counter this yields the hit rate in /admin.
+ */
+const missCounts = new WeakMap<SemanticCache, number>();
+
+function recordMiss(store: SemanticCache): void {
+  missCounts.set(store, (missCounts.get(store) ?? 0) + 1);
+}
+
+/**
  * Look up a cached response.  Order:
  *   1. exact hash match, scoped to `scope` (cheapest)
  *   2. cosine-similarity scan (BGE-M3, 1024 dims, linear scan OK for
@@ -218,7 +339,9 @@ export async function tryGetCachedResponse(
     return {
       query: exact.query,
       response: exact.response,
-      sources: Array.isArray(exact.metadata.sources) ? (exact.metadata.sources as unknown[]) : [],
+      sources: Array.isArray(exact.metadata.sources)
+        ? (exact.metadata.sources as unknown[])
+        : [],
       metadata: exact.metadata,
       similarity: 1,
       hitType: 'exact',
@@ -233,13 +356,18 @@ export async function tryGetCachedResponse(
   const matches = store
     .scanSimilar(vec, threshold, 20)
     .filter((m) => m.entry.metadata.scopeKey === scoped);
-  if (matches.length === 0) return null;
+  if (matches.length === 0) {
+    recordMiss(store);
+    return null;
+  }
   const top = matches[0]!;
   store.recordHit(top.entry.id);
   return {
     query: top.entry.query,
     response: top.entry.response,
-    sources: Array.isArray(top.entry.metadata.sources) ? (top.entry.metadata.sources as unknown[]) : [],
+    sources: Array.isArray(top.entry.metadata.sources)
+      ? (top.entry.metadata.sources as unknown[])
+      : [],
     metadata: top.entry.metadata,
     similarity: top.similarity,
     hitType: 'semantic',
@@ -259,6 +387,13 @@ export async function cacheResponse(
     metadata?: Record<string, unknown>;
     ttlMs?: number;
     store?: SemanticCache;
+    /**
+     * Probability of pruning expired rows on this write (default 0.02).
+     * Writes are rare (one per answered question) so a small probability
+     * keeps the table bounded — and the O(N) similarity scan fast — with
+     * no cron, no lock, no extra process. Tests pass 1 or 0 for determinism.
+     */
+    pruneProbability?: number;
   } = {},
 ): Promise<number | null> {
   if (!isCacheable(scope)) return null;
@@ -267,7 +402,7 @@ export async function cacheResponse(
   const normalised = normaliseQuery(query);
   // Volatile (news/price/election) answers expire fast so they can't go stale.
   const volatile = isVolatileQuery(query);
-  return store.upsert({
+  const id = store.upsert({
     query: normalised,
     queryHash: `${hashQuery(normalised)}:${scopeKey(scope)}`,
     embedding,
@@ -280,14 +415,30 @@ export async function cacheResponse(
     },
     ttlMs: opts.ttlMs ?? (volatile ? FRESH_TTL_MS : DEFAULT_TTL_MS),
   });
+
+  const p = opts.pruneProbability ?? 0.02;
+  if (p > 0 && Math.random() < p) {
+    try {
+      store.prune();
+    } catch {
+      /* best-effort: a failed prune must never fail the write */
+    }
+  }
+  return id;
 }
 
-/** Read-only cache stats. */
-export function getCacheStats(
-  opts: { store?: SemanticCache } = {},
-): { size: number; hits: number } {
+/** Read-only cache stats, including the lookup hit rate for /admin. */
+export function getCacheStats(opts: { store?: SemanticCache } = {}): {
+  size: number;
+  hits: number;
+  misses: number;
+  hitRate: number | null;
+} {
   const store = opts.store ?? defaultStore();
-  return store.stats();
+  const { size, hits } = store.stats();
+  const misses = missCounts.get(store) ?? 0;
+  const lookups = hits + misses;
+  return { size, hits, misses, hitRate: lookups > 0 ? hits / lookups : null };
 }
 
 export { SemanticCache, cosineSimilarity };

@@ -15,6 +15,7 @@ import { newsArticles, newsSources } from '@/lib/db/postgres/schema';
 import { sql } from 'drizzle-orm';
 import { summarizeUsage } from '@/lib/ai/usage';
 import { fastTierStatus } from '@/lib/ai/resolve';
+import { getCacheStats } from '@/lib/cache/semantic';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,5 +94,14 @@ export async function GET(req: Request) {
     corpus,
     usage: summarizeUsage(24),
     fastTier: fastTierStatus(),
+    // try/catch: the cache lives on the local volume — a missing/corrupt
+    // file must not break the whole overview.
+    cache: (() => {
+      try {
+        return getCacheStats();
+      } catch {
+        return { size: 0, hits: 0, misses: 0, hitRate: null };
+      }
+    })(),
   });
 }
