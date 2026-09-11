@@ -12,7 +12,7 @@ const OptimizationModes = [
   {
     key: 'speed',
     title: 'Rapide',
-    description: 'Reponse rapide, ~5-10 sources.',
+    description: 'Réponse rapide, ~5-10 sources.',
     icon: <Zap size={14} className="text-amber-500" />,
   },
   {

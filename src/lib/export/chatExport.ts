@@ -2,8 +2,10 @@
  * @module lib/export/chatExport
  * @description Client-side chat export helpers (Markdown + PDF), shared by the
  *   desktop Navbar and the mobile actions menu so both produce identical files.
+ *
+ * jspdf (~300KB) is imported lazily inside exportChatAsPDF so it never lands
+ * in the initial bundle — the Markdown path stays synchronous and light.
  */
-import jsPDF from 'jspdf';
 import type { Section } from '@/lib/hooks/useChat';
 import type { SourceBlock } from '@/lib/types';
 
@@ -65,8 +67,9 @@ export function exportChatAsMarkdown(sections: Section[], title: string) {
   downloadFile(`${title || 'chat'}.md`, md, 'text/markdown');
 }
 
-export function exportChatAsPDF(sections: Section[], title: string) {
+export async function exportChatAsPDF(sections: Section[], title: string) {
   if (sections.length === 0) return;
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF();
   const date = new Date(
     sections[0]?.message?.createdAt || Date.now(),

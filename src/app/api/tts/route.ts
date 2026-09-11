@@ -1,9 +1,15 @@
 import { NextRequest } from 'next/server';
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '[REDACTED]';
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel - default voice
 
 export async function POST(req: NextRequest) {
+  // No hardcoded key fallback (a leaked key lived here): fail fast with a
+  // clear 503 so the client can hide voice output. Rotate the exposed key
+  // in the ElevenLabs dashboard.
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    return Response.json({ error: 'VOICE_UNAVAILABLE' }, { status: 503 });
+  }
   try {
     const { text } = await req.json();
 
@@ -20,7 +26,7 @@ export async function POST(req: NextRequest) {
       {
         method: 'POST',
         headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
+          'xi-api-key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

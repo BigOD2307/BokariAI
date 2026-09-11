@@ -1,8 +1,10 @@
-import React from 'react';
+import dynamic from 'next/dynamic';
 import { Widget } from '../ChatWindow';
 import Weather from './Weather';
 import Calculation from './Calculation';
-import Stock from './Stock';
+// lightweight-charts is code-split: the Stock widget only loads when the
+// agent actually returns a stock widget — never in the initial bundle.
+const Stock = dynamic(() => import('./Stock'), { ssr: false });
 
 const Renderer = ({ widgets }: { widgets: Widget[] }) => {
   return widgets.map((widget, index) => {

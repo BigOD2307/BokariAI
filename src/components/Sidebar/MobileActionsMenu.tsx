@@ -128,7 +128,7 @@ const MobileActionsMenu = () => {
                 className={ITEM}
                 disabled={!hasChat}
                 onClick={() => {
-                  exportChatAsPDF(sections, title);
+                  void exportChatAsPDF(sections, title);
                   close();
                 }}
               >

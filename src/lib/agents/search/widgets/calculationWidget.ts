@@ -1,7 +1,7 @@
 import z from 'zod';
 import { Widget } from '../types';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
-import { exp, evaluate as mathEval } from 'mathjs';
+import { evaluateExpression } from '@/lib/math/evaluate';
 
 const schema = z.object({
   expression: z
@@ -55,7 +55,12 @@ const calculationWidget: Widget = {
       return;
     }
 
-    const result = mathEval(output.expression);
+    let result: number;
+    try {
+      result = evaluateExpression(output.expression);
+    } catch {
+      return; // Unsafe or invalid expression — no widget rather than a crash.
+    }
 
     return {
       type: 'calculation_result',

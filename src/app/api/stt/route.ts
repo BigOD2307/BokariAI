@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '[REDACTED]';
-
 export async function POST(req: NextRequest) {
+  // No placeholder fallback: a masked fake key would fail opaquely at the
+  // provider. Fail fast with a clear 503 so the client can hide voice input.
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    return Response.json({ error: 'VOICE_UNAVAILABLE' }, { status: 503 });
+  }
   try {
     const formData = await req.formData();
     const audioFile = formData.get('audio') as Blob | null;
@@ -27,23 +31,23 @@ export async function POST(req: NextRequest) {
     elevenLabsForm.append('model_id', 'scribe_v1');
     elevenLabsForm.append('language_code', languageCode);
 
-    const res = await fetch(
-      'https://api.elevenlabs.io/v1/speech-to-text',
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-        },
-        body: elevenLabsForm,
+    const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
       },
-    );
+      body: elevenLabsForm,
+    });
 
     if (!res.ok) {
       const err = await res.text();
       console.error('[Bokari STT] ElevenLabs error:', err);
-      return new Response(JSON.stringify({ error: 'STT transcription failed' }), {
-        status: 500,
-      });
+      return new Response(
+        JSON.stringify({ error: 'STT transcription failed' }),
+        {
+          status: 500,
+        },
+      );
     }
 
     const data = await res.json();

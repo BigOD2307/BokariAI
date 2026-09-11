@@ -1,5 +1,5 @@
 /**
- * Model-tier routing for the search agent — Perplexity's "smallest adequate
+ * Model-tier routing for the search agent — the "smallest adequate
  * model" play. Simple / factual queries go to the FAST tier (e.g. Groq Llama
  * 3.1 8B) when one is configured; complex queries (multi-step reasoning,
  * synthesis) stay on the default 70B-class model. Always falls back safely to

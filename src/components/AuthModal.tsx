@@ -11,7 +11,8 @@ import BokariAvatar from '@/components/BokariAvatar';
  * Bokari Canvas language: a white paper card with a 2px ink border, a Chewy
  * heading, Patrick-Hand labels, a chunky 3D teal button, and mint accents.
  * Light-only (matches the site). The legacy WhatsApp OTP flow is removed from
- * the UI; its backend stays dormant — see docs/TODO-kapso-cleanup.md.
+ * the UI; its backend stays dormant — Kapso/WhatsApp reactivation or full
+ * removal is tracked as roadmap item C12 (newsletter WhatsApp channel).
  */
 const AuthModal = () => {
   const { showAuthModal, setShowAuthModal, login, register } = useAuth();

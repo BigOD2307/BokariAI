@@ -30,9 +30,20 @@ import Citation from './MessageRenderer/Citation';
 import AssistantSteps from './AssistantSteps';
 import { ResearchBlock, Block, FlashcardBlock, QuizBlock } from '@/lib/types';
 import Renderer from './Widgets/Renderer';
-import CodeBlock from './MessageRenderer/CodeBlock';
+// Heavy renderers are code-split: recharts (~400KB) and the syntax
+// highlighter (~200KB) only load when a message actually contains a chart
+// or a code block — never in the initial bundle.
+import dynamic from 'next/dynamic';
+import { Skeleton } from './ui/skeleton';
+const CodeBlock = dynamic(() => import('./MessageRenderer/CodeBlock'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-24 w-full rounded-xl" />,
+});
 import ImageBlock from './MessageRenderer/ImageBlock';
-import ChartBlock from './MessageRenderer/ChartBlock';
+const ChartBlock = dynamic(() => import('./MessageRenderer/ChartBlock'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full rounded-xl" />,
+});
 import VerdictBlock from './MessageRenderer/VerdictBlock';
 import EntityCardBlock from './MessageRenderer/EntityCardBlock';
 import ComparisonTableBlock from './MessageRenderer/ComparisonTableBlock';
@@ -154,26 +165,26 @@ const MessageBox = ({
       </div>
 
       {/* User attachments (uploaded images) */}
-      {section.message.attachments && section.message.attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {section.message.attachments.map((att: import('@/lib/types/multimodal').Attachment) => {
-            const vision = section.message.visionResults?.find(
-              (v: import('@/lib/types/multimodal').VisionResult) =>
-                v.attachmentId === att.id,
-            );
-            if (att.kind !== 'image') return null;
-            return (
-              <ImageBlock key={att.id} attachment={att} vision={vision} />
-            );
-          })}
-        </div>
-      )}
+      {section.message.attachments &&
+        section.message.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {section.message.attachments.map(
+              (att: import('@/lib/types/multimodal').Attachment) => {
+                const vision = section.message.visionResults?.find(
+                  (v: import('@/lib/types/multimodal').VisionResult) =>
+                    v.attachmentId === att.id,
+                );
+                if (att.kind !== 'image') return null;
+                return (
+                  <ImageBlock key={att.id} attachment={att} vision={vision} />
+                );
+              },
+            )}
+          </div>
+        )}
 
       <div className="flex flex-col lg:flex-row lg:justify-between lg:gap-10">
-        <div
-          ref={dividerRef}
-          className="flex flex-col gap-5 w-full lg:w-9/12"
-        >
+        <div ref={dividerRef} className="flex flex-col gap-5 w-full lg:w-9/12">
           {/* Sources */}
           {sources.length > 0 && (
             <div className="flex flex-col gap-2.5">
@@ -230,9 +241,11 @@ const MessageBox = ({
           {/* Charts (auto-detected from query) */}
           {section.message.charts && section.message.charts.length > 0 && (
             <div className="flex flex-col gap-3">
-              {section.message.charts.map((c: import('@/lib/types/multimodal').ChartSpec) => (
-                <ChartBlock key={c.id} spec={c} />
-              ))}
+              {section.message.charts.map(
+                (c: import('@/lib/types/multimodal').ChartSpec) => (
+                  <ChartBlock key={c.id} spec={c} />
+                ),
+              )}
             </div>
           )}
 
@@ -258,7 +271,7 @@ const MessageBox = ({
               <div className="flex items-center gap-2">
                 <BokariBot size={22} />
                 <h3 className="text-black/80 dark:text-white/80 font-medium text-sm">
-                  Reponse
+                  Réponse
                 </h3>
               </div>
             )}
@@ -273,7 +286,9 @@ const MessageBox = ({
 
                 {/* Learn mode — flashcards + quiz */}
                 {(section.message.responseBlocks || [])
-                  .filter((b: Block): b is FlashcardBlock => b.type === 'flashcard')
+                  .filter(
+                    (b: Block): b is FlashcardBlock => b.type === 'flashcard',
+                  )
                   .map((b: FlashcardBlock) => (
                     <FlashcardDeck
                       key={b.id}
@@ -316,7 +331,11 @@ const MessageBox = ({
                               ? 'text-bokari-500'
                               : 'text-black/50 dark:text-white/45 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] hover:text-black/60 dark:hover:text-white/50',
                         )}
-                        title={isPlaying ? 'Arreter la lecture' : 'Ecouter la reponse'}
+                        title={
+                          isPlaying
+                            ? 'Arreter la lecture'
+                            : 'Ecouter la reponse'
+                        }
                       >
                         {ttsLoading ? (
                           <Loader2 size={16} className="animate-spin" />

@@ -12,7 +12,7 @@ import { useChat } from '@/lib/hooks/useChat';
 import { exportChatAsPDF, exportChatAsMarkdown } from '@/lib/export/chatExport';
 
 /**
- * Navbar — the chat top bar (active conversations) on DESKTOP. Perplexity-style,
+ * Navbar — the chat top bar (active conversations) on DESKTOP. Inline-answer
  * adapted to Bokari Canvas: the thread title on the left; on the right a
  * "Partager" button (public link), a "Télécharger" menu (PDF / Markdown), and
  * delete. On mobile these actions live in the mobile top-bar "+" menu
@@ -74,7 +74,7 @@ const Navbar = () => {
                   </p>
                   <button
                     className="font-hand flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[14px] text-[color:var(--bk-ink,#0f172a)] transition-colors hover:bg-[color:var(--bk-mint,#c8f4e0)]/40"
-                    onClick={() => exportChatAsPDF(sections, title || '')}
+                    onClick={() => void exportChatAsPDF(sections, title || '')}
                   >
                     <FileDown
                       size={15}

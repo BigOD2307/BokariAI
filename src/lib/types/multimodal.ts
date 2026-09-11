@@ -61,7 +61,7 @@ export interface ChartSpec {
 
 /* ----------------------------------------------------------------------- *
  * Rich illustration blocks — structured visual blocks rendered in the chat
- * answer (Perplexity-style) when the query is about SHOWING something.
+ * answer (inline cards) when the query is about SHOWING something.
  * Extracted post-research, kept OFF the writer's Block union so the streamed
  * text path is never corrupted. See agents/search/richBlocks.ts.
  * ----------------------------------------------------------------------- */
