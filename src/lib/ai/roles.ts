@@ -17,13 +17,13 @@ export type LlmRole =
 
 /** Sampling per role. Anything that produces JSON or a plan runs at 0. */
 export const ROLE_OPTIONS: Record<LlmRole, GenerateOptions> = {
-  classifier: { temperature: 0 },
-  researcher: { temperature: 0 },
-  writer: { temperature: 0.4 },
-  extractor: { temperature: 0.1 },
-  title: { temperature: 0.2, maxTokens: 32 },
-  blog: { temperature: 0.3, maxTokens: 5000 },
-  stats: { temperature: 0, maxTokens: 160 },
+  classifier: { temperature: 0, label: 'classifier' },
+  researcher: { temperature: 0, label: 'researcher' },
+  writer: { temperature: 0.4, label: 'writer' },
+  extractor: { temperature: 0.1, label: 'extractor' },
+  title: { temperature: 0.2, maxTokens: 32, label: 'title' },
+  blog: { temperature: 0.3, maxTokens: 5000, label: 'blog' },
+  stats: { temperature: 0, maxTokens: 160, label: 'stats' },
 };
 
 /** Roles cheap enough to run on the fast tier when one is configured. */

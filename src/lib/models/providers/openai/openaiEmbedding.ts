@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import BaseEmbedding from '../../base/embedding';
 import { Chunk } from '@/lib/types';
+import { recordUsage } from '@/lib/ai/usage';
 
 type OpenAIConfig = {
   apiKey: string;
@@ -26,6 +27,17 @@ class OpenAIEmbedding extends BaseEmbedding<OpenAIConfig> {
       input: texts,
     });
 
+    recordUsage({
+      label: 'embedding',
+      model: this.config.model,
+      usage: response.usage
+        ? {
+            promptTokens: response.usage.prompt_tokens ?? 0,
+            completionTokens: 0,
+          }
+        : undefined,
+    });
+
     return response.data.map((embedding) => embedding.embedding);
   }
 
@@ -33,6 +45,17 @@ class OpenAIEmbedding extends BaseEmbedding<OpenAIConfig> {
     const response = await this.openAIClient.embeddings.create({
       model: this.config.model,
       input: chunks.map((c) => c.content),
+    });
+
+    recordUsage({
+      label: 'embedding',
+      model: this.config.model,
+      usage: response.usage
+        ? {
+            promptTokens: response.usage.prompt_tokens ?? 0,
+            completionTokens: 0,
+          }
+        : undefined,
     });
 
     return response.data.map((embedding) => embedding.embedding);

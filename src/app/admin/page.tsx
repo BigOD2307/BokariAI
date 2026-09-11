@@ -16,6 +16,14 @@ type JobRow = {
   runs: number;
 };
 
+type UsageSlice = {
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+};
+
 type Overview = {
   jobs: JobRow[];
   articlesByStatus: { draft: number; published: number; rejected: number };
@@ -26,7 +34,20 @@ type Overview = {
     sourcesDisabled: number;
     sourcesFailing: number;
   };
+  usage?: {
+    windowHours: number;
+    events: number;
+    total: UsageSlice;
+    byModel: Record<string, UsageSlice>;
+    byLabel: Record<string, UsageSlice>;
+  };
 };
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
 
 const JOB_LABEL: Record<string, string> = {
   'news-crawl': 'Crawl des flux news',
@@ -152,6 +173,88 @@ export default function AdminOverviewPage() {
               </CardContent>
             </Card>
           </section>
+
+          {/* Usage (LLM cost, last 24h) */}
+          {data.usage && (
+            <section>
+              <h2 className="mb-3 text-sm font-medium text-neutral-700">
+                Coût LLM — dernières 24 h
+              </h2>
+              <Card>
+                <CardContent className="space-y-3 px-5 py-4">
+                  <div className="flex items-baseline gap-3">
+                    <p className="text-2xl font-semibold">
+                      ${data.usage.total.estimatedCostUsd.toFixed(3)}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      {data.usage.total.calls} appels ·{' '}
+                      {fmtTokens(data.usage.total.totalTokens)} tokens
+                    </p>
+                  </div>
+                  {Object.keys(data.usage.byLabel).length > 0 && (
+                    <div className="overflow-hidden rounded-lg border border-neutral-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-neutral-50 text-left text-neutral-500">
+                            <th className="px-3 py-1.5 font-medium">Rôle</th>
+                            <th className="px-3 py-1.5 text-right font-medium">
+                              Appels
+                            </th>
+                            <th className="px-3 py-1.5 text-right font-medium">
+                              Tokens
+                            </th>
+                            <th className="px-3 py-1.5 text-right font-medium">
+                              Coût est.
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {Object.entries(data.usage.byLabel)
+                            .sort((a, b) => b[1].totalTokens - a[1].totalTokens)
+                            .map(([label, s]) => (
+                              <tr key={label}>
+                                <td className="px-3 py-1.5 font-medium">
+                                  {label}
+                                </td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  {s.calls}
+                                </td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  {fmtTokens(s.totalTokens)}
+                                </td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  ${s.estimatedCostUsd.toFixed(4)}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {Object.keys(data.usage.byModel).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(data.usage.byModel).map(([model, s]) => (
+                        <Badge
+                          key={model}
+                          variant="secondary"
+                          className="text-[10px]"
+                        >
+                          {model} · {fmtTokens(s.totalTokens)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {data.usage.total.calls === 0 && (
+                    <p className="text-xs text-neutral-500">
+                      Aucun appel mesuré depuis le dernier redémarrage — les
+                      compteurs sont en mémoire et repartent à zéro au
+                      déploiement.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+          )}
 
           {/* Corpus + articles */}
           <section className="grid grid-cols-2 gap-4">

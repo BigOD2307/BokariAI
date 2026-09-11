@@ -20,6 +20,7 @@ import {
 import { Message } from '@/lib/types';
 import { repairJson } from '@toolsycc/json-repair';
 import { BOKARI_MODEL_ROUTES } from './bokariRoutes';
+import { recordUsage } from '@/lib/ai/usage';
 
 type OpenAIConfig = {
   apiKey: string;
@@ -157,6 +158,16 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     });
 
     if (response.choices && response.choices.length > 0) {
+      recordUsage({
+        label: input.options?.label,
+        model: this.config.model,
+        usage: response.usage
+          ? {
+              promptTokens: response.usage.prompt_tokens ?? 0,
+              completionTokens: response.usage.completion_tokens ?? 0,
+            }
+          : undefined,
+      });
       return {
         content: response.choices[0].message.content!,
         toolCalls:
@@ -174,6 +185,12 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
         additionalInfo: {
           finishReason: response.choices[0].finish_reason,
         },
+        usage: response.usage
+          ? {
+              promptTokens: response.usage.prompt_tokens ?? 0,
+              completionTokens: response.usage.completion_tokens ?? 0,
+            }
+          : undefined,
       };
     }
 
@@ -214,12 +231,44 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
       presence_penalty:
         input.options?.presencePenalty ?? this.config.options?.presencePenalty,
       stream: true,
+      // Ask the provider to append a trailing usage chunk: without this,
+      // streamed calls are invisible to cost accounting. Providers that do
+      // not support the option ignore it (OpenAI-compatible contract).
+      stream_options: { include_usage: true } as Record<
+        string,
+        unknown
+      > as never,
     });
 
     let recievedToolCalls: { name: string; id: string; arguments: string }[] =
       [];
 
     for await (const chunk of stream) {
+      // Trailing usage chunk (empty choices): record and skip — it carries
+      // no content, only the token counts for the finished stream.
+      const chunkUsage = (
+        chunk as unknown as {
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        }
+      ).usage;
+      if (chunkUsage && (!chunk.choices || chunk.choices.length === 0)) {
+        const usage = {
+          promptTokens: chunkUsage.prompt_tokens ?? 0,
+          completionTokens: chunkUsage.completion_tokens ?? 0,
+        };
+        recordUsage({
+          label: input.options?.label,
+          model: this.config.model,
+          usage,
+        });
+        yield {
+          contentChunk: '',
+          toolCallChunk: [],
+          usage,
+          additionalInfo: { finishReason: 'stop' },
+        };
+        continue;
+      }
       if (chunk.choices && chunk.choices.length > 0) {
         const toolCalls = chunk.choices[0].delta.tool_calls;
         // Reasoning models (e.g. DeepSeek V4 via OpenRouter) stream their
@@ -289,6 +338,16 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
     });
 
     if (response.choices && response.choices.length > 0) {
+      recordUsage({
+        label: input.options?.label,
+        model: this.config.model,
+        usage: response.usage
+          ? {
+              promptTokens: response.usage.prompt_tokens ?? 0,
+              completionTokens: response.usage.completion_tokens ?? 0,
+            }
+          : undefined,
+      });
       try {
         return input.schema.parse(
           JSON.parse(

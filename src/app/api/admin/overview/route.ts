@@ -13,6 +13,7 @@ import { listArticles } from '@/lib/blog/store';
 import { pgDb } from '@/lib/db/postgres/client';
 import { newsArticles, newsSources } from '@/lib/db/postgres/schema';
 import { sql } from 'drizzle-orm';
+import { summarizeUsage } from '@/lib/ai/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,5 +86,10 @@ export async function GET(req: Request) {
     /* corpus counters stay zeroed — dashboard still renders */
   }
 
-  return Response.json({ jobs, articlesByStatus, corpus });
+  return Response.json({
+    jobs,
+    articlesByStatus,
+    corpus,
+    usage: summarizeUsage(24),
+  });
 }

@@ -8,6 +8,7 @@
 import OpenAI from 'openai';
 import BaseEmbedding from '../../base/embedding';
 import { Chunk } from '@/lib/types';
+import { recordUsage } from '@/lib/ai/usage';
 
 type OpenRouterConfig = {
   apiKey: string;
@@ -34,6 +35,16 @@ class OpenRouterEmbedding extends BaseEmbedding<OpenRouterConfig> {
     const response = await this.client.embeddings.create({
       model: this.config.model,
       input: texts,
+    });
+    recordUsage({
+      label: 'embedding',
+      model: this.config.model,
+      usage: response.usage
+        ? {
+            promptTokens: response.usage.prompt_tokens ?? 0,
+            completionTokens: 0,
+          }
+        : undefined,
     });
     return response.data.map((e) => e.embedding);
   }

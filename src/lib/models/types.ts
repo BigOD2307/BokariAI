@@ -35,6 +35,18 @@ type GenerateOptions = {
   stopSequences?: string[];
   frequencyPenalty?: number;
   presencePenalty?: number;
+  /**
+   * Usage-accounting label (e.g. a role name like 'classifier'). Recorded by
+   * providers that report token usage — see src/lib/ai/usage.ts. Purely
+   * observational: never affects the call itself.
+   */
+  label?: string;
+};
+
+/** Token counts for one LLM call, as reported by the provider. */
+type TokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
 };
 
 type Tool = {
@@ -59,6 +71,8 @@ type GenerateTextOutput = {
   content: string;
   toolCalls: ToolCall[];
   additionalInfo?: Record<string, any>;
+  /** Present when the provider reported token counts for this call. */
+  usage?: TokenUsage;
 };
 
 type StreamTextOutput = {
@@ -69,6 +83,9 @@ type StreamTextOutput = {
    *  research steps as the "Reflexion" sub-step. Empty for non-reasoning models. */
   reasoningChunk?: string;
   additionalInfo?: Record<string, any>;
+  /** Present on the final chunk when the provider reported stream usage
+   *  (requires stream_options.include_usage, set by OpenAILLM). */
+  usage?: TokenUsage;
   done?: boolean;
 };
 
@@ -81,6 +98,8 @@ type GenerateObjectInput = {
 type GenerateObjectOutput<T> = {
   object: T;
   additionalInfo?: Record<string, any>;
+  /** Present when the provider reported token counts for this call. */
+  usage?: TokenUsage;
 };
 
 type StreamObjectOutput<T> = {
@@ -102,6 +121,7 @@ export type {
   GenerateObjectInput,
   GenerateObjectOutput,
   StreamObjectOutput,
+  TokenUsage,
   Tool,
   ToolCall,
 };
