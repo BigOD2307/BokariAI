@@ -17,6 +17,7 @@ const schema = z.object({
 const generateSuggestions = async (
   input: SuggestionGeneratorInput,
   llm: BaseLLM<any>,
+  options?: { temperature?: number; maxTokens?: number },
 ) => {
   const res = await llm.generateObject<typeof schema>({
     messages: [
@@ -30,6 +31,7 @@ const generateSuggestions = async (
       },
     ],
     schema,
+    options,
   });
 
   return res.suggestions;

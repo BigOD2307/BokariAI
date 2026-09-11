@@ -4,37 +4,22 @@ import { classifierPrompt } from '@/lib/prompts/search/classifier';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
 import { ROLE_OPTIONS } from '@/lib/ai/roles';
 
+// The social/youtube/academic/personal flags were removed from the prompt and
+// schema: the client only ever sends sources=['web'] (there is no source
+// picker in the UI), so those decisions were computed on every request and
+// then gated off by `config.sources.includes(...)` — pure prompt cost. They
+// come back with the source picker (B-36). Kept in the TYPE as always-false
+// so the downstream code compiles unchanged.
 const schema = z.object({
   classification: z.object({
     skipSearch: z
       .boolean()
       .describe('Indicates whether to skip the search step.'),
-    personalSearch: z
-      .boolean()
-      .describe('Indicates whether to perform a personal search.'),
-    academicSearch: z
-      .boolean()
-      .describe('Indicates whether to perform an academic search.'),
     newsSearch: z
       .boolean()
       .describe(
         'True when the query is about current events / recent news and needs a dated, fresh source rather than a timeless reference page.',
       ),
-    discussionSearch: z
-      .boolean()
-      .describe('Indicates whether to perform a discussion search.'),
-    xSearch: z
-      .boolean()
-      .describe('Indicates whether to search X (Twitter) for posts.'),
-    redditSearch: z
-      .boolean()
-      .describe('Indicates whether to search Reddit for posts and threads.'),
-    linkedinSearch: z
-      .boolean()
-      .describe('Indicates whether to search LinkedIn for posts and articles.'),
-    youtubeSearch: z
-      .boolean()
-      .describe('Indicates whether to search YouTube for relevant videos.'),
     showWeatherWidget: z
       .boolean()
       .describe('Indicates whether to show the weather widget.'),
@@ -85,14 +70,7 @@ export const classify = async (input: ClassifierInput) => {
 export const defaultClassification = (query: string): ClassifierOutput => ({
   classification: {
     skipSearch: false,
-    personalSearch: false,
-    academicSearch: false,
     newsSearch: false,
-    discussionSearch: false,
-    xSearch: false,
-    redditSearch: false,
-    linkedinSearch: false,
-    youtubeSearch: false,
     showWeatherWidget: false,
     showStockWidget: false,
     showCalculationWidget: false,

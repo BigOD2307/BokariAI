@@ -63,17 +63,21 @@ export type ClassifierInput = {
 export type ClassifierOutput = {
   classification: {
     skipSearch: boolean;
-    personalSearch: boolean;
-    academicSearch: boolean;
     newsSearch: boolean;
-    discussionSearch: boolean;
-    xSearch: boolean;
-    redditSearch: boolean;
-    linkedinSearch: boolean;
-    youtubeSearch: boolean;
     showWeatherWidget: boolean;
     showStockWidget: boolean;
     showCalculationWidget: boolean;
+    // Deprecated classifier flags, kept optional so the social/academic/
+    // youtube action gates still compile. The classifier no longer emits
+    // them (the client only ever enables the 'web' source), so they are
+    // effectively always false; they return with the source picker (B-36).
+    personalSearch?: boolean;
+    academicSearch?: boolean;
+    discussionSearch?: boolean;
+    xSearch?: boolean;
+    redditSearch?: boolean;
+    linkedinSearch?: boolean;
+    youtubeSearch?: boolean;
   };
   standaloneFollowUp: string;
   complexity: 'simple' | 'complex';

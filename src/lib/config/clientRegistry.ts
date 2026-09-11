@@ -7,7 +7,10 @@ const getClientConfig = (key: string, defaultVal?: any) => {
 export const getTheme = () => getClientConfig('theme', 'dark');
 
 export const getAutoMediaSearch = () =>
-  getClientConfig('autoMediaSearch', 'true') === 'true';
+  // Off by default: the auto-click fires /api/images AND /api/videos on every
+  // answer — two paid calls per question for media the user only sees when
+  // they ask. The buttons stay one click away in the action bar.
+  getClientConfig('autoMediaSearch', 'false') === 'true';
 
 export const getSystemInstructions = () =>
   getClientConfig('systemInstructions', '');

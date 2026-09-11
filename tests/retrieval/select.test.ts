@@ -8,22 +8,47 @@ vi.mock('@/lib/ai/reranker', () => ({
   },
 }));
 
-const { selectEvidence, DEFAULT_BUDGET } = await import('@/lib/retrieval/select');
+const { selectEvidence, DEFAULT_BUDGET } = await import(
+  '@/lib/retrieval/select'
+);
 
-const chunk = (over: Partial<Chunk> & { url: string; domain?: string; publishedAt?: string | null }): Chunk => ({
+const chunk = (
+  over: Partial<Chunk> & {
+    url: string;
+    domain?: string;
+    publishedAt?: string | null;
+  },
+): Chunk => ({
   content: 'contenu par defaut',
   ...over,
-  metadata: { url: over.url, title: `titre ${over.url}`, publishedAt: over.publishedAt ?? undefined },
+  metadata: {
+    url: over.url,
+    title: `titre ${over.url}`,
+    publishedAt: over.publishedAt ?? undefined,
+  },
 });
 
 describe('selectEvidence', () => {
   it('prefers a fresh source over a stale one at equal lexical score', async () => {
     const now = new Date('2026-08-30');
     const chunks = [
-      chunk({ url: 'https://old.test/a', content: 'budget mali', publishedAt: '2024-01-01T00:00:00Z' }),
-      chunk({ url: 'https://new.test/a', content: 'budget mali', publishedAt: '2026-08-29T00:00:00Z' }),
+      chunk({
+        url: 'https://old.test/a',
+        content: 'budget mali',
+        publishedAt: '2024-01-01T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://new.test/a',
+        content: 'budget mali',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
     ];
-    const out = await selectEvidence(chunks, 'budget mali', DEFAULT_BUDGET.speed, now);
+    const out = await selectEvidence(
+      chunks,
+      'budget mali',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
     expect(out[0].metadata!.url).toBe('https://new.test/a');
   });
 
@@ -45,8 +70,14 @@ describe('selectEvidence', () => {
       chunk({ url: 'https://a.test/3', content: 'mali budget' }),
       chunk({ url: 'https://b.test/1', content: 'mali budget' }),
     ];
-    const out = await selectEvidence(chunks, 'mali budget', DEFAULT_BUDGET.speed);
-    const fromA = out.filter((c) => new URL(c.metadata!.url as string).hostname === 'a.test');
+    const out = await selectEvidence(
+      chunks,
+      'mali budget',
+      DEFAULT_BUDGET.speed,
+    );
+    const fromA = out.filter(
+      (c) => new URL(c.metadata!.url as string).hostname === 'a.test',
+    );
     expect(fromA.length).toBeLessThanOrEqual(2);
   });
 
@@ -55,7 +86,9 @@ describe('selectEvidence', () => {
   });
 
   it('does not crash on a chunk with no url/date metadata', async () => {
-    const chunks: Chunk[] = [{ content: 'contenu sans metadata', metadata: {} }];
+    const chunks: Chunk[] = [
+      { content: 'contenu sans metadata', metadata: {} },
+    ];
     const out = await selectEvidence(chunks, 'contenu', DEFAULT_BUDGET.speed);
     expect(out).toHaveLength(1);
   });
@@ -63,10 +96,23 @@ describe('selectEvidence', () => {
   it('falls back to freshness/authority ranking when BM25 cannot discriminate', async () => {
     const now = new Date('2026-08-30');
     const chunks = [
-      chunk({ url: 'https://old.test/a', content: 'contenu totalement hors sujet', publishedAt: '2020-01-01T00:00:00Z' }),
-      chunk({ url: 'https://new.test/a', content: 'contenu totalement hors sujet', publishedAt: '2026-08-29T00:00:00Z' }),
+      chunk({
+        url: 'https://old.test/a',
+        content: 'contenu totalement hors sujet',
+        publishedAt: '2020-01-01T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://new.test/a',
+        content: 'contenu totalement hors sujet',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
     ];
-    const out = await selectEvidence(chunks, 'un terme qui napparait nulle part', DEFAULT_BUDGET.speed, now);
+    const out = await selectEvidence(
+      chunks,
+      'un terme qui napparait nulle part',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
     // Neither scores lexically, so freshness alone should still order them.
     expect(out[0].metadata!.url).toBe('https://new.test/a');
   });
@@ -84,16 +130,22 @@ describe('selectEvidence — reranker integration', () => {
         },
       }),
     }));
-    const { selectEvidence: selectWithFailingReranker, DEFAULT_BUDGET: budget } = await import(
-      '@/lib/retrieval/select'
-    );
+    const {
+      selectEvidence: selectWithFailingReranker,
+      DEFAULT_BUDGET: budget,
+    } = await import('@/lib/retrieval/select');
     const chunks = Array.from({ length: 30 }, (_, i) =>
       chunk({ url: `https://d${i}.test/a`, content: `mali budget ${i}` }),
     );
-    const out = await selectWithFailingReranker(chunks, 'mali budget', budget.speed);
+    // balanced keeps the reranker enabled (speed skips it by design).
+    const out = await selectWithFailingReranker(
+      chunks,
+      'mali budget',
+      budget.balanced,
+    );
     // Lexical order stands — evidence is not lost just because rerank failed.
     expect(out.length).toBeGreaterThan(0);
-    expect(out.length).toBeLessThanOrEqual(budget.speed.maxPassages);
+    expect(out.length).toBeLessThanOrEqual(budget.balanced.maxPassages);
   });
 
   it('uses the reranked order when the cross-encoder succeeds', async () => {
@@ -102,18 +154,32 @@ describe('selectEvidence — reranker integration', () => {
       getReranker: () => ({
         // Reverse whatever order it's given, so we can tell the reranked
         // order was actually applied.
-        rank: async (_q: string, docs: Array<{ id: string; text: string }>, topN?: number) =>
+        rank: async (
+          _q: string,
+          docs: Array<{ id: string; text: string }>,
+          topN?: number,
+        ) =>
           [...docs]
             .reverse()
             .slice(0, topN)
-            .map((d, i) => ({ id: d.id, score: 1 - i * 0.01, index: Number(d.id) })),
+            .map((d, i) => ({
+              id: d.id,
+              score: 1 - i * 0.01,
+              index: Number(d.id),
+            })),
       }),
     }));
-    const { selectEvidence: selectWithReranker, DEFAULT_BUDGET: budget } = await import('@/lib/retrieval/select');
+    const { selectEvidence: selectWithReranker, DEFAULT_BUDGET: budget } =
+      await import('@/lib/retrieval/select');
     const chunks = Array.from({ length: 30 }, (_, i) =>
       chunk({ url: `https://d${i}.test/a`, content: `mali budget ${i}` }),
     );
-    const out = await selectWithReranker(chunks, 'mali budget', budget.speed);
+    // balanced keeps the reranker enabled (speed skips it by design).
+    const out = await selectWithReranker(
+      chunks,
+      'mali budget',
+      budget.balanced,
+    );
     expect(out.length).toBeGreaterThan(0);
   });
 });

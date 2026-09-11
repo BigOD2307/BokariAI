@@ -33,11 +33,37 @@ export type SelectionBudget = {
   maxPassages: number;
 };
 
-export const DEFAULT_BUDGET: Record<SearchAgentConfig['mode'], SelectionBudget> = {
-  speed: { maxTokens: 4_000, rerankPoolSize: 25, maxPerDomain: 2, maxPassages: 8 },
-  balanced: { maxTokens: 8_000, rerankPoolSize: 40, maxPerDomain: 2, maxPassages: 12 },
-  quality: { maxTokens: 16_000, rerankPoolSize: 60, maxPerDomain: 3, maxPassages: 20 },
-  learn: { maxTokens: 6_000, rerankPoolSize: 25, maxPerDomain: 2, maxPassages: 10 },
+export const DEFAULT_BUDGET: Record<
+  SearchAgentConfig['mode'],
+  SelectionBudget
+> = {
+  // speed: rerankPoolSize 0 = skip the cross-encoder (a 300-800ms round-trip
+  // for a reordering BM25+freshness already approximates — latency is the
+  // product in speed mode).
+  speed: {
+    maxTokens: 4_000,
+    rerankPoolSize: 0,
+    maxPerDomain: 2,
+    maxPassages: 8,
+  },
+  balanced: {
+    maxTokens: 8_000,
+    rerankPoolSize: 40,
+    maxPerDomain: 2,
+    maxPassages: 12,
+  },
+  quality: {
+    maxTokens: 16_000,
+    rerankPoolSize: 60,
+    maxPerDomain: 3,
+    maxPassages: 20,
+  },
+  learn: {
+    maxTokens: 6_000,
+    rerankPoolSize: 25,
+    maxPerDomain: 2,
+    maxPassages: 10,
+  },
 };
 
 const AFRICAN_BOOST = 1.25;
@@ -87,11 +113,16 @@ export async function selectEvidence(
     const meta = (chunk.metadata ?? {}) as Record<string, unknown>;
     const publishedAtRaw = meta.publishedAt;
     const publishedAt =
-      typeof publishedAtRaw === 'string' && publishedAtRaw ? new Date(publishedAtRaw) : null;
+      typeof publishedAtRaw === 'string' && publishedAtRaw
+        ? new Date(publishedAtRaw)
+        : null;
     return {
       chunk,
       domain: domainOf(typeof meta.url === 'string' ? meta.url : ''),
-      publishedAt: publishedAt && !Number.isNaN(publishedAt.getTime()) ? publishedAt : null,
+      publishedAt:
+        publishedAt && !Number.isNaN(publishedAt.getTime())
+          ? publishedAt
+          : null,
       lexicalScore: bm25Score(queryTokens, tokenizedDocs[i], idf, avgdl),
     };
   });
@@ -116,15 +147,28 @@ export async function selectEvidence(
 
   scored.sort((a, b) => b.score - a.score);
 
-  // 2. Diversity cap before the reranker, so the pool we pay for is varied.
-  const diverse = applyDiversityCap(scored, budget.maxPerDomain).slice(0, budget.rerankPoolSize);
+  // 2. Diversity cap. Pool size: rerankPoolSize, except when reranking is
+  //    disabled for this mode (rerankPoolSize 0) — then the pool is the
+  //    passage budget, since the lexical order IS the final order.
+  const poolSize =
+    budget.rerankPoolSize > 0 ? budget.rerankPoolSize : budget.maxPassages;
+  const diverse = applyDiversityCap(scored, budget.maxPerDomain).slice(
+    0,
+    Math.max(1, poolSize),
+  );
 
   // 3. Cross-encoder. Optional by design: when it is off or fails, the
   //    lexical order stands and the answer is merely less well ordered,
-  //    never absent.
+  //    never absent. Speed mode skips it entirely: the reranker costs a
+  //    network round-trip (300-800ms) for a reordering the lexical+freshness
+  //    score already approximates — latency is the product in speed mode.
   let ordered: Candidate[] = diverse;
   const rerankConfig = getRerankConfig();
-  if (rerankConfig.enabled && diverse.length > budget.maxPassages) {
+  if (
+    rerankConfig.enabled &&
+    budget.rerankPoolSize > 0 && // 0 = rerank disabled for this mode
+    diverse.length > budget.maxPassages
+  ) {
     try {
       // The API is getReranker(mode) + .rank(query, docs, topN) — see
       // src/lib/ai/reranker.ts before changing this call.
