@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Share2, Check, Copy, X, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { Share2, Check, Copy, X, Link as LinkIcon, Loader2, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -12,6 +12,11 @@ interface ShareButtonProps {
   className?: string;
   /** 'icon' = bare icon button · 'button' = labelled "Partager" button (top bar). */
   variant?: 'icon' | 'button';
+}
+
+/** Deep link opening WhatsApp with the shared answer pre-filled. */
+export function whatsappShareUrl(shareUrl: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(`Bokari, journaliste IA africain : ${shareUrl}`)}`;
 }
 
 /**
@@ -183,6 +188,16 @@ const ShareButton = ({ chatId, className, variant = 'icon' }: ShareButtonProps) 
                       className="font-hand flex-1 rounded-[10px] border-2 border-[color:var(--bk-teal-700,#0f766e)] bg-[color:var(--bk-teal,#14b8a6)] py-2.5 text-center text-[14px] uppercase tracking-wide text-white shadow-[0_3px_0_var(--bk-teal-700,#0f766e)] transition-transform hover:-translate-y-px active:translate-y-px"
                     >
                       Ouvrir
+                    </a>
+                    <a
+                      href={whatsappShareUrl(shareUrl)}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title="Partager sur WhatsApp"
+                      aria-label="Partager sur WhatsApp"
+                      className="flex items-center justify-center rounded-[10px] border-2 border-[color:var(--bk-ink,#0f172a)] bg-white px-4 py-2.5 text-[color:var(--bk-ink,#0f172a)] shadow-[0_3px_0_rgba(15,23,42,0.10)] transition-transform hover:-translate-y-px active:translate-y-px"
+                    >
+                      <MessageCircle size={16} className="text-[#25D366]" />
                     </a>
                     <button
                       type="button"

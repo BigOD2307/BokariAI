@@ -18,12 +18,22 @@ vi.mock('@/lib/hooks/useAuth', () => ({
   }),
 }));
 
-import ShareButton from '@/components/MessageActions/ShareButton';
+import ShareButton, { whatsappShareUrl } from '@/components/MessageActions/ShareButton';
 
 describe('ShareButton (SSR smoke)', () => {
   it('renders the share icon button', () => {
     const html = renderToStaticMarkup(<ShareButton chatId="c1" />);
     expect(html).toMatch(/<button/);
     expect(html).toMatch(/Partager cette conversation/);
+  });
+});
+
+describe('whatsappShareUrl', () => {
+  it('builds a wa.me deep link with the share URL pre-filled', () => {
+    const url = whatsappShareUrl('https://bokari.space/p/abc123');
+    expect(url.startsWith('https://wa.me/?text=')).toBe(true);
+    expect(decodeURIComponent(url.split('text=')[1])).toContain(
+      'https://bokari.space/p/abc123',
+    );
   });
 });
