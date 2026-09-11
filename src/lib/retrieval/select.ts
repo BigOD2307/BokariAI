@@ -67,6 +67,14 @@ export const DEFAULT_BUDGET: Record<
 };
 
 const AFRICAN_BOOST = 1.25;
+/**
+ * Corpus boost: hits from our own news corpus (C9 — full text read with
+ * Readability, real publication date, vetted outlet) carry more signal than
+ * a web snippet of equal lexical overlap, so they rank above it.
+ */
+const CORPUS_BOOST = 1.2;
+/** Tier-1 corpus outlets (news agency, IFCN/JTI-certified) get a further lift. */
+const CORPUS_TIER1_BOOST = 1.15;
 /** Half-life for evidence selection: a week, not the 3-day default of the
  *  Discover feed — an answer may legitimately rest on last month's report. */
 const HALF_LIFE_MS = 7 * 86_400_000;
@@ -141,8 +149,15 @@ export async function selectEvidence(
       ? freshnessScore(ageMs(c.publishedAt, now), HALF_LIFE_MS)
       : UNDATED_FRESHNESS; // unknown date: neither rewarded nor buried
     const authority = isAfricanDomain(c.domain) ? AFRICAN_BOOST : 1;
+    // Corpus hits (C9) outrank web snippets at equal overlap; tier-1
+    // corpus outlets (agency / IFCN-JTI-certified) outrank the rest.
+    const meta = (c.chunk.metadata ?? {}) as Record<string, unknown>;
+    const fromCorpus = meta.fromCorpus === true;
+    const corpusBoost = fromCorpus
+      ? CORPUS_BOOST * (meta.sourceTier === 1 ? CORPUS_TIER1_BOOST : 1)
+      : 1;
     const lexical = discriminates ? c.lexicalScore : 1;
-    return { ...c, score: lexical * freshness * authority };
+    return { ...c, score: lexical * freshness * authority * corpusBoost };
   });
 
   scored.sort((a, b) => b.score - a.score);

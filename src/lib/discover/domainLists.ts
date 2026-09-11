@@ -38,6 +38,38 @@ export const AFRICAN_DOMAINS: ReadonlySet<string> = new Set([
   'bamada.net',
   'journaldumali.com',
   'abamako.com',
+  // Mali — C9 corpus outlets (were missing: our own priority sources got no
+  // African boost, so a random blog could outrank Studio Tamani)
+  'studiotamani.org',
+  'saheltribune.com',
+  'benbere.org',
+  'lejalon.com',
+  // Senegal — C9 corpus outlets
+  'aps.sn',
+  'lesoleil.sn',
+  // Côte d'Ivoire — C9 corpus outlets
+  'aip.ci',
+  'linfodrome.com',
+  // Burkina Faso — C9 corpus outlets
+  'aib.media',
+  'fasocheck.org',
+  // Niger — C9 corpus outlets
+  'anp.ne',
+  'tamtaminfo.com',
+  // Togo — C9 corpus outlets
+  'togo-first.com',
+  'icilome.com',
+  // Benin — C9 corpus outlets
+  'beninwebtv.com',
+  'lanouvelletribune.info',
+  // Cameroon — C9 corpus outlets
+  'actucameroun.com',
+  'mimimefoinfos.com',
+  // DRC — C9 corpus outlets
+  'beto.cd',
+  // Pan-African — C9 corpus outlets
+  'financialafrik.com',
+  'fr.africanews.com',
   'malijet.com',
   'essorama.com',
   'mali7.net',
@@ -131,8 +163,8 @@ export const BLOCKED_DOMAINS: ReadonlySet<string> = new Set([
   'instagram.com',
   'linkedin.com',
   // Generative AI content farms (we don't want to feed the loop)
-  'medium.com',       // too noisy, prefer canonical sources
-  'reddit.com',       // discussion, not journalism
+  'medium.com', // too noisy, prefer canonical sources
+  'reddit.com', // discussion, not journalism
   'quora.com',
   'pinterest.com',
   // PDF / doc hosts (we want HTML articles)

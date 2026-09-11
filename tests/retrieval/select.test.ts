@@ -116,6 +116,60 @@ describe('selectEvidence', () => {
     // Neither scores lexically, so freshness alone should still order them.
     expect(out[0].metadata!.url).toBe('https://new.test/a');
   });
+
+  it('ranks a corpus hit above a web snippet at equal lexical overlap', async () => {
+    const now = new Date('2026-09-10');
+    const text = 'le gouvernement du mali annonce un nouveau budget national';
+    const chunks = [
+      chunk({
+        url: 'https://randomblog.test/a',
+        content: text,
+        publishedAt: '2026-09-09T00:00:00Z',
+      }),
+      {
+        content: text,
+        metadata: {
+          url: 'https://lefaso.net/a',
+          title: 'titre lefaso',
+          publishedAt: '2026-09-09T00:00:00Z',
+          fromCorpus: true,
+          sourceTier: 2,
+        },
+      },
+    ];
+    const out = await selectEvidence(
+      chunks,
+      'budget mali gouvernement',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(out[0]!.metadata!.url).toBe('https://lefaso.net/a');
+  });
+
+  it('ranks a tier-1 corpus outlet above a lower-tier one at equal overlap', async () => {
+    const now = new Date('2026-09-10');
+    const text = 'le gouvernement du mali annonce un nouveau budget national';
+    const corpusChunk = (url: string, tier: number): Chunk => ({
+      content: text,
+      metadata: {
+        url,
+        title: `titre ${url}`,
+        publishedAt: '2026-09-09T00:00:00Z',
+        fromCorpus: true,
+        sourceTier: tier,
+      },
+    });
+    const out = await selectEvidence(
+      [
+        corpusChunk('https://maliweb.net/a', 3),
+        corpusChunk('https://studiotamani.org/a', 1),
+      ],
+      'budget mali gouvernement',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(out[0]!.metadata!.url).toBe('https://studiotamani.org/a');
+  });
 });
 
 describe('selectEvidence — reranker integration', () => {
