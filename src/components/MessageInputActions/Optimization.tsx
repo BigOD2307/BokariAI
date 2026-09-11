@@ -18,13 +18,13 @@ const OptimizationModes = [
   {
     key: 'balanced',
     title: 'Standard',
-    description: 'Equilibre vitesse/precision, ~15-20 sources.',
+    description: 'Équilibre vitesse/précision, ~15-20 sources.',
     icon: <Search size={14} className="text-emerald-500" />,
   },
   {
     key: 'quality',
     title: 'Approfondie',
-    description: 'Investigation complete, 30-100 sources.',
+    description: 'Investigation complète, 30-100 sources.',
     icon: <Layers size={14} className="text-bokari-500" />,
     badge: 'Pro',
   },
