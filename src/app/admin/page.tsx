@@ -41,6 +41,9 @@ type Overview = {
     byModel: Record<string, UsageSlice>;
     byLabel: Record<string, UsageSlice>;
   };
+  fastTier?:
+    | { configured: true; provider: string; model: string }
+    | { configured: false; reason: string };
 };
 
 function fmtTokens(n: number): string {
@@ -180,6 +183,22 @@ export default function AdminOverviewPage() {
               <h2 className="mb-3 text-sm font-medium text-neutral-700">
                 Coût LLM — dernières 24 h
               </h2>
+              {data.fastTier && (
+                <div className="mb-3">
+                  {data.fastTier.configured ? (
+                    <Badge variant="secondary" className="text-[11px]">
+                      Fast tier : {data.fastTier.provider}/{data.fastTier.model}{' '}
+                      — rôles classifier, titres, suggestions, stats et
+                      questions simples
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px]">
+                      Fast tier inactif — tout passe sur le modèle de base
+                      (BOKARI_FAST_CHAT_PROVIDER/MODEL)
+                    </Badge>
+                  )}
+                </div>
+              )}
               <Card>
                 <CardContent className="space-y-3 px-5 py-4">
                   <div className="flex items-baseline gap-3">

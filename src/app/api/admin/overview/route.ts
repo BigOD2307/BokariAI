@@ -14,6 +14,7 @@ import { pgDb } from '@/lib/db/postgres/client';
 import { newsArticles, newsSources } from '@/lib/db/postgres/schema';
 import { sql } from 'drizzle-orm';
 import { summarizeUsage } from '@/lib/ai/usage';
+import { fastTierStatus } from '@/lib/ai/resolve';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,5 +92,6 @@ export async function GET(req: Request) {
     articlesByStatus,
     corpus,
     usage: summarizeUsage(24),
+    fastTier: fastTierStatus(),
   });
 }
