@@ -20,8 +20,8 @@ const messageSchema = z.object({
 // zod silently strips unrecognised keys by default.
 const bodySchema = z.object({
   message: messageSchema,
-  optimizationMode: z.enum(['speed', 'balanced', 'quality', 'learn'], {
-    message: 'Optimization mode must be one of: speed, balanced, quality, learn',
+  optimizationMode: z.enum(['speed', 'balanced', 'quality', 'learn', 'eco'], {
+    message: 'Optimization mode must be one of: speed, balanced, quality, learn, eco',
   }),
   sources: z.array(z.string()).optional().default([]),
   focus: z.enum(['auto', 'actu', 'marches', 'demarches', 'examens']).optional().default('auto'),

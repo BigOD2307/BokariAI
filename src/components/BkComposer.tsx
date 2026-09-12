@@ -21,6 +21,7 @@ import {
   ChartLine,
   Landmark,
   Backpack,
+  Leaf,
   Image as ImageIcon,
   FileText,
   type LucideIcon,
@@ -44,13 +45,14 @@ import { useElevenLabsSTT } from '@/lib/hooks/useElevenLabsSTT';
  *  - variant="compact" → the in-chat follow-up bar (tighter).
  */
 
-type OptMode = 'speed' | 'balanced' | 'quality' | 'learn';
+type OptMode = 'speed' | 'balanced' | 'quality' | 'learn' | 'eco';
 
 const MODES: { key: OptMode; label: string; Icon: LucideIcon }[] = [
   { key: 'speed', label: 'Rapide', Icon: Zap },
   { key: 'balanced', label: 'Standard', Icon: Gauge },
   { key: 'quality', label: 'Approfondi', Icon: Layers },
   { key: 'learn', label: 'Apprendre', Icon: GraduationCap },
+  { key: 'eco', label: 'Éco (3G)', Icon: Leaf },
 ];
 
 /** Local intent presets (focus modes) — WHAT to look for, orthogonal to MODES (HOW deep). */
@@ -156,6 +158,26 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
   }, [autoFocus]);
+
+  // Slow connection (2G/3G via the Network Information API): default to the
+  // eco mode once, on first mount — the user can still pick any other mode.
+  // Guarded by a ref so StrictMode double-mount doesn't toast twice.
+  const ecoSuggested = useRef(false);
+  useEffect(() => {
+    if (ecoSuggested.current) return;
+    ecoSuggested.current = true;
+    try {
+      const conn = (navigator as Navigator & { connection?: { effectiveType?: string } }).connection;
+      const slow = conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g' || conn?.effectiveType === '3g';
+      if (slow && mode === 'speed') {
+        setOptimizationMode('eco');
+        toast.info('Connexion lente détectée : mode Éco activé.');
+      }
+    } catch {
+      // Network Information API unsupported — stay on the default mode.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // "/" focuses the field.
   useEffect(() => {

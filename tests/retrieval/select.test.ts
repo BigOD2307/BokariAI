@@ -85,6 +85,13 @@ describe('selectEvidence', () => {
     expect(await selectEvidence([], 'x', DEFAULT_BUDGET.speed)).toEqual([]);
   });
 
+  it('eco budget is the leanest: 5 passages, 2000 tokens, no rerank', async () => {
+    expect(DEFAULT_BUDGET.eco.maxPassages).toBe(5);
+    expect(DEFAULT_BUDGET.eco.maxTokens).toBe(2_000);
+    expect(DEFAULT_BUDGET.eco.rerankPoolSize).toBe(0);
+    expect(DEFAULT_BUDGET.eco.maxPerDomain).toBe(1);
+  });
+
   it('does not crash on a chunk with no url/date metadata', async () => {
     const chunks: Chunk[] = [
       { content: 'contenu sans metadata', metadata: {} },

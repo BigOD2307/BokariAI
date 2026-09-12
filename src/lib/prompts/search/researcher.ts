@@ -245,7 +245,7 @@ const getQualityPrompt = (
 
 export const getResearcherPrompt = (
   actionDesc: string,
-  mode: 'speed' | 'balanced' | 'quality' | 'learn',
+  mode: 'speed' | 'balanced' | 'quality' | 'learn' | 'eco',
   i: number,
   maxIteration: number,
   fileIds: string[],
@@ -264,6 +264,11 @@ export const getResearcherPrompt = (
 
   switch (mode) {
     case 'speed':
+      prompt = getSpeedPrompt(actionDesc, i, maxIteration, fileDesc);
+      break;
+    case 'eco':
+      // Same lean loop as speed (few tools, no wandering) — the answer
+      // length is capped downstream by the writer's eco instructions.
       prompt = getSpeedPrompt(actionDesc, i, maxIteration, fileDesc);
       break;
     case 'balanced':

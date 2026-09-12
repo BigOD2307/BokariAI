@@ -1,9 +1,17 @@
 import type { Evidence } from '@/lib/agents/search/evidence';
 
-type Mode = 'speed' | 'balanced' | 'quality' | 'learn';
+type Mode = 'speed' | 'balanced' | 'quality' | 'learn' | 'eco';
 
 const getModeInstructions = (mode: Mode) => {
   switch (mode) {
+    case 'eco':
+      return `
+    ### MODE ECO — Reponse ultra-courte pour connexion lente (3G)
+    - Ta reponse doit faire entre **80 et 150 mots maximum**. C'est le mode le plus court.
+    - Commence par **LA reponse** en 1 phrase, puis 2-3 faits essentiels en phrases courtes.
+    - Pas d'introduction, pas de chapo, pas de conclusion, PAS de sous-titres (##).
+    - Cite les sources cles (2-3 citations suffisent).
+    - Pense « SMS d'un correspondant » : que l'essentiel, lisible sur un petit ecran avec une connexion lente.`;
     case 'speed':
       return `
     ### MODE RAPIDE — Reponse directe et concise

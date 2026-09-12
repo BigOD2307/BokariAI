@@ -1,4 +1,4 @@
-import { ChevronDown, Layers, Search, Zap } from 'lucide-react';
+import { ChevronDown, Layers, Leaf, Search, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Popover,
@@ -27,6 +27,12 @@ const OptimizationModes = [
     description: 'Investigation complète, 30-100 sources.',
     icon: <Layers size={14} className="text-bokari-500" />,
     badge: 'Pro',
+  },
+  {
+    key: 'eco',
+    title: 'Éco (3G)',
+    description: 'Réponse ultra-courte, 80-150 mots, idéale en connexion lente.',
+    icon: <Leaf size={14} className="text-green-500" />,
   },
 ];
 

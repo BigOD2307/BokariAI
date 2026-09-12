@@ -67,6 +67,14 @@ export const DEFAULT_BUDGET: Record<
     maxPerDomain: 2,
     maxPassages: 10,
   },
+  // eco: the 3G mode — minimal context (5 short passages), no reranker, one
+  // source per domain. The answer streams fast and costs the least.
+  eco: {
+    maxTokens: 2_000,
+    rerankPoolSize: 0,
+    maxPerDomain: 1,
+    maxPassages: 5,
+  },
 };
 
 const AFRICAN_BOOST = 1.25;

@@ -27,7 +27,7 @@ export type SearchAgentConfig = {
   /** Optional fast tier (e.g. Groq Llama 3.1 8B) for simple queries. */
   fastLlm?: BaseLLM<any>;
   embedding: BaseEmbedding<any>;
-  mode: 'speed' | 'balanced' | 'quality' | 'learn';
+  mode: 'speed' | 'balanced' | 'quality' | 'learn' | 'eco';
   systemInstructions: string;
   /**
    * Local intent preset chosen by the user ('auto' = let the classifier

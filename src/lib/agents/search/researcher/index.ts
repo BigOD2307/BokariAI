@@ -26,9 +26,11 @@ class Researcher {
     let maxIteration =
       input.config.mode === 'speed'
         ? 3
-        : input.config.mode === 'balanced'
-          ? 6
-          : 12; // deep search: up to 12 iterations x 3 queries = ~35 sources.
+        : input.config.mode === 'eco'
+          ? 2 // 3G mode: one corpus pass + one web pass, then write.
+          : input.config.mode === 'balanced'
+            ? 6
+            : 12; // deep search: up to 12 iterations x 3 queries = ~35 sources.
     // Was 35: that number existed to compensate for the writer never seeing
     // past the first 8 arrival-order results (BUG-19) — more turns couldn't
     // help, since their output landed past the slice. Now that evidence

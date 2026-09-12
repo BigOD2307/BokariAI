@@ -26,7 +26,7 @@ import { getCaller } from '@/lib/auth/require';
  *  route's validated body. */
 export type ChatStreamBody = {
   message: { messageId: string; chatId: string; content: string };
-  optimizationMode: 'speed' | 'balanced' | 'quality' | 'learn';
+  optimizationMode: 'speed' | 'balanced' | 'quality' | 'learn' | 'eco';
   sources: string[];
   history: [string, string][];
   files: string[];

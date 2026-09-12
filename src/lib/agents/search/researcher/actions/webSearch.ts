@@ -163,11 +163,13 @@ const webSearchAction: ResearchAction<typeof actionSchema> = {
     await Promise.all(input.queries.map(search));
 
     // Content fetching based on mode:
+    // eco = fetch top 1 URL (3G: every fetch is latency on a slow link)
     // speed = fetch top 2 URLs (fast but enriched)
     // balanced = fetch top 4 URLs
     // quality = fetch top 6 URLs
     const mode = additionalConfig.mode || 'speed';
-    const maxFetch = mode === 'speed' ? 2 : mode === 'balanced' ? 4 : 6;
+    const maxFetch =
+      mode === 'eco' ? 1 : mode === 'speed' ? 2 : mode === 'balanced' ? 4 : 6;
 
     if (maxFetch > 0) {
       const uniqueUrls = [...new Set(
