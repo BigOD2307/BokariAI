@@ -25,6 +25,7 @@ import type { Chunk } from '@/lib/types';
 import type {
   SearchAgentConfig,
   SearchFocus,
+  SourceFilter,
 } from '@/lib/agents/search/types';
 
 export type SelectionBudget = {
@@ -169,6 +170,40 @@ export function isOfficialDomain(domain: string): boolean {
   return OFFICIAL_DOMAIN_RE.test(domain);
 }
 
+/** Community / discussion sources: forums, social video, social networks. */
+const COMMUNITY_DOMAIN_RE =
+  /(^|\.)(reddit\.com|x\.com|twitter\.com|youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|instagram\.com|whatsapp\.com|telegram\.me|discord\.gg)|forum\.|forums\.|discussion/i;
+
+export function isCommunityDomain(domain: string): boolean {
+  return COMMUNITY_DOMAIN_RE.test(domain);
+}
+
+/**
+ * Explicit source-type filter knobs. Stronger than focus nudges (x2 class)
+ * because the user asked for it — but still multiplicative, so ranking
+ * never hides a source, it only reorders.
+ */
+const SOURCE_FILTER_BOOST: Record<
+  Exclude<SourceFilter, 'all'>,
+  { test: (domain: string, fromCorpus: boolean) => boolean; boost: number; floor: number }
+> = {
+  official: {
+    test: (domain) => isOfficialDomain(domain),
+    boost: 2,
+    floor: 0.5,
+  },
+  press: {
+    test: (domain, fromCorpus) => fromCorpus || isAfricanDomain(domain),
+    boost: 2,
+    floor: 0,
+  },
+  community: {
+    test: (domain) => isCommunityDomain(domain),
+    boost: 2,
+    floor: 0,
+  },
+};
+
 /**
  * Bounded lift for figure-dense content: +numericLift per digit group,
  * capped at +40%. "250 FCFA/kg à Bamako, 275 à Ségou" (2 groups) outranks
@@ -211,6 +246,7 @@ export async function selectEvidence(
   budget: SelectionBudget,
   now: Date = new Date(),
   focus: SearchFocus = 'auto',
+  sourceFilter: SourceFilter = 'all',
 ): Promise<Chunk[]> {
   if (chunks.length === 0) return [];
 
@@ -272,10 +308,20 @@ export async function selectEvidence(
     const figures = knobs
       ? numericBoost(c.chunk.content ?? '', knobs.numericLift)
       : 1;
+    // Explicit source-type filter: x2-class boost + optional floor for
+    // matching sources. Composes multiplicatively with focus knobs.
+    const filterKnobs =
+      sourceFilter === 'all' ? null : SOURCE_FILTER_BOOST[sourceFilter];
+    let filterBoost = 1;
+    if (filterKnobs && filterKnobs.test(c.domain, fromCorpus)) {
+      filterBoost = filterKnobs.boost;
+      if (filterKnobs.floor > 0) freshness = Math.max(freshness, filterKnobs.floor);
+    }
     const lexical = discriminates ? c.lexicalScore : 1;
     return {
       ...c,
-      score: lexical * freshness * authority * official * corpusBoost * figures,
+      score:
+        lexical * freshness * authority * official * corpusBoost * figures * filterBoost,
     };
   });
 

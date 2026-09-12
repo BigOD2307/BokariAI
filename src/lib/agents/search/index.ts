@@ -261,6 +261,7 @@ class SearchAgent {
       DEFAULT_BUDGET[input.config.mode],
       new Date(),
       input.config.focus,
+      input.config.sourceFilter,
     );
 
     // C7: stable [S1]/[S2] ids (evidence.ts), not the arrival-order Chunk[]

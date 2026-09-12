@@ -158,6 +158,7 @@ export const POST = async (req: Request) => {
             mode: body.optimizationMode,
             fileIds: body.files,
             focus: 'auto',
+            sourceFilter: 'all',
             systemInstructions: body.systemInstructions || 'None',
           },
         });

@@ -22,11 +22,14 @@ import {
   Landmark,
   Backpack,
   Leaf,
+  ShieldCheck,
+  Radio,
+  MessagesSquare,
   Image as ImageIcon,
   FileText,
   type LucideIcon,
 } from 'lucide-react';
-import type { SearchFocus } from '@/lib/agents/search/types';
+import type { SearchFocus, SourceFilter } from '@/lib/agents/search/types';
 import { fileToAttachment, MultipartUploadError } from '@/lib/uploads/multimodal';
 import { useChat } from '@/lib/hooks/useChat';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -61,6 +64,13 @@ const FOCUSES: { key: SearchFocus; label: string; Icon: LucideIcon }[] = [
   { key: 'marches', label: 'Prix & Marchés', Icon: ChartLine },
   { key: 'demarches', label: 'Démarches', Icon: Landmark },
   { key: 'examens', label: 'Examens', Icon: Backpack },
+];
+
+/** Source-type filter — WHICH sources to prefer (boost, never exclusion). */
+const SOURCE_FILTERS: { key: SourceFilter; label: string; Icon: LucideIcon }[] = [
+  { key: 'official', label: 'Officielles', Icon: ShieldCheck },
+  { key: 'press', label: 'Presse', Icon: Radio },
+  { key: 'community', label: 'Communauté', Icon: MessagesSquare },
 ];
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,image/gif,application/pdf';
@@ -135,6 +145,8 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
     setOptimizationMode,
     focus,
     setFocus,
+    sourceFilter,
+    setSourceFilter,
   } = useChat();
   const { requireAuth } = useAuth();
   const { isRecording, isTranscribing, startRecording, stopRecording } = useElevenLabsSTT();
@@ -442,6 +454,33 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
                           >
                             <f.Icon size={15} strokeWidth={2.2} aria-hidden="true" />
                             <span className="flex-1">{f.label}</span>
+                            {active && <Check size={15} strokeWidth={2.6} aria-hidden="true" />}
+                          </button>
+                        );
+                      })}
+
+                      <div className="my-1 h-px bg-[color:var(--bk-ink,#0f172a)]/10" aria-hidden="true" />
+
+                      <p className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                        Sources
+                      </p>
+                      {SOURCE_FILTERS.map((s) => {
+                        const active = s.key === sourceFilter;
+                        return (
+                          <button
+                            key={s.key}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={active}
+                            onClick={() => setSourceFilter(active ? 'all' : s.key)}
+                            className={`font-hand flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] transition-colors ${
+                              active
+                                ? 'bg-[color:var(--bk-teal,#14b8a6)]/10 text-[color:var(--bk-teal-700,#0f766e)]'
+                                : 'text-[color:var(--bk-ink,#0f172a)] hover:bg-black/[0.04]'
+                            }`}
+                          >
+                            <s.Icon size={15} strokeWidth={2.2} aria-hidden="true" />
+                            <span className="flex-1">{s.label}</span>
                             {active && <Check size={15} strokeWidth={2.6} aria-hidden="true" />}
                           </button>
                         );

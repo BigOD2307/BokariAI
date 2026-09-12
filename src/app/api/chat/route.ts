@@ -25,6 +25,7 @@ const bodySchema = z.object({
   }),
   sources: z.array(z.string()).optional().default([]),
   focus: z.enum(['auto', 'actu', 'marches', 'demarches', 'examens']).optional().default('auto'),
+  sourceFilter: z.enum(['all', 'official', 'press', 'community']).optional().default('all'),
   history: z
     .array(z.tuple([z.string(), z.string()]))
     .optional()

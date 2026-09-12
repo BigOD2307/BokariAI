@@ -20,6 +20,14 @@ export type SearchSources =
  */
 export type SearchFocus = 'auto' | 'actu' | 'marches' | 'demarches' | 'examens';
 
+/**
+ * Source-type filter (Perplexity-Goggles-style, simplified). An explicit
+ * user filter, stronger than a focus nudge: matching sources get a x2-class
+ * boost with a freshness floor, others are untouched (boost, never filter —
+ * a brilliant off-filter source can still win on lexical merit).
+ */
+export type SourceFilter = 'all' | 'official' | 'press' | 'community';
+
 export type SearchAgentConfig = {
   sources: SearchSources[];
   fileIds: string[];
@@ -35,6 +43,8 @@ export type SearchAgentConfig = {
    * mode controls HOW deep to dig.
    */
   focus: SearchFocus;
+  /** Explicit source-type filter. 'all' = no filtering (default). */
+  sourceFilter: SourceFilter;
 };
 
 export type SearchAgentInput = {

@@ -165,6 +165,7 @@ export const runChatBackground = async (args: RunArgs): Promise<void> => {
           mode: body.optimizationMode,
           fileIds: body.files,
           focus: body.focus,
+          sourceFilter: body.sourceFilter,
           systemInstructions: body.systemInstructions || 'None',
         },
       })

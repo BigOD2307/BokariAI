@@ -1,7 +1,7 @@
 'use client';
 
 import { Block } from '@/lib/types';
-import type { SearchFocus } from '@/lib/agents/search/types';
+import type { SearchFocus, SourceFilter } from '@/lib/agents/search/types';
 import type { Message, Widget } from '@/lib/types/window';
 import type { Section } from '@/lib/types/section';
 import type { Attachment } from '@/lib/types/multimodal';
@@ -56,6 +56,8 @@ type ChatContext = {
   optimizationMode: string;
   focus: SearchFocus;
   setFocus: (focus: SearchFocus) => void;
+  sourceFilter: SourceFilter;
+  setSourceFilter: (filter: SourceFilter) => void;
   isMessagesLoaded: boolean;
   isConfigReady: boolean;
   newChatCreated: boolean;
@@ -227,6 +229,8 @@ export const chatContext = createContext<ChatContext>({
   optimizationMode: '',
   focus: 'auto',
   setFocus: () => {},
+  sourceFilter: 'all',
+  setSourceFilter: () => {},
   chatModelProvider: { key: '', providerId: '' },
   embeddingModelProvider: { key: '', providerId: '' },
   researchEnded: false,
@@ -283,6 +287,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [sources, setSources] = useState<string[]>(['web']);
   const [optimizationMode, setOptimizationMode] = useState('speed');
   const [focus, setFocus] = useState<SearchFocus>('auto');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
 
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
@@ -959,6 +964,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sources: sources,
         optimizationMode: optimizationMode,
         focus: focus,
+        sourceFilter: sourceFilter,
         history: rewrite
           ? truncateHistory(
               chatHistory.current.slice(
@@ -1085,6 +1091,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         optimizationMode,
         focus,
         setFocus,
+        sourceFilter,
+        setSourceFilter,
         setFileIds,
         setFiles,
         setSources,

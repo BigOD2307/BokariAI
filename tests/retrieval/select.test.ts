@@ -92,6 +92,107 @@ describe('selectEvidence', () => {
     expect(DEFAULT_BUDGET.eco.maxPerDomain).toBe(1);
   });
 
+  it("sourceFilter=official: .gouv wins even when older and auto prefers the blog", async () => {
+    const now = new Date('2026-08-30');
+    const chunks = [
+      chunk({
+        url: 'https://blog.test/cni',
+        content: 'carte identité nationale biométrique',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://gouv.ml/cni',
+        content: 'carte identité nationale biométrique',
+        publishedAt: '2023-01-01T00:00:00Z',
+      }),
+    ];
+    const auto = await selectEvidence(
+      chunks,
+      'carte identité',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(auto[0].metadata!.url).toBe('https://blog.test/cni');
+    const filtered = await selectEvidence(
+      chunks,
+      'carte identité',
+      DEFAULT_BUDGET.speed,
+      now,
+      'auto',
+      'official',
+    );
+    expect(filtered[0].metadata!.url).toBe('https://gouv.ml/cni');
+  });
+
+  it('sourceFilter=press: corpus hit outranks a fresher web snippet', async () => {
+    const now = new Date('2026-08-30');
+    const corpusChunk: Chunk = {
+      content: 'communiqué conseil ministres Bamako',
+      metadata: {
+        url: 'https://essor.ml/cm',
+        title: 'Conseil des ministres',
+        publishedAt: '2026-08-25T00:00:00Z',
+        fromCorpus: true,
+      },
+    };
+    const chunks = [
+      chunk({
+        url: 'https://blog.test/cm',
+        content: 'communiqué conseil ministres Bamako',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      corpusChunk,
+    ];
+    const auto = await selectEvidence(
+      chunks,
+      'conseil ministres',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(auto[0].metadata!.url).toBe('https://blog.test/cm');
+    const filtered = await selectEvidence(
+      chunks,
+      'conseil ministres',
+      DEFAULT_BUDGET.speed,
+      now,
+      'auto',
+      'press',
+    );
+    expect(filtered[0].metadata!.url).toBe('https://essor.ml/cm');
+  });
+
+  it('sourceFilter=community: forum post outranks a fresher news page', async () => {
+    const now = new Date('2026-08-30');
+    const chunks = [
+      chunk({
+        url: 'https://news.test/visa',
+        content: 'visa France Mali rendez-vous TLS',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://forum.test/visa',
+        content: 'visa France Mali rendez-vous TLS',
+        publishedAt: '2026-08-27T00:00:00Z',
+      }),
+    ];
+    const auto = await selectEvidence(
+      chunks,
+      'visa France rendez-vous',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(auto[0].metadata!.url).toBe('https://news.test/visa');
+    const filtered = await selectEvidence(
+      chunks,
+      'visa France rendez-vous',
+      DEFAULT_BUDGET.speed,
+      now,
+      'auto',
+      'community',
+    );
+    expect(filtered[0].metadata!.url).toBe('https://forum.test/visa');
+  });
+
   it('does not crash on a chunk with no url/date metadata', async () => {
     const chunks: Chunk[] = [
       { content: 'contenu sans metadata', metadata: {} },

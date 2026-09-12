@@ -60,6 +60,7 @@ export const POST = async (req: Request) => {
         mode: body.optimizationMode,
         fileIds: [],
         focus: 'auto',
+        sourceFilter: 'all',
         systemInstructions: body.systemInstructions || '',
       },
       followUp: body.query,
