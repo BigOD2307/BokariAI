@@ -22,7 +22,10 @@ import { getRerankConfig, getReranker } from '@/lib/ai/reranker';
 import { tokenize, buildBM25Index, bm25Score } from '@/lib/discover/bm25';
 import { domainOf } from './url';
 import type { Chunk } from '@/lib/types';
-import type { SearchAgentConfig } from '@/lib/agents/search/types';
+import type {
+  SearchAgentConfig,
+  SearchFocus,
+} from '@/lib/agents/search/types';
 
 export type SelectionBudget = {
   /** Hard cap on the tokens the evidence block may occupy in the writer prompt. */
@@ -80,6 +83,95 @@ const CORPUS_TIER1_BOOST = 1.15;
 const HALF_LIFE_MS = 7 * 86_400_000;
 const UNDATED_FRESHNESS = 0.6;
 
+/**
+ * Focus ranking knobs — the deterministic half of focus modes (the other
+ * half is the researcher briefing in prompts/search/focus.ts). Same
+ * multiplicative philosophy as the base score: bounded boosts, never a
+ * filter, so a brilliant off-focus source can still win on lexical merit.
+ */
+type FocusKnobs = {
+  /** Freshness half-life: short for news, long for timeless procedures. */
+  halfLifeMs: number;
+  /** Freshness value for undated sources under this focus. */
+  undatedFreshness: number;
+  /** Extra multiplier on corpus hits (presse africaine vetted). */
+  corpusMult: number;
+  /** Multiplier for official domains (governments, institutions). */
+  officialBoost: number;
+  /**
+   * Freshness floor for official domains: procedures stay citable even when
+   * old (a 2024 .gouv page beats yesterday's blog). 0 = no floor.
+   */
+  officialFloor: number;
+  /** Per-digit-group lift cap for figure-dense content (prices, stats). */
+  numericLift: number;
+};
+
+const FOCUS_RANKING: Record<Exclude<SearchFocus, 'auto'>, FocusKnobs> = {
+  // News: 2-day half-life — yesterday's dispatch must beat last month's
+  // analysis. Undated web pages are suspect for news.
+  actu: {
+    halfLifeMs: 2 * 86_400_000,
+    undatedFreshness: 0.4,
+    corpusMult: 1.25,
+    officialBoost: 1,
+    officialFloor: 0,
+    numericLift: 0,
+  },
+  // Prices/figures: a figure-dense page (tables, prices) outranks prose;
+  // undated figures are dangerous, bury them harder than the default.
+  marches: {
+    halfLifeMs: HALF_LIFE_MS,
+    undatedFreshness: 0.4,
+    corpusMult: 1,
+    officialBoost: 1,
+    officialFloor: 0,
+    numericLift: 0.05,
+  },
+  // Procedures: official sources win; procedures are timeless (a 2024
+  // .gouv page beats yesterday's blog). Numeric lift 0: a tariff table is
+  // nice but officialness decides.
+  demarches: {
+    halfLifeMs: 180 * 86_400_000,
+    undatedFreshness: UNDATED_FRESHNESS,
+    corpusMult: 1,
+    officialBoost: 1.5,
+    officialFloor: 0.7,
+    numericLift: 0,
+  },
+  // Exams: official education sources win; calendars age slowly. The floor
+  // is high (0.8): last year's official calendar remains the best template
+  // until replaced — the writer cross-checks the dates, ranking keeps it
+  // visible.
+  examens: {
+    halfLifeMs: 90 * 86_400_000,
+    undatedFreshness: 0.5,
+    corpusMult: 1,
+    officialBoost: 1.35,
+    officialFloor: 0.8,
+    numericLift: 0,
+  },
+};
+
+/** Governments, public services and major African institutions. */
+const OFFICIAL_DOMAIN_RE =
+  /(^|\.)gouv\.|\.gov(\.|$)|service-public|education\.|unesco\.org|worldbank\.org|afdb\.org|au\.int|cedeao|uemoa/i;
+
+export function isOfficialDomain(domain: string): boolean {
+  return OFFICIAL_DOMAIN_RE.test(domain);
+}
+
+/**
+ * Bounded lift for figure-dense content: +numericLift per digit group,
+ * capped at +40%. "250 FCFA/kg à Bamako, 275 à Ségou" (2 groups) outranks
+ * prose with the same words; a phone-number dump cannot run away.
+ */
+export function numericBoost(content: string, liftPerGroup: number): number {
+  if (liftPerGroup <= 0) return 1;
+  const groups = (content.match(/\d[\d\s.,]*/g) ?? []).length;
+  return 1 + Math.min(0.4, groups * liftPerGroup);
+}
+
 let encoder: ReturnType<typeof getEncoding> | null = null;
 function countTokens(text: string): number {
   // js-tiktoken is already a dependency (src/lib/utils/splitText.ts uses the
@@ -110,6 +202,7 @@ export async function selectEvidence(
   query: string,
   budget: SelectionBudget,
   now: Date = new Date(),
+  focus: SearchFocus = 'auto',
 ): Promise<Chunk[]> {
   if (chunks.length === 0) return [];
 
@@ -143,21 +236,39 @@ export async function selectEvidence(
 
   // 1. Lexical score modulated by freshness and source authority.
   //    Multiplicative on purpose: a two-year-old page should not outrank
-  //    today's dispatch on lexical overlap alone.
+  //    today's dispatch on lexical overlap alone. A user-chosen focus
+  //    adjusts the knobs (half-life, official boost, figure lift) without
+  //    changing the formula — 'auto' reproduces the legacy score exactly.
+  const knobs = focus === 'auto' ? null : FOCUS_RANKING[focus];
   const scored: Candidate[] = candidates.map((c) => {
-    const freshness = c.publishedAt
-      ? freshnessScore(ageMs(c.publishedAt, now), HALF_LIFE_MS)
-      : UNDATED_FRESHNESS; // unknown date: neither rewarded nor buried
+    const isOfficial = isOfficialDomain(c.domain);
+    let freshness = c.publishedAt
+      ? freshnessScore(ageMs(c.publishedAt, now), knobs?.halfLifeMs ?? HALF_LIFE_MS)
+      : (knobs?.undatedFreshness ?? UNDATED_FRESHNESS); // unknown date: neither rewarded nor buried
+    // Official procedures stay citable: the floor keeps a 2024 .gouv page
+    // above yesterday's blog (a floor, not immunity — brilliant fresh
+    // content can still win on lexical merit).
+    if (knobs && isOfficial && knobs.officialFloor > 0) {
+      freshness = Math.max(freshness, knobs.officialFloor);
+    }
     const authority = isAfricanDomain(c.domain) ? AFRICAN_BOOST : 1;
+    const official = knobs && isOfficial ? knobs.officialBoost : 1;
     // Corpus hits (C9) outrank web snippets at equal overlap; tier-1
     // corpus outlets (agency / IFCN-JTI-certified) outrank the rest.
     const meta = (c.chunk.metadata ?? {}) as Record<string, unknown>;
     const fromCorpus = meta.fromCorpus === true;
-    const corpusBoost = fromCorpus
-      ? CORPUS_BOOST * (meta.sourceTier === 1 ? CORPUS_TIER1_BOOST : 1)
+    const corpusBoost =
+      (fromCorpus
+        ? CORPUS_BOOST * (meta.sourceTier === 1 ? CORPUS_TIER1_BOOST : 1)
+        : 1) * (knobs && fromCorpus ? knobs.corpusMult : 1);
+    const figures = knobs
+      ? numericBoost(c.chunk.content ?? '', knobs.numericLift)
       : 1;
     const lexical = discriminates ? c.lexicalScore : 1;
-    return { ...c, score: lexical * freshness * authority * corpusBoost };
+    return {
+      ...c,
+      score: lexical * freshness * authority * official * corpusBoost * figures,
+    };
   });
 
   scored.sort((a, b) => b.score - a.score);

@@ -259,6 +259,8 @@ class SearchAgent {
       searchResults?.searchFindings ?? [],
       classification.standaloneFollowUp || input.followUp,
       DEFAULT_BUDGET[input.config.mode],
+      new Date(),
+      input.config.focus,
     );
 
     // C7: stable [S1]/[S2] ids (evidence.ts), not the arrival-order Chunk[]

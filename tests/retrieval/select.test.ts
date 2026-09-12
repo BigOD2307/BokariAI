@@ -93,6 +93,90 @@ describe('selectEvidence', () => {
     expect(out).toHaveLength(1);
   });
 
+  it('demarches: a 2024 official page beats a fresh blog, auto does the reverse', async () => {
+    const now = new Date('2026-08-30');
+    const chunks = [
+      chunk({
+        url: 'https://blog.test/passeport',
+        content: 'passeport biométrique pièces fournir',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://service-public.gouv.ml/passeport',
+        content: 'passeport biométrique pièces fournir',
+        publishedAt: '2024-03-01T00:00:00Z',
+      }),
+    ];
+    const auto = await selectEvidence(
+      chunks,
+      'passeport biométrique',
+      DEFAULT_BUDGET.speed,
+      now,
+    );
+    expect(auto[0].metadata!.url).toBe('https://blog.test/passeport');
+    const focus = await selectEvidence(
+      chunks,
+      'passeport biométrique',
+      DEFAULT_BUDGET.speed,
+      now,
+      'demarches',
+    );
+    expect(focus[0].metadata!.url).toBe(
+      'https://service-public.gouv.ml/passeport',
+    );
+  });
+
+  it('marches: figure-dense content outranks prose at equal terms', async () => {
+    const now = new Date('2026-08-30');
+    // Same length, same query terms — only the figures differ, so the
+    // numeric lift alone decides (a 3-word snippet vs a 12-word page would
+    // test BM25 length-norm, not the knob).
+    const chunks = [
+      chunk({
+        url: 'https://blog.test/mil',
+        content: 'prix mil Bamako en détail ici',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://marche.test/mil',
+        content: 'prix mil Bamako 250 FCFA kilo',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+    ];
+    const out = await selectEvidence(
+      chunks,
+      'prix mil Bamako',
+      DEFAULT_BUDGET.speed,
+      now,
+      'marches',
+    );
+    expect(out[0].metadata!.url).toBe('https://marche.test/mil');
+  });
+
+  it('examens: official education source wins over a fresh forum post', async () => {
+    const now = new Date('2026-08-30');
+    const chunks = [
+      chunk({
+        url: 'https://forum.test/bac',
+        content: 'baccalauréat épreuves dates résultats',
+        publishedAt: '2026-08-29T00:00:00Z',
+      }),
+      chunk({
+        url: 'https://education.gouv.ml/bac',
+        content: 'baccalauréat épreuves dates résultats',
+        publishedAt: '2025-06-01T00:00:00Z',
+      }),
+    ];
+    const out = await selectEvidence(
+      chunks,
+      'baccalauréat épreuves',
+      DEFAULT_BUDGET.speed,
+      now,
+      'examens',
+    );
+    expect(out[0].metadata!.url).toBe('https://education.gouv.ml/bac');
+  });
+
   it('falls back to freshness/authority ranking when BM25 cannot discriminate', async () => {
     const now = new Date('2026-08-30');
     const chunks = [
