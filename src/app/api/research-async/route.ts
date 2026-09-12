@@ -157,6 +157,7 @@ export const POST = async (req: Request) => {
             sources: body.sources as SearchSources[],
             mode: body.optimizationMode,
             fileIds: body.files,
+            focus: 'auto',
             systemInstructions: body.systemInstructions || 'None',
           },
         });

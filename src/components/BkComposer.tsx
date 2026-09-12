@@ -17,10 +17,15 @@ import {
   GraduationCap,
   Check,
   X,
+  Newspaper,
+  ChartLine,
+  Landmark,
+  Backpack,
   Image as ImageIcon,
   FileText,
   type LucideIcon,
 } from 'lucide-react';
+import type { SearchFocus } from '@/lib/agents/search/types';
 import { fileToAttachment, MultipartUploadError } from '@/lib/uploads/multimodal';
 import { useChat } from '@/lib/hooks/useChat';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -46,6 +51,14 @@ const MODES: { key: OptMode; label: string; Icon: LucideIcon }[] = [
   { key: 'balanced', label: 'Standard', Icon: Gauge },
   { key: 'quality', label: 'Approfondi', Icon: Layers },
   { key: 'learn', label: 'Apprendre', Icon: GraduationCap },
+];
+
+/** Local intent presets (focus modes) — WHAT to look for, orthogonal to MODES (HOW deep). */
+const FOCUSES: { key: SearchFocus; label: string; Icon: LucideIcon }[] = [
+  { key: 'actu', label: 'Actu', Icon: Newspaper },
+  { key: 'marches', label: 'Prix & Marchés', Icon: ChartLine },
+  { key: 'demarches', label: 'Démarches', Icon: Landmark },
+  { key: 'examens', label: 'Examens', Icon: Backpack },
 ];
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,image/gif,application/pdf';
@@ -118,6 +131,8 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
     removeAttachment,
     optimizationMode,
     setOptimizationMode,
+    focus,
+    setFocus,
   } = useChat();
   const { requireAuth } = useAuth();
   const { isRecording, isTranscribing, startRecording, stopRecording } = useElevenLabsSTT();
@@ -378,6 +393,33 @@ const BkComposer = ({ variant = 'full', autoFocus = false }: Props) => {
                           >
                             <m.Icon size={15} strokeWidth={2.2} aria-hidden="true" />
                             <span className="flex-1">{m.label}</span>
+                            {active && <Check size={15} strokeWidth={2.6} aria-hidden="true" />}
+                          </button>
+                        );
+                      })}
+
+                      <div className="my-1 h-px bg-[color:var(--bk-ink,#0f172a)]/10" aria-hidden="true" />
+
+                      <p className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                        Focus
+                      </p>
+                      {FOCUSES.map((f) => {
+                        const active = f.key === focus;
+                        return (
+                          <button
+                            key={f.key}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={active}
+                            onClick={() => setFocus(active ? 'auto' : f.key)}
+                            className={`font-hand flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] transition-colors ${
+                              active
+                                ? 'bg-[color:var(--bk-teal,#14b8a6)]/10 text-[color:var(--bk-teal-700,#0f766e)]'
+                                : 'text-[color:var(--bk-ink,#0f172a)] hover:bg-black/[0.04]'
+                            }`}
+                          >
+                            <f.Icon size={15} strokeWidth={2.2} aria-hidden="true" />
+                            <span className="flex-1">{f.label}</span>
                             {active && <Check size={15} strokeWidth={2.6} aria-hidden="true" />}
                           </button>
                         );

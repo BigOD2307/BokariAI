@@ -24,6 +24,7 @@ const bodySchema = z.object({
     message: 'Optimization mode must be one of: speed, balanced, quality, learn',
   }),
   sources: z.array(z.string()).optional().default([]),
+  focus: z.enum(['auto', 'actu', 'marches', 'demarches', 'examens']).optional().default('auto'),
   history: z
     .array(z.tuple([z.string(), z.string()]))
     .optional()

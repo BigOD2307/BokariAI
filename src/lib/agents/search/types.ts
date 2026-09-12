@@ -13,6 +13,13 @@ export type SearchSources =
   | 'linkedin'
   | 'youtube';
 
+/**
+ * Local intent preset (Perplexity "focus modes", mapped to West-African
+ * intents instead of Web/Academic/Social). Chosen by the user, defaults to
+ * 'auto' (classifier decides).
+ */
+export type SearchFocus = 'auto' | 'actu' | 'marches' | 'demarches' | 'examens';
+
 export type SearchAgentConfig = {
   sources: SearchSources[];
   fileIds: string[];
@@ -22,6 +29,12 @@ export type SearchAgentConfig = {
   embedding: BaseEmbedding<any>;
   mode: 'speed' | 'balanced' | 'quality' | 'learn';
   systemInstructions: string;
+  /**
+   * Local intent preset chosen by the user ('auto' = let the classifier
+   * decide). Orthogonal to `mode` (depth): focus biases WHAT to look for,
+   * mode controls HOW deep to dig.
+   */
+  focus: SearchFocus;
 };
 
 export type SearchAgentInput = {

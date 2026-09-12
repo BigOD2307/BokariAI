@@ -12,6 +12,7 @@ import {
   extractChartSpec,
 } from '@/lib/agents/multimodal/charts';
 import { pickWriterLlm } from './routing';
+import { applyFocusToClassification } from '@/lib/prompts/search/focus';
 import { ROLE_OPTIONS } from '@/lib/ai/roles';
 import { streamTextWithFallback } from '@/lib/ai/gateway';
 import { selectEvidence, DEFAULT_BUDGET } from '@/lib/retrieval/select';
@@ -171,6 +172,14 @@ class SearchAgent {
       });
       classification = defaultClassification(input.followUp);
     }
+
+    // A user-chosen focus overrides the classifier where it is decisive:
+    // 'actu' forces the fresh-news path (corpus first). Other focuses only
+    // brief the researcher via the prompt (focus.ts), the loop stays agentic.
+    classification = applyFocusToClassification(
+      classification,
+      input.config.focus,
+    );
 
     session.emit('analyzing', {
       step: 'widgets',

@@ -1,6 +1,7 @@
 'use client';
 
 import { Block } from '@/lib/types';
+import type { SearchFocus } from '@/lib/agents/search/types';
 import type { Message, Widget } from '@/lib/types/window';
 import type { Section } from '@/lib/types/section';
 import type { Attachment } from '@/lib/types/multimodal';
@@ -53,6 +54,8 @@ type ChatContext = {
   sources: string[];
   chatId: string | undefined;
   optimizationMode: string;
+  focus: SearchFocus;
+  setFocus: (focus: SearchFocus) => void;
   isMessagesLoaded: boolean;
   isConfigReady: boolean;
   newChatCreated: boolean;
@@ -222,6 +225,8 @@ export const chatContext = createContext<ChatContext>({
   sections: [],
   notFound: false,
   optimizationMode: '',
+  focus: 'auto',
+  setFocus: () => {},
   chatModelProvider: { key: '', providerId: '' },
   embeddingModelProvider: { key: '', providerId: '' },
   researchEnded: false,
@@ -277,6 +282,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [sources, setSources] = useState<string[]>(['web']);
   const [optimizationMode, setOptimizationMode] = useState('speed');
+  const [focus, setFocus] = useState<SearchFocus>('auto');
 
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
@@ -952,6 +958,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         files: fileIds,
         sources: sources,
         optimizationMode: optimizationMode,
+        focus: focus,
         history: rewrite
           ? truncateHistory(
               chatHistory.current.slice(
@@ -1076,6 +1083,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         messageAppeared,
         notFound,
         optimizationMode,
+        focus,
+        setFocus,
         setFileIds,
         setFiles,
         setSources,

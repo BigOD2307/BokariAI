@@ -1,4 +1,6 @@
 import UploadStore from '@/lib/uploads/store';
+import { focusDirective } from './focus';
+import type { SearchFocus } from '@/lib/agents/search/types';
 
 const getSpeedPrompt = (
   actionDesc: string,
@@ -247,6 +249,7 @@ export const getResearcherPrompt = (
   i: number,
   maxIteration: number,
   fileIds: string[],
+  focus: SearchFocus = 'auto',
 ) => {
   let prompt = '';
 
@@ -274,5 +277,5 @@ export const getResearcherPrompt = (
       break;
   }
 
-  return prompt;
+  return prompt + focusDirective(focus);
 };

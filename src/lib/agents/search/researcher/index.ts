@@ -79,6 +79,7 @@ class Researcher {
         i,
         maxIteration,
         input.config.fileIds,
+        input.config.focus,
       );
 
       const actionStream = withTimeout(

@@ -13,6 +13,7 @@
  * and the stream is closed.
  */
 import { startTimer, logStage } from '@/lib/observability/latence';
+import type { SearchFocus } from '@/lib/agents/search/types';
 import { recordTiming } from '@/lib/observability/ttfb';
 import { cacheResponse, hashHistory, type CacheScope } from '@/lib/cache/semantic';
 import { embedOne } from '@/lib/ai/gateway';
@@ -29,6 +30,7 @@ export type ChatStreamBody = {
   sources: string[];
   history: [string, string][];
   files: string[];
+  focus: SearchFocus;
   systemInstructions: string | null | undefined;
 };
 
